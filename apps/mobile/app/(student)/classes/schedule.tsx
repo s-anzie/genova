@@ -7,9 +7,10 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Plus, Calendar } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Plus, Calendar, Info } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
 import { PageHeader } from '@/components/PageHeader';
@@ -32,10 +33,13 @@ interface TimeSlot {
 }
 
 const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-const HOURS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-const CELL_WIDTH = 100;
+const ALL_HOURS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+const BASE_CELL_WIDTH = 100;
 const CELL_HEIGHT = 80;
 const TIME_COLUMN_WIDTH = 60;
+const MAX_TIMETABLE_HEIGHT = 500; // Hauteur maximale avant scroll
+const HORIZONTAL_PADDING = Spacing.xs * 2; // Padding left + right from content
+const DAY_COLUMN_GAP = 2; // marginRight between day columns
 
 export default function ClassScheduleScreen() {
   const router = useRouter();
@@ -43,15 +47,118 @@ export default function ClassScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [className, setClassName] = useState('');
+  const [visibleHours, setVisibleHours] = useState<string[]>([]);
+  const [visibleDays, setVisibleDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
+  const [dynamicCellWidth, setDynamicCellWidth] = useState(BASE_CELL_WIDTH);
   
   const horizontalScrollRef = useRef<ScrollView>(null);
   const verticalScrollRef = useRef<ScrollView>(null);
+
+  // Calculate statistics
+  const getStatistics = () => {
+    const subjectCount: { [key: string]: number } = {};
+    let totalHours = 0;
+
+    timeSlots.forEach(slot => {
+      // Count slots per subject
+      subjectCount[slot.subject] = (subjectCount[slot.subject] || 0) + 1;
+      
+      // Calculate total hours
+      const startMinutes = timeToMinutes(slot.startTime);
+      const endMinutes = timeToMinutes(slot.endTime);
+      totalHours += (endMinutes - startMinutes) / 60;
+    });
+
+    return {
+      totalSlots: timeSlots.length,
+      totalHours: totalHours.toFixed(1),
+      subjects: Object.entries(subjectCount).map(([subject, count]) => ({
+        subject,
+        count,
+      })),
+    };
+  };
 
   useEffect(() => {
     if (id) {
       loadSchedule();
     }
   }, [id]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadSchedule();
+      }
+    }, [id])
+  );
+
+  // Calculate which hours and days are actually used by time slots
+  const calculateVisibleHoursAndDays = (slots: TimeSlot[]) => {
+    if (slots.length === 0) {
+      setVisibleHours([]);
+      setVisibleDays([]);
+      setDynamicCellWidth(BASE_CELL_WIDTH);
+      return;
+    }
+
+    const usedHours = new Set<number>();
+    const usedDays = new Set<number>();
+
+    slots.forEach(slot => {
+      // Track which days have slots
+      usedDays.add(slot.dayOfWeek);
+      
+      const startMinutes = timeToMinutes(slot.startTime);
+      const endMinutes = timeToMinutes(slot.endTime);
+      
+      // Get all hours covered by this slot
+      const startHour = Math.floor(startMinutes / 60);
+      const endHour = Math.floor((endMinutes - 1) / 60); // -1 to handle exact hour endings
+      
+      for (let hour = startHour; hour <= endHour; hour++) {
+        usedHours.add(hour);
+      }
+    });
+
+    // Convert hour numbers to hour strings and filter ALL_HOURS
+    const hoursToShow = ALL_HOURS.filter(hourStr => {
+      const hour = parseInt(hourStr.split(':')[0]);
+      return usedHours.has(hour);
+    });
+
+    const sortedDays = Array.from(usedDays).sort();
+    
+    setVisibleHours(hoursToShow);
+    setVisibleDays(sortedDays);
+    
+    // Calculate dynamic cell width
+    calculateDynamicCellWidth(sortedDays.length);
+  };
+
+  // Calculate the optimal cell width based on available space
+  const calculateDynamicCellWidth = (numberOfDays: number) => {
+    if (numberOfDays === 0) {
+      setDynamicCellWidth(BASE_CELL_WIDTH);
+      return;
+    }
+
+    const screenWidth = Dimensions.get('window').width;
+    const availableWidth = screenWidth - TIME_COLUMN_WIDTH - HORIZONTAL_PADDING;
+    
+    // Calculate total width needed with base cell width
+    const totalGapWidth = (numberOfDays - 1) * DAY_COLUMN_GAP;
+    const totalNeededWidth = numberOfDays * BASE_CELL_WIDTH + totalGapWidth;
+    
+    // If total needed width is less than available, redistribute the space
+    if (totalNeededWidth < availableWidth) {
+      const newCellWidth = (availableWidth - totalGapWidth) / numberOfDays;
+      setDynamicCellWidth(Math.floor(newCellWidth));
+    } else {
+      setDynamicCellWidth(BASE_CELL_WIDTH);
+    }
+  };
 
   const loadSchedule = async () => {
     if (!id) return;
@@ -65,7 +172,9 @@ export default function ClassScheduleScreen() {
       setClassName(classResponse.data.name);
       
       const slotsResponse = await apiClient.get(`/classes/${id}/schedule/time-slots`);
-      setTimeSlots(slotsResponse.data);
+      const slots = slotsResponse.data;
+      setTimeSlots(slots);
+      calculateVisibleHoursAndDays(slots);
     } catch (error: any) {
       console.error('Error loading schedule:', error);
       Alert.alert('Erreur', 'Impossible de charger l\'emploi du temps');
@@ -75,7 +184,7 @@ export default function ClassScheduleScreen() {
   };
 
   const handleAddTimeSlot = () => {
-    router.push(`/(student)/classes/${id}/schedule/add` as any);
+    router.push(`/(student)/classes/add?id=${id}`);
   };
 
   const handleDeleteTimeSlot = async (slotId: string, subject: string) => {
@@ -90,7 +199,7 @@ export default function ClassScheduleScreen() {
           onPress: async () => {
             try {
               await apiClient.delete(`/classes/${id}/schedule/time-slots/${slotId}`);
-              loadSchedule();
+              await loadSchedule(); // Reload to recalculate visible hours
             } catch (error: any) {
               Alert.alert('Erreur', error.message || 'Impossible de supprimer le créneau');
             }
@@ -103,14 +212,6 @@ export default function ClassScheduleScreen() {
   const timeToMinutes = (time: string): number => {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
-  };
-
-  const getQuarterPosition = (minutes: number): number => {
-    // Returns which quarter (0-3) the minutes fall into
-    if (minutes < 15) return 0;
-    if (minutes < 30) return 1;
-    if (minutes < 45) return 2;
-    return 3;
   };
 
   const getSlotsForDayAndHour = (day: number, hour: string): Array<{slot: TimeSlot, quarters: number[]}> => {
@@ -147,6 +248,41 @@ export default function ClassScheduleScreen() {
     return results;
   };
 
+  // Get all slots for a specific day to render text overlays
+  const getSlotsForDay = (day: number): TimeSlot[] => {
+    return timeSlots.filter(slot => slot.dayOfWeek === day);
+  };
+
+  // Calculate the position and height of a slot's text overlay
+  const getSlotTextPosition = (slot: TimeSlot) => {
+    const startMinutes = timeToMinutes(slot.startTime);
+    const endMinutes = timeToMinutes(slot.endTime);
+    const durationMinutes = endMinutes - startMinutes;
+
+    // Find which hour index this starts at (in visible hours)
+    const startHour = Math.floor(startMinutes / 60);
+    const startHourStr = `${startHour.toString().padStart(2, '0')}:00`;
+    const hourIndex = visibleHours.indexOf(startHourStr);
+
+    if (hourIndex === -1) return { top: 0, height: 0 }; // Hour not visible
+
+    // Calculate offset within the hour (in quarters)
+    const minutesIntoHour = startMinutes % 60;
+    const quarterOffset = Math.floor(minutesIntoHour / 15);
+    const quarterHeight = CELL_HEIGHT / 4;
+
+    // Calculate total height in pixels
+    const heightInPixels = (durationMinutes / 15) * quarterHeight;
+
+    // Calculate top position
+    const topPosition = hourIndex * (CELL_HEIGHT + 2) + quarterOffset * quarterHeight;
+
+    return {
+      top: topPosition,
+      height: heightInPixels,
+    };
+  };
+
   const handleContentScroll = (event: any) => {
     const { contentOffset } = event.nativeEvent;
     
@@ -168,7 +304,7 @@ export default function ClassScheduleScreen() {
       return (
         <TouchableOpacity
           key={`${day}-${hour}`}
-          style={styles.emptyCell}
+          style={[styles.emptyCell, { width: dynamicCellWidth }]}
           onPress={handleAddTimeSlot}
         >
           <Plus size={16} color={Colors.textTertiary} strokeWidth={2} />
@@ -176,12 +312,14 @@ export default function ClassScheduleScreen() {
       );
     }
 
-    // For now, handle single slot per cell (most common case)
-    const { slot, quarters } = slotsInCell[0];
-    const assignedTutor = slot.tutorAssignments.find(a => a.status === 'ACCEPTED');
+    // Merge all quarters from all slots in this cell
+    const allQuarters = new Set<number>();
+    slotsInCell.forEach(({ quarters }) => {
+      quarters.forEach(q => allQuarters.add(q));
+    });
 
     return (
-      <View key={`${day}-${hour}`} style={styles.cellContainer}>
+      <View key={`${day}-${hour}`} style={[styles.cellContainer, { width: dynamicCellWidth }]}>
         {/* Render quarters */}
         <View style={styles.quartersContainer}>
           {[0, 1, 2, 3].map(q => (
@@ -189,30 +327,57 @@ export default function ClassScheduleScreen() {
               key={q}
               style={[
                 styles.quarter,
-                quarters.includes(q) && styles.quarterFilled,
+                allQuarters.has(q) && styles.quarterFilled,
               ]}
             />
           ))}
         </View>
+      </View>
+    );
+  };
 
-        {/* Render slot info if this is the starting hour */}
-        {slot.startTime.startsWith(hour.substring(0, 2)) && (
-          <TouchableOpacity
-            style={styles.slotInfo}
-            onLongPress={() => handleDeleteTimeSlot(slot.id, slot.subject)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.slotSubject} numberOfLines={1}>{slot.subject}</Text>
-            <Text style={styles.slotTime} numberOfLines={1}>
-              {slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}
-            </Text>
-            {assignedTutor && (
-              <Text style={styles.slotTutor} numberOfLines={1}>
-                👨‍🏫 {assignedTutor.tutor.firstName}
+  const renderDayColumn = (day: number) => {
+    const daySlots = getSlotsForDay(day);
+
+    return (
+      <View key={day} style={[styles.dayColumn, { width: dynamicCellWidth }]}>
+        {/* Render all visible hour cells for this day */}
+        {visibleHours.map(hour => renderTimeSlotCell(day, hour))}
+        
+        {/* Overlay slot text on top */}
+        {daySlots.map(slot => {
+          const position = getSlotTextPosition(slot);
+          
+          // Don't render if position is invalid (hour not visible)
+          if (position.height === 0) return null;
+          
+          const assignedTutor = slot.tutorAssignments.find(a => a.status === 'ACCEPTED');
+          
+          return (
+            <TouchableOpacity
+              key={slot.id}
+              style={[
+                styles.slotTextOverlay,
+                {
+                  top: position.top,
+                  height: position.height,
+                },
+              ]}
+              onLongPress={() => handleDeleteTimeSlot(slot.id, slot.subject)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.slotSubject} numberOfLines={1}>{slot.subject}</Text>
+              <Text style={styles.slotTime} numberOfLines={1}>
+                {slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}
               </Text>
-            )}
-          </TouchableOpacity>
-        )}
+              {assignedTutor && (
+                <Text style={styles.slotTutor} numberOfLines={1}>
+                  👨‍🏫 {assignedTutor.tutor.firstName}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -233,6 +398,7 @@ export default function ClassScheduleScreen() {
       <PageHeader 
         title="Emploi du temps"
         subtitle={className}
+        showBackButton={true}
         rightElement={
           <TouchableOpacity style={styles.addButton} onPress={handleAddTimeSlot}>
             <Plus size={22} color={Colors.white} strokeWidth={2.5} />
@@ -256,7 +422,16 @@ export default function ClassScheduleScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.timetableContainer}>
+            <View style={[
+              styles.timetableContainer,
+              {
+                maxHeight: MAX_TIMETABLE_HEIGHT,
+                height: Math.min(
+                  visibleHours.length * (CELL_HEIGHT + 2) + 40, // +40 for header
+                  MAX_TIMETABLE_HEIGHT
+                ),
+              }
+            ]}>
               {/* Top-left corner (fixed) */}
               <View style={styles.cornerCell} />
 
@@ -269,8 +444,8 @@ export default function ClassScheduleScreen() {
                 style={styles.daysHeader}
               >
                 <View style={styles.daysRow}>
-                  {[1, 2, 3, 4, 5, 6].map(day => (
-                    <View key={day} style={styles.dayHeader}>
+                  {visibleDays.map(day => (
+                    <View key={day} style={[styles.dayHeader, { width: dynamicCellWidth }]}>
                       <Text style={styles.dayHeaderText}>{DAYS_SHORT[day - 1]}</Text>
                     </View>
                   ))}
@@ -285,7 +460,7 @@ export default function ClassScheduleScreen() {
                 style={styles.timeColumnScroll}
               >
                 <View>
-                  {HOURS.map(hour => (
+                  {visibleHours.map(hour => (
                     <View key={hour} style={styles.timeCell}>
                       <Text style={styles.timeText}>{hour}</Text>
                     </View>
@@ -307,18 +482,50 @@ export default function ClassScheduleScreen() {
                   onScroll={handleContentScroll}
                 >
                   <View style={styles.grid}>
-                    {HOURS.map(hour => (
-                      <View key={hour} style={styles.gridRow}>
-                        {[1, 2, 3, 4, 5, 6].map(day => renderTimeSlotCell(day, hour))}
-                      </View>
-                    ))}
+                    {visibleDays.map(day => renderDayColumn(day))}
                   </View>
                 </ScrollView>
               </ScrollView>
             </View>
 
+            {/* Statistics Section */}
+            <View style={styles.statsContainer}>
+              <Text style={styles.statsTitle}>Statistiques</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{getStatistics().totalSlots}</Text>
+                  <Text style={styles.statLabel}>Créneaux</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{getStatistics().totalHours}h</Text>
+                  <Text style={styles.statLabel}>Par semaine</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{getStatistics().subjects.length}</Text>
+                  <Text style={styles.statLabel}>Matières</Text>
+                </View>
+              </View>
+              
+              {/* Subject breakdown */}
+              {getStatistics().subjects.length > 0 && (
+                <View style={styles.subjectsBreakdown}>
+                  <Text style={styles.breakdownTitle}>Par matière</Text>
+                  {getStatistics().subjects.map(({ subject, count }) => (
+                    <View key={subject} style={styles.subjectRow}>
+                      <View style={styles.subjectDot} />
+                      <Text style={styles.subjectName}>{subject}</Text>
+                      <Text style={styles.subjectCount}>{count} créneau{count > 1 ? 'x' : ''}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
             <View style={styles.legend}>
-              <Text style={styles.legendText}>💡 Appuyez longuement sur un créneau pour le supprimer</Text>
+              <View style={styles.legendIconContainer}>
+                <Info size={16} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <Text style={styles.legendText}>Appuyez longuement sur un créneau pour le supprimer</Text>
             </View>
           </>
         )}
@@ -392,7 +599,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   timetableContainer: {
-    flex: 1,
     backgroundColor: Colors.white,
     overflow: 'hidden',
     ...Shadows.medium,
@@ -421,7 +627,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   dayHeader: {
-    width: CELL_WIDTH,
+    width: BASE_CELL_WIDTH,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -467,15 +673,17 @@ const styles = StyleSheet.create({
   },
   grid: {
     paddingBottom: Spacing.md,
-  },
-  gridRow: {
     flexDirection: 'row',
-    marginBottom: 2,
+  },
+  dayColumn: {
+    width: BASE_CELL_WIDTH,
+    marginRight: 2,
+    position: 'relative',
   },
   cellContainer: {
-    width: CELL_WIDTH,
+    width: BASE_CELL_WIDTH,
     height: CELL_HEIGHT,
-    marginRight: 2,
+    marginBottom: 2,
     position: 'relative',
   },
   quartersContainer: {
@@ -493,23 +701,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   quarterFilled: {
-    backgroundColor: 'rgba(74, 222, 128, 0.2)',
+    backgroundColor: 'rgba(13, 115, 119, 0.15)',
     borderLeftWidth: 3,
-    borderLeftColor: Colors.success,
+    borderLeftColor: Colors.primary,
   },
-  slotInfo: {
+  slotTextOverlay: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
     padding: Spacing.xs,
     justifyContent: 'center',
+    zIndex: 10,
   },
   emptyCell: {
-    width: CELL_WIDTH,
+    width: BASE_CELL_WIDTH,
     height: CELL_HEIGHT,
-    marginRight: 2,
+    marginBottom: 2,
     backgroundColor: Colors.bgCream,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -533,14 +740,101 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.textSecondary,
   },
-  legend: {
-    marginTop: Spacing.xs,
+  statsContainer: {
+    marginTop: Spacing.md,
+    marginHorizontal: Spacing.xs,
+    padding: Spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.medium,
+    ...Shadows.small,
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
     padding: Spacing.sm,
     backgroundColor: 'rgba(13, 115, 119, 0.05)',
+    borderRadius: BorderRadius.medium,
+    alignItems: 'center',
   },
-  legendText: {
-    fontSize: 13,
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  subjectsBreakdown: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+  },
+  breakdownTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+  },
+  subjectDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    marginRight: Spacing.sm,
+  },
+  subjectName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  subjectCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  legend: {
+    marginTop: Spacing.md,
+    marginHorizontal: Spacing.xs,
+    padding: Spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...Shadows.small,
+  },
+  legendIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(13, 115, 119, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+  },
+  legendText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
 });

@@ -98,15 +98,16 @@ model PasswordReset {
 // ============================================================================
 
 model StudentProfile {
-  id               String   @id @default(uuid())
-  userId           String   @unique
-  educationLevel   String
-  schoolName       String?
-  parentEmail      String?
-  parentPhone      String?
-  learningGoals    String?
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  educationLevel    String
+  educationDetails  Json?    // Detailed education information (system, class, series)
+  schoolName        String?
+  parentEmail       String?
+  parentPhone       String?
+  learningGoals     String?
   preferredSubjects String[]
-  budgetPerHour    Decimal? @db.Decimal(10, 2)
+  budgetPerHour     Decimal? @db.Decimal(10, 2)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -126,6 +127,7 @@ model TutorProfile {
   serviceRadius          Int?
   diplomas               Json     @default("[]")
   availability           Json     @default("{}")
+  teachingSkillsDetails  Json?    // Detailed teaching skills structure
   totalHoursTaught       Decimal  @default(0) @db.Decimal(10, 2)
   averageRating          Decimal  @default(0) @db.Decimal(3, 2)
   totalReviews           Int      @default(0)

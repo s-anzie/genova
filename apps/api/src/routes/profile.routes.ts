@@ -146,6 +146,7 @@ router.put('/student', authenticate, async (req: Request, res: Response, next: N
     
     const data: UpdateStudentProfileData = {
       educationLevel: req.body.educationLevel,
+      educationDetails: req.body.educationDetails,
       schoolName: req.body.schoolName,
       parentEmail: req.body.parentEmail,
       parentPhone: req.body.parentPhone,
@@ -185,6 +186,7 @@ router.put('/tutor', authenticate, async (req: Request, res: Response, next: Nex
       serviceRadius: req.body.serviceRadius,
       diplomas: req.body.diplomas,
       availability: req.body.availability,
+      teachingSkillsDetails: req.body.teachingSkillsDetails,
     };
 
     const profile = await updateTutorProfile(userId, data);

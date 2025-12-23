@@ -31,6 +31,7 @@ export default function ScheduleScreen() {
   const [selectedDuration, setSelectedDuration] = useState<'30' | '60'>('60');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -154,7 +155,7 @@ export default function ScheduleScreen() {
   };
 
   const handleContinue = () => {
-    if (selectedTime && tutor) {
+    if (selectedTime && selectedSubject && tutor) {
       // Calculate session times
       const [hours, minutes] = selectedTime.split(':').map(Number);
       const startTime = new Date(selectedDate);
@@ -172,6 +173,7 @@ export default function ScheduleScreen() {
           endTime: endTime.toISOString(),
           duration: selectedDuration,
           price: tutor.hourlyRate.toString(),
+          subject: selectedSubject,
         },
       });
     }
@@ -186,6 +188,10 @@ export default function ScheduleScreen() {
   }
 
   const days = getNext7Days();
+  const morningSlots = availableSlots.filter(slot => {
+    const hour = parseInt(slot.split(':')[0]);
+    return hour >= 6 && hour < 12;
+  });
   const afternoonSlots = availableSlots.filter(slot => {
     const hour = parseInt(slot.split(':')[0]);
     return hour >= 12 && hour < 18;
@@ -248,6 +254,29 @@ export default function ScheduleScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Subject Selection */}
+        {tutor && tutor.subjects && tutor.subjects.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Matière</Text>
+            <View style={styles.subjectsGrid}>
+              {tutor.subjects.map((subject) => {
+                const isSelected = selectedSubject === subject;
+                return (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[styles.subjectChip, isSelected && styles.subjectChipSelected]}
+                    onPress={() => setSelectedSubject(subject)}
+                  >
+                    <Text style={[styles.subjectChipText, isSelected && styles.subjectChipTextSelected]}>
+                      {subject}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Calendar */}
         <View style={styles.section}>
           <View style={styles.calendarHeader}>
@@ -283,6 +312,18 @@ export default function ScheduleScreen() {
 
         {/* Time Slots */}
         <View style={styles.section}>
+          {morningSlots.length > 0 && (
+            <>
+              <View style={styles.timeHeader}>
+                <Clock size={18} color={Colors.textSecondary} strokeWidth={2} />
+                <Text style={styles.timeHeaderText}>Matin</Text>
+              </View>
+              <View style={styles.timeSlotsGrid}>
+                {morningSlots.map(renderTimeSlot)}
+              </View>
+            </>
+          )}
+
           {afternoonSlots.length > 0 && (
             <>
               <View style={styles.timeHeader}>
@@ -314,12 +355,12 @@ export default function ScheduleScreen() {
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={[styles.continueButton, !selectedTime && styles.continueButtonDisabled]}
+          style={[styles.continueButton, (!selectedTime || !selectedSubject) && styles.continueButtonDisabled]}
           onPress={handleContinue}
-          disabled={!selectedTime}
+          disabled={!selectedTime || !selectedSubject}
         >
           <Text style={styles.continueButtonText}>
-            {selectedTime ? 'Passer au paiement' : 'Continuer'}
+            {selectedTime && selectedSubject ? 'Passer au paiement' : 'Sélectionnez un créneau et une matière'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -390,6 +431,37 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  subjectsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  subjectChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: Colors.bgCream,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  subjectChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  subjectChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  subjectChipTextSelected: {
+    color: Colors.white,
   },
   calendarHeader: {
     marginBottom: 16,

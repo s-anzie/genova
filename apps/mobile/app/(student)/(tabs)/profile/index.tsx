@@ -259,7 +259,7 @@ export default function StudentProfileScreen() {
           
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => router.push('/(student)/payment/wallet')}
+            onPress={() => router.push('/wallet')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#E8F5E9' }]}>
@@ -268,7 +268,7 @@ export default function StudentProfileScreen() {
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>Mon portefeuille</Text>
                 <Text style={styles.menuSubtitle}>
-                  Solde: {userData?.walletBalance?.toFixed(2) || '0.00'}€
+                  Solde: {userData?.walletBalance ? Number(userData.walletBalance).toFixed(2) : '0.00'}€
                 </Text>
               </View>
             </View>
@@ -277,7 +277,7 @@ export default function StudentProfileScreen() {
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => router.push('/(student)/payment/transactions')}
+            onPress={() => router.push('/wallet/transactions')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#FFF3E0' }]}>

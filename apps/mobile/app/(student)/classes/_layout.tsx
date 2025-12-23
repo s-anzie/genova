@@ -9,6 +9,10 @@ export default function ClassesLayout() {
       <Stack.Screen name="index"/>
       <Stack.Screen name="create"/>
       <Stack.Screen name="[id]"/>
+      <Stack.Screen name="invite"/>
+      <Stack.Screen name="edit"/>
+      <Stack.Screen name="schedule"/>
+      <Stack.Screen name="add"/>
     </Stack>
   );
 }

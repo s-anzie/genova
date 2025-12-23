@@ -1,20 +1,56 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Gradients } from '@/constants/colors';
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
   rightElement?: React.ReactNode;
+  leftElement?: React.ReactNode;
+  showBackButton?: boolean;
+  onBackPress?: () => void;
   showGradient?: boolean;
 }
 
-export function PageHeader({ title, subtitle, rightElement, showGradient = true }: PageHeaderProps) {
+export function PageHeader({ 
+  title, 
+  subtitle, 
+  rightElement, 
+  leftElement,
+  showBackButton = false,
+  onBackPress,
+  showGradient = true 
+}: PageHeaderProps) {
+  const router = useRouter();
+
+  const handleBackPress = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else {
+      router.back();
+    }
+  };
+
   const content = (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bgCream} />
       <View style={styles.content}>
+        {(showBackButton || leftElement) && (
+          <View style={styles.leftElement}>
+            {leftElement || (
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={handleBackPress}
+                activeOpacity={0.7}
+              >
+                <ArrowLeft size={28} color={Colors.textPrimary} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{title}</Text>
           {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -91,6 +127,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: 60, // Espace pour la barre de statut
     paddingBottom: Spacing.sm,
+  },
+  leftElement: {
+    marginRight: Spacing.sm,
+    paddingTop: 4,
+  },
+  backButton: {
+    width: 30,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   titleContainer: {
     flex: 1,

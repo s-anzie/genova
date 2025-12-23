@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
   KeyboardAvoidingView,
@@ -16,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Mail, Plus, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function InviteMembersScreen() {
   const router = useRouter();
@@ -276,7 +276,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   footer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.06)',

@@ -8,6 +8,7 @@ import {
   StatusBar,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -18,17 +19,19 @@ import {
 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import StripePayment from '@/components/payment/stripe-payment';
-import { apiClient } from '@/utils/api-client';
+import { ApiClient } from '@/utils/api';
 import { ClassResponse } from '@/types/api';
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { id, tutorId, startTime, endTime, duration, price } = useLocalSearchParams();
+  const { id, tutorId, startTime, endTime, duration, price, subject } = useLocalSearchParams();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassResponse | null>(null);
   const [classes, setClasses] = useState<ClassResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [creatingSession, setCreatingSession] = useState(false);
 
   useEffect(() => {
     loadUserClasses();
@@ -37,7 +40,7 @@ export default function CheckoutScreen() {
   const loadUserClasses = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get<{ success: boolean; data: ClassResponse[] }>('/classes');
+      const response = await ApiClient.get<{ success: boolean; data: ClassResponse[] }>('/classes');
       setClasses(response.data || []);
       
       // Auto-select first class if only one exists
@@ -77,12 +80,33 @@ export default function CheckoutScreen() {
     price: price ? parseFloat(price as string) : 30,
   };
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     if (!selectedClass) {
       setShowClassModal(true);
       return;
     }
-    setShowPaymentModal(true);
+
+    // Create session first
+    try {
+      setCreatingSession(true);
+
+      const response = await ApiClient.post<{ success: boolean; data: { id: string } }>('/sessions', {
+        tutorId: tutorId as string,
+        classId: selectedClass.id,
+        scheduledStart: startTime as string,
+        scheduledEnd: endTime as string,
+        subject: subject as string,
+        price: booking.price,
+      });
+
+      setSessionId(response.data.id);
+      setShowPaymentModal(true);
+    } catch (error: any) {
+      console.error('Session creation error:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de créer la session');
+    } finally {
+      setCreatingSession(false);
+    }
   };
 
   const handlePaymentSuccess = () => {
@@ -214,16 +238,18 @@ export default function CheckoutScreen() {
             <Text style={styles.totalValue}>${booking.price}</Text>
           </View>
         </View>
-
+        
         {/* Cancellation Policy */}
-        <View style={styles.policyCard}>
-          <View style={styles.policyHeader}>
-            <AlertCircle size={20} color="#FF6B6B" strokeWidth={2} />
-            <Text style={styles.policyTitle}>Cancellation Guarantee</Text>
+        <View style={styles.section}>
+          <View style={styles.policyCard}>
+            <View style={styles.policyHeader}>
+              <AlertCircle size={20} color="#FF6B6B" strokeWidth={2} />
+              <Text style={styles.policyTitle}>Cancellation Guarantee</Text>
+            </View>
+            <Text style={styles.policyText}>
+              100% refundable if you cancel at least 24 hours before the lesson starts.
+            </Text>
           </View>
-          <Text style={styles.policyText}>
-            100% refundable if you cancel at least 24 hours before the lesson starts.
-          </Text>
         </View>
 
         <View style={{ height: 20 }} />
@@ -232,13 +258,17 @@ export default function CheckoutScreen() {
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={[styles.confirmButton, !selectedClass && styles.confirmButtonDisabled]}
+          style={[styles.confirmButton, (!selectedClass || creatingSession) && styles.confirmButtonDisabled]}
           onPress={handleConfirmPayment}
-          disabled={!selectedClass}
+          disabled={!selectedClass || creatingSession}
         >
-          <Text style={styles.confirmButtonText}>
-            {selectedClass ? 'Confirm Payment' : 'Select a class first'}
-          </Text>
+          {creatingSession ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Text style={styles.confirmButtonText}>
+              {selectedClass ? 'Confirm Payment' : 'Select a class first'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -294,7 +324,7 @@ export default function CheckoutScreen() {
                     <View style={styles.classItemContent}>
                       <Text style={styles.className}>{classItem.name}</Text>
                       <Text style={styles.classDetails}>
-                        {classItem.subject} • {classItem.educationLevel}
+                        {classItem.subjects} • {String(classItem.educationLevel)}
                       </Text>
                       <View style={styles.classMembersRow}>
                         <Users size={14} color={Colors.textSecondary} strokeWidth={2} />
@@ -323,12 +353,14 @@ export default function CheckoutScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <StripePayment
-              sessionId={selectedClass?.id || 'mock-session-id'}
-              amount={booking.price}
-              onSuccess={handlePaymentSuccess}
-              onCancel={() => setShowPaymentModal(false)}
-            />
+            {sessionId && (
+              <StripePayment
+                sessionId={sessionId}
+                amount={booking.price}
+                onSuccess={handlePaymentSuccess}
+                onCancel={() => setShowPaymentModal(false)}
+              />
+            )}
           </View>
         </View>
       </Modal>

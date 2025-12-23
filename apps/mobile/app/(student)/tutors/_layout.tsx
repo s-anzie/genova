@@ -4,7 +4,7 @@ export default function TutorsLayout() {
   return (
     <Stack>
       <Stack.Screen
-        name="[id]/index"
+        name="[id]"
         options={{
           headerShown: false,
         }}

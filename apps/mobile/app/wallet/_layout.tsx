@@ -4,7 +4,7 @@ export default function PaymentLayout() {
   return (
     <Stack>
       <Stack.Screen
-        name="wallet"
+        name="index"
         options={{
           title: 'Wallet',
           headerShown: false,

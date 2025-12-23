@@ -131,6 +131,7 @@ export default function ClassesScreen() {
     <View style={styles.container}>
       <PageHeader 
         title="Mes classes"
+        showBackButton={true}
         rightElement={
           <TouchableOpacity style={styles.addButton} onPress={handleCreateClass}>
             <Plus size={22} color={Colors.white} strokeWidth={2.5} />

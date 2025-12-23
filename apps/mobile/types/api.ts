@@ -25,6 +25,7 @@ export interface StudentProfileResponse {
   id: string;
   userId: string;
   educationLevel: string;
+  educationDetails?: string; // JSON string containing detailed education info
   schoolName: string | null;
   parentEmail: string | null;
   parentPhone: string | null;
@@ -47,6 +48,7 @@ export interface TutorProfileResponse {
   serviceRadius: number | null;
   diplomas: Diploma[];
   availability: WeeklySchedule;
+  teachingSkillsDetails?: string; // JSON string containing detailed teaching skills
   totalHoursTaught: number;
   averageRating: number;
   totalReviews: number;

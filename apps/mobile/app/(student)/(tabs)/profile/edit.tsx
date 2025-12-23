@@ -24,6 +24,7 @@ import {
   Target,
   DollarSign,
   Check,
+  X,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/auth-context';
 import { apiClient } from '@/utils/api-client';
@@ -32,13 +33,87 @@ import { API_BASE_URL } from '@/config/api';
 import * as ImagePicker from 'expo-image-picker';
 import type { UserResponse, StudentProfileResponse } from '@/types/api';
 
+// Education levels with their available systems and teaching types
 const EDUCATION_LEVELS = [
-  { value: 'primary', label: 'École primaire' },
-  { value: 'middle_school', label: 'Collège' },
-  { value: 'high_school', label: 'Lycée' },
-  { value: 'university', label: 'Université' },
-  { value: 'graduate', label: 'Études supérieures' },
+  { 
+    value: 'primary', 
+    label: 'Primaire',
+    systems: [
+      { value: 'francophone', label: 'Francophone', teachingTypes: [] },
+      { value: 'anglophone', label: 'Anglophone', teachingTypes: [] },
+    ],
+  },
+  { 
+    value: 'middle_school', 
+    label: 'Collège',
+    systems: [
+      { value: 'francophone', label: 'Francophone', teachingTypes: ['Général', 'Technique'] },
+      { value: 'anglophone', label: 'Anglophone', teachingTypes: [] },
+    ],
+  },
+  { 
+    value: 'high_school', 
+    label: 'Lycée',
+    systems: [
+      { value: 'francophone', label: 'Francophone', teachingTypes: ['Général', 'Technique'] },
+      { value: 'anglophone', label: 'Anglophone', teachingTypes: ['Science', 'Literature'] },
+    ],
+  },
+  { 
+    value: 'higher', 
+    label: 'Supérieur',
+    systems: [], // No system for higher education
+  },
 ];
+
+// Classes per level, system, and teaching type
+const CLASSES: Record<string, any> = {
+  primary: {
+    francophone: {
+      default: ['SIL', 'CP', 'CE1', 'CE2', 'CM1', 'CM2'],
+    },
+    anglophone: {
+      default: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6'],
+    },
+  },
+  middle_school: {
+    francophone: {
+      Général: ['6ème', '5ème', '4ème', '3ème'],
+      Technique: {
+        '1ére A': ['ESF', 'STT', 'STI', 'STG'],
+        '2ème A': ['ESF', 'STT', 'STI', 'STG'],
+        '3ème A': ['ESF', 'STT', 'STI', 'STG'],
+        '4ème A': ['ESF', 'STT', 'STI', 'STG'],
+      },
+    },
+    anglophone: {
+      default: ['Form 1', 'Form 2', 'Form 3', 'Form 4', 'Form 5'],
+    },
+  },
+  high_school: {
+    francophone: {
+      Général: {
+        Seconde: ['C', 'A', 'E'],
+        Première: ['C', 'D', 'E', 'A'],
+        Terminale: ['C', 'D', 'E', 'A'],
+      },
+      Technique: {
+        Seconde: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
+        Première: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
+        Terminale: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
+      },
+    },
+    anglophone: {
+      Science: ['Lower Sixth', 'Upper Sixth'],
+      Literature: ['Lower Sixth', 'Upper Sixth'],
+    },
+  },
+  higher: {
+    default: {
+      default: ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2', 'Doctorat'],
+    },
+  },
+};
 
 const SUBJECTS = [
   'Mathématiques',
@@ -65,6 +140,10 @@ export default function StudentEditProfileScreen() {
   // Student profile data
   const [studentData, setStudentData] = useState({
     educationLevel: '',
+    system: '',
+    teachingType: '',
+    specificClass: '',
+    selectedSerie: '', // Une seule série/filière
     schoolName: '',
     preferredSubjects: [] as string[],
     learningGoals: '',
@@ -109,8 +188,16 @@ export default function StudentEditProfileScreen() {
       const profileResponse = await apiClient.get<{ success: boolean; data: StudentProfileResponse }>(
         `${API_BASE_URL}/profiles/student/${user?.id}`
       );
+      
+      // Parse education details if available
+      const educationDetails: any = profileResponse.data.educationDetails || {};
+      
       setStudentData({
         educationLevel: profileResponse.data.educationLevel || '',
+        system: educationDetails.system || '',
+        teachingType: educationDetails.teachingType || '',
+        specificClass: educationDetails.specificClass || '',
+        selectedSerie: educationDetails.selectedSerie || '',
         schoolName: profileResponse.data.schoolName || '',
         preferredSubjects: profileResponse.data.preferredSubjects || [],
         learningGoals: profileResponse.data.learningGoals || '',
@@ -173,8 +260,17 @@ export default function StudentEditProfileScreen() {
       }
 
       // Update student profile
+      // Prepare education details
+      const educationDetails = {
+        system: studentData.system,
+        teachingType: studentData.teachingType,
+        specificClass: studentData.specificClass,
+        selectedSerie: studentData.selectedSerie,
+      };
+      
       await apiClient.put(`${API_BASE_URL}/profiles/student`, {
         educationLevel: studentData.educationLevel,
+        educationDetails: educationDetails, // Send as object, not string
         schoolName: studentData.schoolName || undefined,
         preferredSubjects: studentData.preferredSubjects,
         learningGoals: studentData.learningGoals || undefined,
@@ -206,11 +302,25 @@ export default function StudentEditProfileScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={() => router.back()}
+          disabled={isSaving}
+        >
+          <X size={24} color={Colors.white} strokeWidth={2.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modifier le profil</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={Colors.white} />
+          ) : (
+            <Check size={24} color={Colors.white} strokeWidth={2.5} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
@@ -365,30 +475,246 @@ export default function StudentEditProfileScreen() {
           </View>
           
           <Text style={styles.fieldLabel}>Niveau d'études</Text>
-          <View style={styles.optionsContainer}>
+          <View style={styles.pillGrid}>
             {EDUCATION_LEVELS.map((level) => (
               <TouchableOpacity
                 key={level.value}
                 style={[
-                  styles.optionButton,
-                  studentData.educationLevel === level.value && styles.optionButtonActive,
+                  styles.pillButton,
+                  studentData.educationLevel === level.value && styles.pillButtonActive,
                 ]}
-                onPress={() => setStudentData({ ...studentData, educationLevel: level.value })}
+                onPress={() => {
+                  setStudentData({ 
+                    ...studentData, 
+                    educationLevel: level.value,
+                    system: '',
+                    teachingType: '',
+                    specificClass: '',
+                    selectedSerie: '',
+                  });
+                }}
               >
                 <Text
                   style={[
-                    styles.optionButtonText,
-                    studentData.educationLevel === level.value && styles.optionButtonTextActive,
+                    styles.pillButtonText,
+                    studentData.educationLevel === level.value && styles.pillButtonTextActive,
                   ]}
                 >
                   {level.label}
                 </Text>
-                {studentData.educationLevel === level.value && (
-                  <Check size={16} color={Colors.white} strokeWidth={3} />
-                )}
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* System selection (if applicable) */}
+          {studentData.educationLevel && EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel)?.systems && EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel)!.systems.length > 0 && (
+            <View style={styles.inlineField}>
+              <Text style={styles.inlineLabel}>Système</Text>
+              <View style={styles.pillGrid}>
+                {EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel)!.systems.map((system) => (
+                  <TouchableOpacity
+                    key={system.value}
+                    style={[
+                      styles.pillButton,
+                      studentData.system === system.value && styles.pillButtonActive,
+                    ]}
+                    onPress={() => setStudentData({ 
+                      ...studentData, 
+                      system: system.value,
+                      teachingType: '',
+                      specificClass: '',
+                      selectedSerie: '',
+                    })}
+                  >
+                    <Text
+                      style={[
+                        styles.pillButtonText,
+                        studentData.system === system.value && styles.pillButtonTextActive,
+                      ]}
+                    >
+                      {system.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Teaching type selection (if applicable) */}
+          {studentData.system && (() => {
+            const level = EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel);
+            const system = level?.systems.find(s => s.value === studentData.system);
+            return system?.teachingTypes && system.teachingTypes.length > 0;
+          })() && (
+            <View style={styles.inlineField}>
+              <Text style={styles.inlineLabel}>Enseignement</Text>
+              <View style={styles.pillGrid}>
+                {EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel)!.systems.find(s => s.value === studentData.system)!.teachingTypes.map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.pillButton,
+                      studentData.teachingType === type && styles.pillButtonActive,
+                    ]}
+                    onPress={() => setStudentData({ 
+                      ...studentData, 
+                      teachingType: type,
+                      specificClass: '',
+                      selectedSerie: '',
+                    })}
+                  >
+                    <Text
+                      style={[
+                        styles.pillButtonText,
+                        studentData.teachingType === type && styles.pillButtonTextActive,
+                      ]}
+                    >
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Class selection */}
+          {studentData.educationLevel && (studentData.educationLevel === 'higher' || studentData.system) && (() => {
+            const levelData = EDUCATION_LEVELS.find(l => l.value === studentData.educationLevel);
+            if (!levelData) return null;
+
+            let availableClasses: any = [];
+            let hasSeriesSelection = false;
+
+            if (studentData.educationLevel === 'higher') {
+              availableClasses = CLASSES.higher.default.default;
+            } else if (studentData.system) {
+              const systemData = levelData.systems.find(s => s.value === studentData.system);
+              const hasTeachingTypes = systemData?.teachingTypes && systemData.teachingTypes.length > 0;
+              
+              if (hasTeachingTypes && studentData.teachingType) {
+                const classData = CLASSES[studentData.educationLevel]?.[studentData.system]?.[studentData.teachingType];
+                if (typeof classData === 'object' && !Array.isArray(classData)) {
+                  availableClasses = classData;
+                  hasSeriesSelection = true;
+                } else {
+                  availableClasses = classData || [];
+                }
+              } else if (!hasTeachingTypes) {
+                availableClasses = CLASSES[studentData.educationLevel]?.[studentData.system]?.default || [];
+              }
+            }
+
+            if (!availableClasses || (Array.isArray(availableClasses) && availableClasses.length === 0 && !hasSeriesSelection)) {
+              return null;
+            }
+
+            return (
+              <View style={styles.inlineField}>
+                <Text style={styles.inlineLabel}>Classe</Text>
+                {hasSeriesSelection ? (
+                  // Classes with series
+                  <View>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.classesScrollView}
+                    >
+                      <View style={styles.classesRow}>
+                        {Object.keys(availableClasses).map((className) => (
+                          <TouchableOpacity
+                            key={className}
+                            style={[
+                              styles.pillButton,
+                              studentData.specificClass === className && styles.pillButtonActive,
+                            ]}
+                            onPress={() => setStudentData({ 
+                              ...studentData, 
+                              specificClass: className,
+                              selectedSerie: '',
+                            })}
+                          >
+                            <Text
+                              style={[
+                                styles.pillButtonText,
+                                studentData.specificClass === className && styles.pillButtonTextActive,
+                              ]}
+                            >
+                              {className}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+
+                    {/* Series selection */}
+                    {studentData.specificClass && availableClasses[studentData.specificClass] && (
+                      <View style={styles.seriesSection}>
+                        <Text style={styles.seriesSectionTitle}>
+                          Série/Filière pour {studentData.specificClass}
+                        </Text>
+                        <ScrollView 
+                          horizontal 
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.seriesScrollView}
+                        >
+                          <View style={styles.seriesContainer}>
+                            {availableClasses[studentData.specificClass].map((serie: string) => {
+                              const isSelected = studentData.selectedSerie === serie;
+                              return (
+                                <TouchableOpacity
+                                  key={serie}
+                                  style={[
+                                    styles.pillButton,
+                                    styles.serieButton,
+                                    isSelected && styles.pillButtonActive,
+                                  ]}
+                                  onPress={() => {
+                                    setStudentData({ ...studentData, selectedSerie: serie });
+                                  }}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.pillButtonText,
+                                      isSelected && styles.pillButtonTextActive,
+                                    ]}
+                                  >
+                                    {serie}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  // Simple classes (no series)
+                  <View style={styles.pillGrid}>
+                    {(availableClasses as string[]).map((className) => (
+                      <TouchableOpacity
+                        key={className}
+                        style={[
+                          styles.pillButton,
+                          studentData.specificClass === className && styles.pillButtonActive,
+                        ]}
+                        onPress={() => setStudentData({ ...studentData, specificClass: className })}
+                      >
+                        <Text
+                          style={[
+                            styles.pillButtonText,
+                            studentData.specificClass === className && styles.pillButtonTextActive,
+                          ]}
+                        >
+                          {className}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })()}
 
           <View style={styles.inputGroup}>
             <View style={styles.inputIcon}>
@@ -475,27 +801,6 @@ export default function StudentEditProfileScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
-
-      {/* Footer Buttons */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.cancelButtonText}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
-          )}
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -528,7 +833,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  backButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -688,34 +993,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Options
-  optionsContainer: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  optionButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    backgroundColor: Colors.bgCream,
-  },
-  optionButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  optionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  optionButtonTextActive: {
-    color: Colors.white,
-  },
-
   // Subjects
   subjectsGrid: {
     flexDirection: 'row',
@@ -744,54 +1021,79 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 
-  // Footer
-  footer: {
-    backgroundColor: Colors.white,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  // Inline form layout
+  inlineField: {
+    gap: 6,
+    marginBottom: 12,
+  },
+  inlineLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  
+  // Pill buttons for selections
+  pillGrid: {
     flexDirection: 'row',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  cancelButton: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  pillButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.white,
+    marginRight: 6,
   },
-  cancelButtonText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  saveButton: {
-    flex: 1,
+  pillButtonActive: {
     backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    borderColor: Colors.primary,
   },
-  saveButtonDisabled: {
-    opacity: 0.6,
+  pillButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
-  saveButtonText: {
+  pillButtonTextActive: {
     color: Colors.white,
-    fontSize: 16,
+  },
+  
+  // Classes with series
+  classesScrollView: {
+    flexGrow: 0,
+    marginBottom: 8,
+  },
+  classesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 12,
+  },
+  seriesSection: {
+    backgroundColor: 'rgba(13, 115, 119, 0.05)',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  seriesSectionTitle: {
+    fontSize: 11,
     fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  seriesScrollView: {
+    flexGrow: 0,
+  },
+  seriesContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingRight: 12,
+  },
+  serieButton: {
+    minWidth: 40,
   },
 });

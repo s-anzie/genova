@@ -22,6 +22,7 @@ export interface CreateStudentProfileData {
 
 export interface UpdateStudentProfileData {
   educationLevel?: string;
+  educationDetails?: any; // JSON structure for detailed education info
   schoolName?: string;
   parentEmail?: string;
   parentPhone?: string;
@@ -55,6 +56,7 @@ export interface UpdateTutorProfileData {
   serviceRadius?: number;
   diplomas?: Diploma[];
   availability?: WeeklySchedule;
+  teachingSkillsDetails?: any; // JSON structure for detailed teaching skills
 }
 
 export interface Diploma {
@@ -308,6 +310,7 @@ export async function updateStudentProfile(userId: string, data: UpdateStudentPr
     where: { userId },
     data: {
       educationLevel: data.educationLevel,
+      educationDetails: data.educationDetails as any,
       schoolName: data.schoolName,
       parentEmail: data.parentEmail,
       parentPhone: data.parentPhone,
@@ -357,6 +360,7 @@ export async function updateTutorProfile(userId: string, data: UpdateTutorProfil
       serviceRadius: data.serviceRadius,
       diplomas: data.diplomas as any,
       availability: data.availability as any,
+      teachingSkillsDetails: data.teachingSkillsDetails as any,
     },
   });
 
@@ -506,11 +510,25 @@ export async function getUserById(userId: string) {
     where: { id: userId },
     select: {
       id: true,
+      email: true,
+      phone: true,
       firstName: true,
       lastName: true,
       avatarUrl: true,
+      birthDate: true,
+      address: true,
+      city: true,
+      postalCode: true,
+      country: true,
+      preferredLanguage: true,
       role: true,
+      subscriptionType: true,
+      subscriptionExpiresAt: true,
+      walletBalance: true,
       createdAt: true,
+      updatedAt: true,
+      isVerified: true,
+      isActive: true,
     },
   });
 

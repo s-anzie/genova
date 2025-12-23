@@ -18,6 +18,7 @@ import {
   UserPlus,
   Trash2,
   Calendar,
+  Edit,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
@@ -67,15 +68,15 @@ export default function ClassDetailScreen() {
   };
 
   const handleInviteMembers = () => {
-    router.push(`/classes/${id}/invite`);
+    router.push(`/(student)/classes/invite?id=${id}`);
   };
 
   const handleEditClass = () => {
-    router.push(`/classes/${id}/edit`);
+    router.push(`/(student)/classes/edit?id=${id}`);
   };
 
   const handleViewSchedule = () => {
-    router.push(`/classes/${id}/schedule`);
+    router.push(`/(student)/classes/schedule?id=${id}`);
   };
 
   const handleRemoveMember = (studentId: string, studentName: string) => {
@@ -201,7 +202,7 @@ export default function ClassDetailScreen() {
         <Text style={styles.headerTitle}>Détails</Text>
         {isCreator && (
           <TouchableOpacity style={styles.settingsButton} onPress={handleEditClass}>
-            <Settings size={22} color={Colors.textPrimary} strokeWidth={2} />
+            <Edit size={22} color={Colors.textPrimary} strokeWidth={2} />
           </TouchableOpacity>
         )}
         {!isCreator && <View style={styles.placeholder} />}
@@ -566,6 +567,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: 12,
     padding: 16,
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',

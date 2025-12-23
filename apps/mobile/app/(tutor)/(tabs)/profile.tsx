@@ -48,26 +48,19 @@ export default function TutorProfileScreen() {
     try {
       setIsLoading(true);
       
-      console.log('Loading profile for user:', user?.id);
-      
       // Fetch user data
-      console.log('Fetching user data from:', `/profiles/user/${user?.id}`);
       const userResponse = await apiClient.get<{ success: boolean; data: UserResponse }>(
         `/profiles/user/${user?.id}`
       );
-      console.log('User response:', userResponse);
       setUserData(userResponse.data);
 
       // Fetch tutor profile - handle 404 if profile doesn't exist yet
       try {
-        console.log('Fetching tutor profile from:', `/profiles/tutor/${user?.id}`);
         const profileResponse = await apiClient.get<{ success: boolean; data: TutorProfileResponse }>(
           `/profiles/tutor/${user?.id}`
         );
-        console.log('Profile response:', profileResponse);
         setProfileData(profileResponse.data);
       } catch (profileError: any) {
-        console.log('Tutor profile not found (404) - this is normal for new users');
         // Profile doesn't exist yet - this is OK for new users
         setProfileData(null);
       }
@@ -130,7 +123,7 @@ export default function TutorProfileScreen() {
             )}
             <TouchableOpacity 
               style={styles.editAvatarButton}
-              onPress={() => router.push('/(tutor)/(tabs)/profile/edit')}
+              onPress={() => router.push('/(tutor)/profile/edit')}
             >
               <Edit2 size={16} color={Colors.white} strokeWidth={2.5} />
             </TouchableOpacity>
@@ -274,7 +267,7 @@ export default function TutorProfileScreen() {
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>Mon portefeuille</Text>
                 <Text style={styles.menuSubtitle}>
-                  Solde: {userData?.walletBalance?.toFixed(2) || '0.00'}€
+                  Solde: {userData?.walletBalance ? Number(userData.walletBalance).toFixed(2) : '0.00'}€
                 </Text>
               </View>
             </View>
@@ -304,7 +297,7 @@ export default function TutorProfileScreen() {
           
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => router.push('/(tutor)/(tabs)/profile/edit')}
+            onPress={() => router.push('/(tutor)/profile/edit')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#F5F5F5' }]}>
