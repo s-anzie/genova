@@ -18,6 +18,7 @@ export const Colors = {
   textTertiary: '#999999',
   white: '#FFFFFF',
   success: '#4ade80',
+  warning: '#f59e0b',
   error: '#ef4444',
   
   // Backgrounds

@@ -4,20 +4,22 @@ import { useRouter } from 'expo-router';
 import { Download, CreditCard, TrendingUp, Plus } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 
-interface QuickActionsProps {
-  userRole: 'student' | 'tutor' | 'STUDENT' | 'TUTOR';
+export interface QuickActionsProps {
+  userRole: 'student' | 'tutor' | 'STUDENT' | 'TUTOR' | 'ADMIN' | 'admin';
 }
 
 export function QuickActions({ userRole }: QuickActionsProps) {
   const router = useRouter();
   const isTutor = userRole === 'tutor' || userRole === 'TUTOR';
+  
+  const basePath = isTutor ? '/(tutor)/wallet' : '/(student)/wallet';
 
   return (
     <View style={styles.quickActions}>
       {isTutor && (
         <TouchableOpacity
           style={styles.quickActionButton}
-          onPress={() => router.push('/withdraw')}
+          onPress={() => router.push(`${basePath}/withdraw` as any)}
           activeOpacity={0.7}
         >
           <View style={[styles.quickActionIcon, { backgroundColor: Colors.success }]}>
@@ -29,7 +31,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       
       <TouchableOpacity
         style={styles.quickActionButton}
-        onPress={() => router.push('/payment-methods')}
+        onPress={() => router.push(`${basePath}/payment-methods` as any)}
         activeOpacity={0.7}
       >
         <View style={[styles.quickActionIcon, { backgroundColor: Colors.primary }]}>
@@ -40,7 +42,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       
       <TouchableOpacity
         style={styles.quickActionButton}
-        onPress={() => router.push('/transactions')}
+        onPress={() => router.push(`${basePath}/transactions` as any)}
         activeOpacity={0.7}
       >
         <View style={[styles.quickActionIcon, { backgroundColor: Colors.secondary }]}>
@@ -52,7 +54,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       {!isTutor && (
         <TouchableOpacity
           style={styles.quickActionButton}
-          onPress={() => router.push('/add-funds')}
+          onPress={() => router.push(`${basePath}/add-funds` as any)}
           activeOpacity={0.7}
         >
           <View style={[styles.quickActionIcon, { backgroundColor: Colors.accent2 }]}>

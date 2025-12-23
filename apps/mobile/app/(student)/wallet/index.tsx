@@ -34,7 +34,7 @@ export default function StudentWalletScreen() {
         balance={balance}
         balanceVisible={balanceVisible}
         onToggleVisibility={() => setBalanceVisible(!balanceVisible)}
-        showBackButton={false}
+        showBackButton={true}
       />
 
       <ScrollView

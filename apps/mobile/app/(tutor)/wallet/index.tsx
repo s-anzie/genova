@@ -34,7 +34,7 @@ export default function TutorWalletScreen() {
         balance={balance}
         balanceVisible={balanceVisible}
         onToggleVisibility={() => setBalanceVisible(!balanceVisible)}
-        showBackButton={false}
+        showBackButton={true}
       />
 
       <ScrollView
@@ -45,7 +45,7 @@ export default function TutorWalletScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <QuickActions userRole={user?.role || 'tutor'} />
+        <QuickActions userRole={user?.role || 'TUTOR'} />
         
         <RecentTransactions transactions={recentTransactions} />
 
