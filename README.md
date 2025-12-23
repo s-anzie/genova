@@ -1,135 +1,236 @@
-# Turborepo starter
+# Genova - Plateforme Mobile de Tutorat
 
-This Turborepo starter is maintained by the Turborepo core team.
+Plateforme mobile complète de mise en relation entre tuteurs et étudiants, construite avec React Native/Expo et Node.js.
 
-## Using this example
+## Structure du Projet
 
-Run the following command:
-
-```sh
-npx create-turbo@latest
-```
-
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
+Ce monorepo Turborepo contient:
 
 ```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+genova/
+├── apps/
+│   ├── api/              # Backend API (Node.js + Express + PostgreSQL)
+│   ├── mobile/           # Application mobile (React Native + Expo)
+│   ├── web/              # Application web (Next.js) - template
+│   └── docs/             # Documentation (Next.js) - template
+├── packages/
+│   ├── utils/            # Utilitaires partagés (erreurs, logger, config)
+│   ├── ui/               # Composants UI partagés - template
+│   ├── eslint-config/    # Configuration ESLint partagée
+│   └── typescript-config/# Configuration TypeScript partagée
+└── specs/                # Spécifications du projet
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+## Prérequis
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+- Node.js >= 18
+- npm >= 11
+- PostgreSQL >= 14
+- Redis (optionnel, pour le cache)
+- Elasticsearch (optionnel, pour la recherche)
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+## Installation
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```bash
+# Installer toutes les dépendances
+npm install
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+## Configuration
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+### Backend API
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+1. Copier le fichier d'environnement:
+```bash
+cp apps/api/.env.example apps/api/.env
 ```
 
-### Remote Caching
+2. Configurer les variables d'environnement dans `apps/api/.env`
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+3. Créer la base de données:
+```bash
+createdb genova_dev
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+4. Exécuter les migrations:
+```bash
+npm run migrate -w @repo/api
 ```
 
-## Useful Links
+## Développement
 
-Learn more about the power of Turborepo:
+### Lancer tous les projets
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+```bash
+npm run dev
+```
+
+### Lancer un projet spécifique
+
+```bash
+# API backend
+npm run dev -w @repo/api
+
+# Application mobile
+npm run dev -w @repo/mobile
+
+# Package utils
+npm run dev -w @repo/utils
+```
+
+## Tests
+
+### Exécuter tous les tests
+
+```bash
+npm run test
+```
+
+### Tests basés sur les propriétés (Property-Based Testing)
+
+```bash
+npm run test:property
+```
+
+### Tests pour un workspace spécifique
+
+```bash
+npm run test -w @repo/api
+npm run test -w @repo/utils
+```
+
+## Build
+
+```bash
+# Build tous les projets
+npm run build
+
+# Build un projet spécifique
+npm run build -w @repo/api
+```
+
+## Linting et Formatage
+
+```bash
+# Linter tous les projets
+npm run lint
+
+# Vérifier les types TypeScript
+npm run check-types
+
+# Formater le code
+npm run format
+```
+
+## Stack Technologique
+
+### Backend
+- Node.js avec Express
+- PostgreSQL pour les données relationnelles
+- Redis pour le cache
+- Elasticsearch pour la recherche
+- Stripe pour les paiements
+- Firebase Cloud Messaging pour les notifications
+- AWS S3 pour le stockage de fichiers
+
+### Mobile
+- React Native avec Expo
+- Expo Router pour la navigation
+- React Native Gesture Handler & Reanimated
+
+### Partagé
+- TypeScript
+- Jest pour les tests unitaires
+- fast-check pour les tests basés sur les propriétés
+- ESLint + Prettier pour la qualité du code
+- Turborepo pour la gestion du monorepo
+
+## Schéma de Base de Données
+
+Le schéma est défini dans `apps/api/src/database/schema.sql` et inclut:
+
+- Utilisateurs et profils (étudiants, tuteurs)
+- Classes et membres de classe
+- Consortiums et membres de consortium
+- Sessions de tutorat et présence
+- Paiements et transactions
+- Avis et évaluations
+- Badges et réalisations
+- Résultats académiques
+- Produits marketplace
+- Notifications
+
+## Endpoints API
+
+L'API suit les conventions RESTful:
+
+- `/api/auth` - Authentification
+- `/api/users` - Gestion des utilisateurs
+- `/api/students` - Profils étudiants
+- `/api/tutors` - Profils tuteurs et recherche
+- `/api/classes` - Gestion des classes
+- `/api/sessions` - Réservation et gestion des sessions
+- `/api/payments` - Traitement des paiements
+- `/api/consortiums` - Gestion des consortiums
+- `/api/marketplace` - Ressources éducatives
+- `/api/badges` - Gamification
+- `/api/notifications` - Notifications
+
+## Gestion des Erreurs
+
+Toutes les erreurs suivent un format cohérent:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Message lisible",
+    "details": {},
+    "field": "nomDuChamp",
+    "timestamp": "2025-12-20T10:30:00Z",
+    "requestId": "req_abc123"
+  }
+}
+```
+
+Types d'erreurs:
+- ValidationError (400)
+- AuthenticationError (401)
+- AuthorizationError (403)
+- NotFoundError (404)
+- ConflictError (409)
+- PaymentError (402)
+- ExternalServiceError (503)
+
+## Stratégie de Test
+
+### Tests Unitaires
+- Testent les fonctions et composants individuels
+- Mockent les dépendances externes
+- Se concentrent sur la logique métier
+
+### Tests Basés sur les Propriétés (PBT)
+- Vérifient les propriétés universelles sur tous les inputs
+- Utilisent fast-check pour la génération aléatoire
+- Minimum 100 itérations par propriété
+- Chaque propriété de correction du document de design a un test correspondant
+
+### Tests d'Intégration
+- Testent les endpoints API de bout en bout
+- Testent les opérations de base de données
+- Testent les interactions entre services
+
+## Variables d'Environnement
+
+Voir `apps/api/.env.example` pour les variables requises.
+
+## Contribution
+
+1. Créer une branche feature
+2. Faire vos modifications
+3. Exécuter les tests et le linting
+4. Soumettre une pull request
+
+## License
+
+Privé - Tous droits réservés

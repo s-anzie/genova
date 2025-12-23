@@ -1,0 +1,614 @@
+// Prisma schema for Genova Mobile Application
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id                    String           @id @default(uuid())
+  email                 String           @unique
+  phone                 String?
+  passwordHash          String
+  firstName             String
+  lastName              String
+  avatarUrl             String?
+  birthDate             DateTime?
+  address               String?
+  city                  String?
+  postalCode            String?
+  country               String?
+  preferredLanguage     String           @default("en")
+  role                  Role             @default(STUDENT)
+  subscriptionType      SubscriptionType @default(FREE)
+  subscriptionExpiresAt DateTime?
+  walletBalance         Decimal          @default(0) @db.Decimal(10, 2)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  isVerified            Boolean          @default(false)
+  isActive              Boolean          @default(true)
+
+  // Relations
+  refreshTokens         RefreshToken[]
+  passwordResets        PasswordReset[]
+  studentProfile        StudentProfile?
+  tutorProfile          TutorProfile?
+  createdClasses        Class[]          @relation("ClassCreator")
+  classMembers          ClassMember[]
+  tutorAssignments      ClassTutorAssignment[] @relation("TutorAssignments")
+  createdConsortiums    Consortium[]     @relation("ConsortiumCreator")
+  consortiumMembers     ConsortiumMember[]
+  sessionsAsTutor       TutoringSession[] @relation("SessionTutor")
+  attendances           Attendance[]
+  sessionReports        SessionReport[]
+  reviewsGiven          Review[]         @relation("Reviewer")
+  reviewsReceived       Review[]         @relation("Reviewee")
+  transactionsAsPayer   Transaction[]    @relation("Payer")
+  transactionsAsPayee   Transaction[]    @relation("Payee")
+  badges                UserBadge[]
+  academicResults       AcademicResult[]
+  shopProducts          ShopProduct[]
+  shopPurchases         ShopPurchase[]
+  notifications         Notification[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isUsed    Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ============================================================================
+// PROFILES
+// ============================================================================
+
+model StudentProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  educationLevel   String
+  schoolName       String?
+  parentEmail      String?
+  parentPhone      String?
+  learningGoals    String?
+  preferredSubjects String[]
+  budgetPerHour    Decimal? @db.Decimal(10, 2)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+
+model TutorProfile {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  bio                    String?
+  experienceYears        Int      @default(0)
+  hourlyRate             Decimal  @db.Decimal(10, 2)
+  subjects               String[]
+  educationLevels        String[]
+  languages              String[]
+  teachingMode           TeachingMode
+  serviceRadius          Int?
+  diplomas               Json     @default("[]")
+  availability           Json     @default("{}")
+  totalHoursTaught       Decimal  @default(0) @db.Decimal(10, 2)
+  averageRating          Decimal  @default(0) @db.Decimal(3, 2)
+  totalReviews           Int      @default(0)
+  isVerified             Boolean  @default(false)
+  verificationDocuments  String[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tutor_profiles")
+}
+
+// ============================================================================
+// CLASSES
+// ============================================================================
+
+model Class {
+  id              String        @id @default(uuid())
+  name            String
+  description     String?
+  createdBy       String
+  educationLevel  Json          // Structured: { level, system, specificLevel, stream }
+  subjects        String[]      // Multiple subjects per class
+  maxStudents     Int?
+  meetingType     MeetingType
+  meetingLocation String?
+  createdAt       DateTime      @default(now())
+  isActive        Boolean       @default(true)
+
+  creator       User              @relation("ClassCreator", fields: [createdBy], references: [id])
+  members       ClassMember[]
+  sessions      TutoringSession[]
+  timeSlots     ClassTimeSlot[]
+  tutorAssignments ClassTutorAssignment[]
+
+  @@index([createdBy])
+  @@map("classes")
+}
+
+model ClassTimeSlot {
+  id          String   @id @default(uuid())
+  classId     String
+  subject     String
+  dayOfWeek   Int      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime   String   // Format: "HH:MM" (e.g., "14:00")
+  endTime     String   // Format: "HH:MM" (e.g., "16:00")
+  createdAt   DateTime @default(now())
+  isActive    Boolean  @default(true)
+
+  class       Class                 @relation(fields: [classId], references: [id], onDelete: Cascade)
+  cancellations ClassSlotCancellation[]
+  tutorAssignments ClassTutorAssignment[]
+
+  @@index([classId])
+  @@index([dayOfWeek])
+  @@map("class_time_slots")
+}
+
+model ClassSlotCancellation {
+  id          String   @id @default(uuid())
+  timeSlotId  String
+  weekStart   DateTime // Start of the week (Monday) for which this slot is cancelled
+  reason      String?
+  createdAt   DateTime @default(now())
+  createdBy   String
+
+  timeSlot    ClassTimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([timeSlotId, weekStart])
+  @@index([timeSlotId])
+  @@index([weekStart])
+  @@map("class_slot_cancellations")
+}
+
+model ClassTutorAssignment {
+  id                String              @id @default(uuid())
+  classId           String
+  timeSlotId        String?             // Null if assignment is for all slots of a subject
+  subject           String
+  tutorId           String
+  recurrencePattern RecurrencePattern   @default(MANUAL)
+  recurrenceConfig  Json?               // Configuration for recurrence (e.g., week numbers, consecutive days count)
+  startDate         DateTime?           // When this assignment starts
+  endDate           DateTime?           // When this assignment ends (null = indefinite)
+  status            AssignmentStatus    @default(PENDING)
+  createdAt         DateTime            @default(now())
+  isActive          Boolean             @default(true)
+
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  timeSlot    ClassTimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  tutor       User           @relation("TutorAssignments", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@index([classId])
+  @@index([timeSlotId])
+  @@index([tutorId])
+  @@index([subject])
+  @@map("class_tutor_assignments")
+}
+
+model ClassMember {
+  id        String   @id @default(uuid())
+  classId   String
+  studentId String
+  joinedAt  DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@index([classId])
+  @@index([studentId])
+  @@map("class_members")
+}
+
+// ============================================================================
+// CONSORTIUMS
+// ============================================================================
+
+model Consortium {
+  id                        String   @id @default(uuid())
+  name                      String
+  description               String?
+  createdBy                 String
+  revenueDistributionPolicy Json
+  createdAt                 DateTime @default(now())
+  isActive                  Boolean  @default(true)
+
+  creator  User               @relation("ConsortiumCreator", fields: [createdBy], references: [id])
+  members  ConsortiumMember[]
+  sessions TutoringSession[]
+
+  @@index([createdBy])
+  @@map("consortiums")
+}
+
+model ConsortiumMember {
+  id           String           @id @default(uuid())
+  consortiumId String
+  tutorId      String
+  role         ConsortiumRole
+  revenueShare Decimal          @db.Decimal(5, 2)
+  joinedAt     DateTime         @default(now())
+
+  consortium Consortium @relation(fields: [consortiumId], references: [id], onDelete: Cascade)
+  tutor      User       @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@unique([consortiumId, tutorId])
+  @@index([consortiumId])
+  @@index([tutorId])
+  @@map("consortium_members")
+}
+
+// ============================================================================
+// SESSIONS
+// ============================================================================
+
+model TutoringSession {
+  id                 String        @id @default(uuid())
+  classId            String
+  tutorId            String?
+  consortiumId       String?
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  actualStart        DateTime?
+  actualEnd          DateTime?
+  location           String?
+  onlineMeetingLink  String?
+  subject            String
+  description        String?
+  price              Decimal       @db.Decimal(10, 2)
+  status             SessionStatus @default(PENDING)
+  cancellationReason String?
+  createdAt          DateTime      @default(now())
+
+  class        Class           @relation(fields: [classId], references: [id])
+  tutor        User?           @relation("SessionTutor", fields: [tutorId], references: [id])
+  consortium   Consortium?     @relation(fields: [consortiumId], references: [id])
+  attendances  Attendance[]
+  reports      SessionReport[]
+  reviews      Review[]
+  transactions Transaction[]
+
+  @@index([classId])
+  @@index([tutorId])
+  @@index([consortiumId])
+  @@index([scheduledStart])
+  @@index([status])
+  @@map("tutoring_sessions")
+}
+
+model Attendance {
+  id           String           @id @default(uuid())
+  sessionId    String
+  studentId    String
+  status       AttendanceStatus @default(ABSENT)
+  checkInTime  DateTime?
+  checkOutTime DateTime?
+  notes        String?
+
+  session TutoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([studentId])
+  @@map("attendances")
+}
+
+model SessionReport {
+  id                 String   @id @default(uuid())
+  sessionId          String   @unique
+  tutorId            String
+  topicsCovered      String?
+  homeworkAssigned   String?
+  studentPerformance Json
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  session TutoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tutor   User            @relation(fields: [tutorId], references: [id])
+
+  @@index([sessionId])
+  @@index([tutorId])
+  @@map("session_reports")
+}
+
+// ============================================================================
+// REVIEWS & RATINGS
+// ============================================================================
+
+model Review {
+  id         String   @id @default(uuid())
+  sessionId  String
+  reviewerId String
+  revieweeId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  session  TutoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  reviewer User            @relation("Reviewer", fields: [reviewerId], references: [id])
+  reviewee User            @relation("Reviewee", fields: [revieweeId], references: [id])
+
+  @@index([sessionId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+// ============================================================================
+// PAYMENTS & TRANSACTIONS
+// ============================================================================
+
+model Transaction {
+  id                  String            @id @default(uuid())
+  sessionId           String?
+  payerId             String
+  payeeId             String?
+  amount              Decimal           @db.Decimal(10, 2)
+  platformFee         Decimal           @db.Decimal(10, 2)
+  netAmount           Decimal           @db.Decimal(10, 2)
+  paymentMethod       String
+  paymentProviderId   String?
+  status              TransactionStatus @default(PENDING)
+  transactionType     TransactionType
+  createdAt           DateTime          @default(now())
+
+  session TutoringSession? @relation(fields: [sessionId], references: [id])
+  payer   User             @relation("Payer", fields: [payerId], references: [id])
+  payee   User?            @relation("Payee", fields: [payeeId], references: [id])
+
+  @@index([sessionId])
+  @@index([payerId])
+  @@index([payeeId])
+  @@index([status])
+  @@map("transactions")
+}
+
+// ============================================================================
+// GAMIFICATION
+// ============================================================================
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  iconUrl     String?
+  category    BadgeCategory
+  criteria    Json
+
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String   @id @default(uuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+  @@map("user_badges")
+}
+
+// ============================================================================
+// ACADEMIC PROGRESS
+// ============================================================================
+
+model AcademicResult {
+  id        String   @id @default(uuid())
+  studentId String
+  subject   String
+  examName  String
+  score     Decimal  @db.Decimal(5, 2)
+  maxScore  Decimal  @db.Decimal(5, 2)
+  examDate  DateTime
+  createdAt DateTime @default(now())
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([subject])
+  @@index([examDate])
+  @@map("academic_results")
+}
+
+// ============================================================================
+// MARKETPLACE
+// ============================================================================
+
+model ShopProduct {
+  id             String      @id @default(uuid())
+  sellerId       String
+  title          String
+  description    String?
+  productType    ProductType
+  subject        String
+  educationLevel String
+  price          Decimal     @db.Decimal(10, 2)
+  fileUrl        String?
+  previewUrl     String?
+  downloadsCount Int         @default(0)
+  rating         Decimal     @default(0) @db.Decimal(3, 2)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+
+  seller    User           @relation(fields: [sellerId], references: [id])
+  purchases ShopPurchase[]
+
+  @@index([sellerId])
+  @@index([subject])
+  @@index([educationLevel])
+  @@map("shop_products")
+}
+
+model ShopPurchase {
+  id            String   @id @default(uuid())
+  productId     String
+  buyerId       String
+  amountPaid    Decimal  @db.Decimal(10, 2)
+  transactionId String
+  purchasedAt   DateTime @default(now())
+
+  product ShopProduct @relation(fields: [productId], references: [id])
+  buyer   User        @relation(fields: [buyerId], references: [id])
+
+  @@unique([productId, buyerId])
+  @@index([productId])
+  @@index([buyerId])
+  @@map("shop_purchases")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  STUDENT
+  TUTOR
+  ADMIN
+}
+
+enum SubscriptionType {
+  FREE
+  BASIC
+  PREMIUM
+  PRO
+}
+
+enum TeachingMode {
+  IN_PERSON
+  ONLINE
+  BOTH
+}
+
+enum MeetingType {
+  IN_PERSON
+  ONLINE
+}
+
+enum ConsortiumRole {
+  COORDINATOR
+  MEMBER
+}
+
+enum SessionStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum TransactionType {
+  SESSION_PAYMENT
+  SUBSCRIPTION
+  SHOP_PURCHASE
+}
+
+enum BadgeCategory {
+  STUDENT
+  TUTOR
+  BOTH
+}
+
+enum ProductType {
+  BOOK
+  EXAM
+  FLASHCARDS
+  VIDEO
+  OTHER
+}
+
+enum RecurrencePattern {
+  ROUND_ROBIN      // Rotate tutors evenly across all time slots
+  WEEKLY           // Tutor teaches specific weeks (e.g., every week, alternating weeks)
+  CONSECUTIVE_DAYS // Tutor teaches for N consecutive days before rotation
+  MANUAL           // Manual assignment for each session
+}
+
+enum AssignmentStatus {
+  PENDING          // Waiting for tutor acceptance
+  ACCEPTED         // Tutor accepted the assignment
+  DECLINED         // Tutor declined the assignment
+  CANCELLED        // Assignment was cancelled
+}
