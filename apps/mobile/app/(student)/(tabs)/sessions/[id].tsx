@@ -4,15 +4,12 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
-  StatusBar,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { 
-  ArrowLeft, 
   Calendar, 
   Clock, 
   MapPin, 
@@ -20,14 +17,16 @@ import {
   User,
   FileText,
   QrCode,
-  Hash,
   X,
-  CheckCircle,
+  BookOpen,
+  AlertCircle,
+  ChevronRight,
 } from 'lucide-react-native';
-import { Colors } from '@/constants/colors';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, SessionReportResponse, AttendanceResponse } from '@/types/api';
 import { useAuth } from '@/contexts/auth-context';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -42,11 +41,23 @@ export default function SessionDetailScreen() {
     loadSessionDetails();
   }, [id]);
 
+  // Reload when screen comes back into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSessionDetails();
+    }, [id])
+  );
+
   const loadSessionDetails = async () => {
     try {
       setLoading(true);
       const sessionResponse = await ApiClient.get<{ success: boolean; data: SessionResponse }>(`/sessions/${id}`);
       setSession(sessionResponse.data);
+      
+      // Debug: log tutor data
+      if (sessionResponse.data.tutor) {
+        console.log('Tutor data:', JSON.stringify(sessionResponse.data.tutor, null, 2));
+      }
 
       // Load report if session is completed
       if (sessionResponse.data.status === 'COMPLETED') {
@@ -56,7 +67,6 @@ export default function SessionDetailScreen() {
           );
           setReport(reportResponse.data);
         } catch (error) {
-          // Report might not exist yet
           console.log('No report available');
         }
       }
@@ -109,6 +119,17 @@ export default function SessionDetailScreen() {
     );
   };
 
+  const handleAssignTutor = () => {
+    // Navigate to search page in assign mode
+    router.push(`/(student)/(tabs)/search?sessionId=${id}&subject=${encodeURIComponent(session?.subject || '')}`);
+  };
+
+  const handleViewTutorProfile = () => {
+    if (session?.tutorId) {
+      router.push(`/tutors/${session.tutorId}` as any);
+    }
+  };
+
   const formatDate = (date: Date) => {
     const d = new Date(date);
     return d.toLocaleDateString('fr-FR', { 
@@ -130,7 +151,7 @@ export default function SessionDetailScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return Colors.accent2; // Gold for pending
+        return Colors.accent2;
       case 'CONFIRMED':
         return Colors.success;
       case 'COMPLETED':
@@ -142,7 +163,18 @@ export default function SessionDetailScreen() {
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, hasTutor: boolean) => {
+    if (!hasTutor) {
+      // Check if session is past and cannot be modified
+      const now = new Date();
+      const endTime = new Date(session?.scheduledEnd || now);
+      const isPast = endTime < now;
+      
+      if (isPast) {
+        return 'Non assignée';
+      }
+      return 'Non assignée';
+    }
     switch (status) {
       case 'PENDING':
         return 'En attente de confirmation';
@@ -188,59 +220,61 @@ export default function SessionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <PageHeader title="Détails de la session" showBackButton variant="primary" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!session) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <PageHeader title="Détails de la session" showBackButton variant="primary" />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Session introuvable</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
+  const hasTutor = !!session.tutor && !!session.tutor.firstName;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détails de la session</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.container}>
+      <PageHeader title="Détails de la session" showBackButton variant="primary" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Status Badge */}
+        {/* Status Banner */}
         <View style={[styles.statusBanner, { backgroundColor: `${getStatusColor(session.status)}15` }]}>
           <Text style={[styles.statusBannerText, { color: getStatusColor(session.status) }]}>
-            {getStatusLabel(session.status)}
+            {getStatusLabel(session.status, hasTutor)}
           </Text>
         </View>
 
-        {/* Subject */}
+        {/* Subject & Class */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Matière</Text>
+          <View style={styles.sectionHeader}>
+            <BookOpen size={18} color={Colors.primary} strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Matière</Text>
+          </View>
           <Text style={styles.subjectText}>{session.subject}</Text>
+          {session.class && (
+            <Text style={styles.className}>{session.class.name}</Text>
+          )}
         </View>
 
         {/* Date & Time */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Date et heure</Text>
+          <Text style={styles.sectionLabel}>Date et heure</Text>
           <View style={styles.infoRow}>
-            <Calendar size={20} color={Colors.primary} />
+            <Calendar size={18} color={Colors.textSecondary} strokeWidth={2} />
             <Text style={styles.infoText}>{formatDate(session.scheduledStart)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Clock size={20} color={Colors.primary} />
+            <Clock size={18} color={Colors.textSecondary} strokeWidth={2} />
             <Text style={styles.infoText}>
               {formatTime(session.scheduledStart)} - {formatTime(session.scheduledEnd)}
             </Text>
@@ -249,43 +283,87 @@ export default function SessionDetailScreen() {
 
         {/* Location */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lieu</Text>
-          {session.location && (
-            <View style={styles.infoRow}>
-              <MapPin size={20} color={Colors.primary} />
-              <Text style={styles.infoText}>{session.location}</Text>
+          <Text style={styles.sectionLabel}>Lieu</Text>
+          {session.onlineMeetingLink ? (
+            <View style={styles.locationCard}>
+              <Video size={20} color={Colors.primary} strokeWidth={2} />
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationTitle}>Session en ligne</Text>
+                {session.status === 'CONFIRMED' && (
+                  <TouchableOpacity>
+                    <Text style={styles.linkText}>Rejoindre la visio</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          )}
-          {session.onlineMeetingLink && (
-            <View style={styles.infoRow}>
-              <Video size={20} color={Colors.primary} />
-              <Text style={styles.infoText}>Session en ligne</Text>
+          ) : session.class?.meetingLocation ? (
+            <View style={styles.locationCard}>
+              <MapPin size={20} color={Colors.primary} strokeWidth={2} />
+              <Text style={styles.locationText}>{session.class?.meetingLocation}</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <AlertCircle size={18} color={Colors.warning} strokeWidth={2} />
+              <Text style={styles.emptyText}>Lieu non défini</Text>
             </View>
           )}
         </View>
 
-        {/* Tutor */}
-        {session.tutor && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tuteur</Text>
-            <View style={styles.tutorCard}>
-              <User size={24} color={Colors.primary} />
+        {/* Tutor Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Tuteur</Text>
+          {hasTutor && session.tutor?.firstName ? (
+            <TouchableOpacity 
+              style={styles.tutorCard}
+              onPress={handleViewTutorProfile}
+              activeOpacity={0.7}
+            >
+              <View style={styles.tutorAvatar}>
+                <User size={20} color={Colors.white} strokeWidth={2} />
+              </View>
               <View style={styles.tutorInfo}>
                 <Text style={styles.tutorName}>
-                  {session.tutor.user?.firstName} {session.tutor.user?.lastName}
+                  {session.tutor.firstName} {session.tutor.lastName}
                 </Text>
                 <Text style={styles.tutorRate}>
-                  {session.tutor.hourlyRate.toFixed(2)} €/h
+                  {session.tutor?.tutorProfile?.hourlyRate 
+                    ? `${Math.round(Number(session.tutor.tutorProfile.hourlyRate))} €/h` 
+                    : session.tutor?.hourlyRate 
+                    ? `${Math.round(Number(session.tutor.hourlyRate) )} €/h`
+                    : '0 FCFA/h'}
                 </Text>
               </View>
-            </View>
-          </View>
-        )}
+              <ChevronRight size={20} color={Colors.textSecondary} strokeWidth={2} />
+            </TouchableOpacity>
+          ) : (
+            <>
+              {canCancel() ? (
+                <TouchableOpacity 
+                  style={styles.emptyCard}
+                  onPress={handleAssignTutor}
+                  activeOpacity={0.7}
+                >
+                  <AlertCircle size={18} color={Colors.accent2} strokeWidth={2} />
+                  <Text style={[styles.emptyText, { color: Colors.accent2 }]}>
+                    Aucun tuteur assigné - Appuyez pour en choisir un
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <AlertCircle size={18} color={Colors.textTertiary} strokeWidth={2} />
+                  <Text style={styles.emptyText}>
+                    Aucun tuteur n'a été assigné à cette session
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
 
         {/* Description */}
         {session.description && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionLabel}>Description</Text>
             <Text style={styles.descriptionText}>{session.description}</Text>
           </View>
         )}
@@ -293,7 +371,7 @@ export default function SessionDetailScreen() {
         {/* Attendance */}
         {attendance.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Présences</Text>
+            <Text style={styles.sectionLabel}>Présences</Text>
             {attendance.map((att) => (
               <View key={att.id} style={styles.attendanceRow}>
                 <Text style={styles.attendanceStudent}>
@@ -318,7 +396,7 @@ export default function SessionDetailScreen() {
         {/* Session Report */}
         {report && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Rapport de session</Text>
+            <Text style={styles.sectionLabel}>Rapport de session</Text>
             
             {report.topicsCovered && (
               <View style={styles.reportItem}>
@@ -362,36 +440,40 @@ export default function SessionDetailScreen() {
         )}
 
         {/* Price */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Prix</Text>
-          <Text style={styles.priceText}>{session.price.toFixed(2)} €</Text>
-        </View>
+        {hasTutor && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Prix</Text>
+            <Text style={styles.priceText}>
+              {session.price ? Math.round(Number(session.price) * 650).toLocaleString('fr-FR') : '0'} FCFA
+            </Text>
+          </View>
+        )}
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           {canCheckIn() && (
             <TouchableOpacity style={styles.primaryButton} onPress={handleCheckIn}>
-              <QrCode size={20} color={Colors.white} />
+              <QrCode size={20} color={Colors.white} strokeWidth={2} />
               <Text style={styles.primaryButtonText}>Check-in</Text>
             </TouchableOpacity>
           )}
 
           {canSubmitReport() && (
             <TouchableOpacity style={styles.primaryButton} onPress={handleSubmitReport}>
-              <FileText size={20} color={Colors.white} />
+              <FileText size={20} color={Colors.white} strokeWidth={2} />
               <Text style={styles.primaryButtonText}>Soumettre un rapport</Text>
             </TouchableOpacity>
           )}
 
           {canCancel() && (
             <TouchableOpacity style={styles.dangerButton} onPress={handleCancelSession}>
-              <X size={20} color={Colors.white} />
+              <X size={20} color={Colors.white} strokeWidth={2} />
               <Text style={styles.dangerButtonText}>Annuler la session</Text>
             </TouchableOpacity>
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -399,24 +481,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgCream,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.textPrimary,
   },
   loadingContainer: {
     flex: 1,
@@ -436,64 +500,143 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    gap: 20,
+    padding: Spacing.lg,
+    gap: Spacing.sm,
   },
   statusBanner: {
-    padding: 16,
-    borderRadius: 12,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
   },
   statusBannerText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   section: {
     backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    borderRadius: BorderRadius.large,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadows.small,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  className: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+    marginTop: 4,
   },
   subjectText: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
+    letterSpacing: -0.3,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   infoText: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.sm,
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  locationText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+    flex: 1,
+  },
+  linkText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  emptyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: Spacing.sm,
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    borderStyle: 'dashed',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    fontWeight: '500',
+    flex: 1,
   },
   tutorCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 12,
+    padding: Spacing.sm,
     backgroundColor: Colors.bgCream,
-    borderRadius: 8,
+    borderRadius: BorderRadius.medium,
+  },
+  tutorAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tutorInfo: {
     flex: 1,
   },
   tutorName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.textPrimary,
+    marginBottom: 2,
   },
   tutorRate: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   descriptionText: {
     fontSize: 15,
@@ -509,28 +652,29 @@ const styles = StyleSheet.create({
   attendanceStudent: {
     fontSize: 15,
     color: Colors.textPrimary,
+    fontWeight: '500',
   },
   attendanceBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: BorderRadius.small,
   },
   attendanceStatus: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   reportItem: {
-    gap: 8,
+    gap: 6,
   },
   reportLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textSecondary,
   },
   reportText: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textPrimary,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   performanceRow: {
     flexDirection: 'row',
@@ -541,20 +685,22 @@ const styles = StyleSheet.create({
   performanceLabel: {
     fontSize: 14,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   performanceValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.primary,
   },
   priceText: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.primary,
+    letterSpacing: -0.5,
   },
   actionsContainer: {
-    gap: 12,
-    marginTop: 8,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -562,12 +708,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.large,
+    ...Shadows.small,
   },
   primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.white,
   },
   dangerButton: {
@@ -576,12 +723,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.error,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.large,
+    ...Shadows.small,
   },
   dangerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.white,
   },
 });

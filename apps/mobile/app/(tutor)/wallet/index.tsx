@@ -5,7 +5,6 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
-  StyleSheet,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth-context';
 import { useWallet } from '@/hooks/useWallet';
@@ -21,15 +20,15 @@ export default function TutorWalletScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 justify-center items-center bg-bgCream">
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Chargement...</Text>
+        <Text className="text-sm text-gray-500 mt-3 font-medium">Chargement...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 bg-bgCream">
       <WalletHeader
         balance={balance}
         balanceVisible={balanceVisible}
@@ -38,8 +37,8 @@ export default function TutorWalletScreen() {
       />
 
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
+        className="flex-1"
+        contentContainerStyle={{ padding: 20, gap: 24 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -54,29 +53,3 @@ export default function TutorWalletScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bgSecondary,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    gap: 24,
-  },
-});

@@ -10,6 +10,20 @@ import { checkMentorBadge, checkPedagogueBadge } from './badge.service';
 
 const prisma = new PrismaClient();
 
+// Reusable select for tutor with hourlyRate
+const tutorSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  avatarUrl: true,
+  tutorProfile: {
+    select: {
+      hourlyRate: true,
+    },
+  },
+} as const;
+
 // Types
 export interface CreateSessionData {
   classId: string;
@@ -31,6 +45,7 @@ export interface UpdateSessionData {
   onlineMeetingLink?: string;
   description?: string;
   price?: number;
+  tutorId?: string;
 }
 
 export interface SessionWithDetails extends TutoringSession {
@@ -189,6 +204,15 @@ export async function createSession(
   }
 
   // Create session with PENDING status (Requirement 6.1)
+  logger.info('Creating session with data:', {
+    classId: data.classId,
+    tutorId: data.tutorId,
+    scheduledStart: data.scheduledStart.toISOString(),
+    scheduledEnd: data.scheduledEnd.toISOString(),
+    subject: data.subject,
+    price: data.price,
+  });
+
   const session = await prisma.tutoringSession.create({
     data: {
       classId: data.classId,
@@ -217,13 +241,7 @@ export async function createSession(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -254,20 +272,33 @@ export async function getSessionById(sessionId: string): Promise<SessionWithDeta
           name: true,
           educationLevel: true,
           subjects: true,
+          meetingLocation: true,
           members: {
             where: { isActive: true },
-            select: { studentId: true },
+            select: {
+              id: true,
+              studentId: true,
+              student: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  avatarUrl: true,
+                  role: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
           },
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -349,16 +380,15 @@ export async function getUserSessions(
             where: { isActive: true },
             select: { studentId: true },
           },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -433,13 +463,7 @@ export async function confirmSession(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -517,13 +541,7 @@ export async function updateSessionStatus(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -749,13 +767,7 @@ export async function cancelSession(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -846,6 +858,50 @@ export async function updateSession(
     }
   }
 
+  // If assigning a tutor, validate and check availability
+  if (data.tutorId) {
+    logger.info(`Assigning tutor ${data.tutorId} to session ${sessionId}`);
+    
+    // Check if session already has a tutor assigned
+    if (session.tutorId) {
+      throw new ConflictError('This session already has a tutor assigned. Please unassign the current tutor first.');
+    }
+    
+    // Check if tutor exists and has a profile
+    const tutorProfile = await prisma.tutorProfile.findUnique({
+      where: { userId: data.tutorId },
+      include: { user: true },
+    });
+
+    if (!tutorProfile) {
+      throw new NotFoundError('Tutor profile not found');
+    }
+
+    logger.info(`Tutor profile found: ${tutorProfile.user.firstName} ${tutorProfile.user.lastName}`);
+
+    // Check tutor availability
+    const isAvailable = await checkTutorAvailability(
+      data.tutorId,
+      data.scheduledStart || session.scheduledStart,
+      data.scheduledEnd || session.scheduledEnd,
+      sessionId
+    );
+
+    if (!isAvailable) {
+      throw new ConflictError('Tutor is not available during this time slot');
+    }
+
+    logger.info(`Tutor is available for the time slot`);
+
+    // Always update price based on tutor's hourly rate when assigning a tutor
+    const duration = ((data.scheduledEnd || session.scheduledEnd).getTime() - 
+                     (data.scheduledStart || session.scheduledStart).getTime()) / (1000 * 60 * 60);
+    data.price = parseFloat(tutorProfile.hourlyRate.toString()) * duration;
+    logger.info(`Calculated price: ${data.price} for ${duration} hours at ${tutorProfile.hourlyRate}/h`);
+  }
+
+  logger.info(`Updating session ${sessionId} with data:`, data);
+
   // Update session
   const updatedSession = await prisma.tutoringSession.update({
     where: { id: sessionId },
@@ -870,6 +926,11 @@ export async function updateSession(
           lastName: true,
           email: true,
           avatarUrl: true,
+          tutorProfile: {
+            select: {
+              hourlyRate: true,
+            },
+          },
         },
       },
       consortium: {
@@ -931,13 +992,7 @@ export async function getClassSessions(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {
@@ -1044,13 +1099,7 @@ export async function rescheduleSession(
         },
       },
       tutor: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          avatarUrl: true,
-        },
+        select: tutorSelect,
       },
       consortium: {
         select: {

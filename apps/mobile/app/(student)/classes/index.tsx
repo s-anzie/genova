@@ -119,7 +119,7 @@ export default function ClassesScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Mes classes" />
+        <PageHeader title="Mes classes" variant="primary" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -132,6 +132,7 @@ export default function ClassesScreen() {
       <PageHeader 
         title="Mes classes"
         showBackButton={true}
+        variant="primary"
         rightElement={
           <TouchableOpacity style={styles.addButton} onPress={handleCreateClass}>
             <Plus size={22} color={Colors.white} strokeWidth={2.5} />

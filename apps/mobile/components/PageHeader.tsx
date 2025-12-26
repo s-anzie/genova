@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -13,6 +13,7 @@ interface PageHeaderProps {
   showBackButton?: boolean;
   onBackPress?: () => void;
   showGradient?: boolean;
+  variant?: 'default' | 'primary'; // New prop for header style
 }
 
 export function PageHeader({ 
@@ -22,7 +23,8 @@ export function PageHeader({
   leftElement,
   showBackButton = false,
   onBackPress,
-  showGradient = true 
+  showGradient = true,
+  variant = 'default' // Default to cream/white style
 }: PageHeaderProps) {
   const router = useRouter();
 
@@ -34,31 +36,46 @@ export function PageHeader({
     }
   };
 
+  const isPrimary = variant === 'primary';
+  const textColor = isPrimary ? Colors.white : Colors.textPrimary;
+  const subtitleColor = isPrimary ? 'rgba(255, 255, 255, 0.8)' : Colors.textSecondary;
+
   const content = (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bgCream} />
+      <StatusBar 
+        barStyle={isPrimary ? "light-content" : "dark-content"} 
+        backgroundColor={isPrimary ? Colors.primary : Colors.bgCream} 
+      />
       <View style={styles.content}>
         {(showBackButton || leftElement) && (
           <View style={styles.leftElement}>
             {leftElement || (
               <TouchableOpacity 
-                style={styles.backButton} 
+                style={[styles.backButton, isPrimary && styles.backButtonPrimary]} 
                 onPress={handleBackPress}
                 activeOpacity={0.7}
               >
-                <ArrowLeft size={28} color={Colors.textPrimary} strokeWidth={2} />
+                <ArrowLeft size={28} color={textColor} strokeWidth={2} />
               </TouchableOpacity>
             )}
           </View>
         )}
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          <Text style={[styles.title, { color: textColor }]}>{title}</Text>
+          {subtitle && <Text style={[styles.subtitle, { color: subtitleColor }]}>{subtitle}</Text>}
         </View>
         {rightElement && <View style={styles.rightElement}>{rightElement}</View>}
       </View>
     </View>
   );
+
+  if (isPrimary) {
+    return (
+      <View style={[styles.wrapper, styles.primaryWrapper]}>
+        {content}
+      </View>
+    );
+  }
 
   if (showGradient) {
     return (
@@ -83,26 +100,24 @@ interface TabSelectorProps {
 export function TabSelector({ tabs, activeTab, onTabChange }: TabSelectorProps) {
   return (
     <View style={styles.tabContainer}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.key}
-          style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-          onPress={() => onTabChange(tab.key)}
-          activeOpacity={0.7}
-        >
-          {activeTab === tab.key && (
-            <LinearGradient
-              colors={Gradients.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.tabGradient}
-            />
-          )}
-          <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabScrollContent}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
+            onPress={() => onTabChange(tab.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -116,6 +131,10 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(13, 115, 119, 0.08)',
+  },
+  primaryWrapper: {
+    backgroundColor: Colors.primary,
+    borderBottomWidth: 0,
   },
   container: {
     backgroundColor: 'transparent',
@@ -138,6 +157,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  backButtonPrimary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+  },
   titleContainer: {
     flex: 1,
   },
@@ -158,33 +183,33 @@ const styles = StyleSheet.create({
   },
   // Tab Selector Styles
   tabContainer: {
-    flexDirection: 'row',
+    backgroundColor: Colors.bgCream,
+    paddingVertical: Spacing.md,
+  },
+  tabScrollContent: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
+    gap: Spacing.xs,
   },
   tab: {
-    flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
-    borderRadius: BorderRadius.large,
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    position: 'relative',
-    overflow: 'hidden',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.medium,
+    backgroundColor: Colors.white,
+    minWidth: 110,
   },
   activeTab: {
-    backgroundColor: 'transparent',
-  },
-  tabGradient: {
-    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.primary,
   },
   tabText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.textSecondary,
-    zIndex: 1,
+    textAlign: 'center',
   },
   activeTabText: {
     color: Colors.white,
+    fontWeight: '700',
   },
 });

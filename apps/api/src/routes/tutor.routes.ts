@@ -128,4 +128,81 @@ router.get(
   }
 );
 
+/**
+ * GET /api/tutors/suggestions/:sessionId
+ * Get tutor suggestions for an unassigned session
+ */
+router.get(
+  '/suggestions/:sessionId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { sessionId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 3;
+
+      if (!sessionId) {
+        throw new ValidationError('Session ID is required', 'sessionId');
+      }
+
+      const { PrismaClient } = await import('@prisma/client');
+      const prisma = new PrismaClient();
+
+      // Get session details
+      const session = await prisma.tutoringSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          class: {
+            select: {
+              subjects: true,
+              educationLevel: true,
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        throw new ValidationError('Session not found', 'sessionId');
+      }
+
+      console.log('Session found:', session.id);
+      console.log('Session subject:', session.subject);
+      console.log('Session class educationLevel:', session.class.educationLevel);
+
+      // Extract education level string from the object
+      let educationLevelStr = '';
+      if (typeof session.class.educationLevel === 'string') {
+        educationLevelStr = session.class.educationLevel;
+      } else if (typeof session.class.educationLevel === 'object' && session.class.educationLevel !== null) {
+        // If it's an object, try to extract the level property
+        educationLevelStr = (session.class.educationLevel as any).level || '';
+      }
+
+      console.log('Education level string:', educationLevelStr);
+
+      // Find tutors matching the session criteria
+      const criteria: TutorSearchCriteria = {
+        subject: session.subject,
+        educationLevel: educationLevelStr,
+      };
+
+      console.log('Search criteria:', criteria);
+
+      const tutors = await searchTutors(criteria);
+
+      console.log('Tutors found:', tutors.length);
+
+      // Limit results
+      const suggestions = tutors.slice(0, limit);
+
+      res.json({
+        success: true,
+        data: suggestions,
+        sessionId,
+      });
+    } catch (error) {
+      console.error('Error in tutor suggestions:', error);
+      next(error);
+    }
+  }
+);
+
 export default router;

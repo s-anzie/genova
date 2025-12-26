@@ -206,7 +206,7 @@ export default function WalletScreen() {
             onPress={() => router.push('/payment-methods')}
             activeOpacity={0.7}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: '#0D7377' }]}>
+            <View style={[styles.quickActionIcon, { backgrolundColor: '#0D7377' }]}>
               <CreditCard size={24} color={Colors.white} strokeWidth={2.5} />
             </View>
             <Text style={styles.quickActionLabel}>Cartes</Text>

@@ -32,8 +32,8 @@ export default function WithdrawScreen() {
       return;
     }
 
-    if (withdrawAmount < 10) {
-      Alert.alert('Erreur', 'Le montant minimum de retrait est de 10 €');
+    if (withdrawAmount < 1000) {
+      Alert.alert('Erreur', 'Le montant minimum de retrait est de 1000 FCFA');
       return;
     }
 
@@ -56,14 +56,14 @@ export default function WithdrawScreen() {
   return (
     <View className="flex-1 bg-bg-secondary">
       {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-white border-b border-border">
+      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-primary border-b-0">
         <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-bg-secondary justify-center items-center"
+          className="w-10 h-10 rounded-full bg-white/15 justify-center items-center"
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#333333" strokeWidth={2.5} />
+          <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-text-primary">Retirer des fonds</Text>
+        <Text className="text-lg font-bold text-white">Retirer des fonds</Text>
         <View className="w-10" />
       </View>
 
@@ -71,7 +71,7 @@ export default function WithdrawScreen() {
         {/* Available Balance */}
         <View className="bg-primary rounded-2xl p-6 items-center mb-6">
           <Text className="text-sm text-white/80 font-medium mb-2">Solde disponible</Text>
-          <Text className="text-4xl font-extrabold text-white">{availableBalance.toFixed(2)} €</Text>
+          <Text className="text-4xl font-extrabold text-white">{availableBalance.toFixed(2)} FCFA</Text>
         </View>
 
         {/* Amount Input */}
@@ -83,11 +83,11 @@ export default function WithdrawScreen() {
               className="flex-1 text-2xl font-bold text-text-primary ml-2"
               value={amount}
               onChangeText={setAmount}
-              placeholder="0.00"
+              placeholder="0"
               keyboardType="decimal-pad"
               placeholderTextColor="#666666"
             />
-            <Text className="text-xl font-semibold text-text-secondary">€</Text>
+            <Text className="text-xl font-semibold text-text-secondary">FCFA</Text>
           </View>
         </View>
 
@@ -95,7 +95,7 @@ export default function WithdrawScreen() {
         <View className="mb-6">
           <Text className="text-base font-semibold text-text-primary mb-3">Montants rapides</Text>
           <View className="flex-row gap-3">
-            {[20, 50, 100, 200].map((value) => (
+            {[5000, 10000, 25000, 50000].map((value) => (
               <TouchableOpacity
                 key={value}
                 className={`flex-1 py-3 rounded-xl border ${
@@ -110,7 +110,7 @@ export default function WithdrawScreen() {
                     amount === value.toString() ? 'text-white' : 'text-text-primary'
                   }`}
                 >
-                  {value} €
+                  {value}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -125,9 +125,9 @@ export default function WithdrawScreen() {
               Informations importantes
             </Text>
             <Text className="text-[13px] text-text-secondary leading-5">
-              • Montant minimum : 10 €{'\n'}
-              • Délai de traitement : 2-5 jours ouvrés{'\n'}
-              • Les fonds seront virés sur votre compte bancaire
+              • Montant minimum : 1000 FCFA{'\n'}
+              • Délai de traitement : 24-48 heures{'\n'}
+              • Retrait via Orange Money ou MTN MoMo
             </Text>
           </View>
         </View>

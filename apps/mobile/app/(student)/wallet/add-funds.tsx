@@ -27,14 +27,14 @@ export default function AddFundsScreen() {
       return;
     }
 
-    if (addAmount < 5) {
-      Alert.alert('Erreur', 'Le montant minimum est de 5 €');
+    if (addAmount < 500) {
+      Alert.alert('Erreur', 'Le montant minimum est de 500 FCFA');
       return;
     }
 
     setLoading(true);
     try {
-      // TODO: Implement add funds API call with Stripe
+      // TODO: Implement add funds API call with Orange Money / MTN MoMo
       Alert.alert('Succès', 'Fonds ajoutés avec succès');
       router.back();
     } catch (error) {
@@ -51,14 +51,14 @@ export default function AddFundsScreen() {
   return (
     <View className="flex-1 bg-bg-secondary">
       {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-white border-b border-border">
+      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-primary border-b-0">
         <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-bg-secondary justify-center items-center"
+          className="w-10 h-10 rounded-full bg-white/15 justify-center items-center"
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#333333" strokeWidth={2.5} />
+          <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-text-primary">Ajouter des fonds</Text>
+        <Text className="text-lg font-bold text-white">Recharger le compte</Text>
         <View className="w-10" />
       </View>
 
@@ -66,23 +66,23 @@ export default function AddFundsScreen() {
         {/* Current Balance */}
         <View className="bg-primary rounded-2xl p-6 items-center mb-6">
           <Text className="text-sm text-white/80 font-medium mb-2">Solde actuel</Text>
-          <Text className="text-4xl font-extrabold text-white">{currentBalance.toFixed(2)} €</Text>
+          <Text className="text-4xl font-extrabold text-white">{currentBalance.toFixed(2)} FCFA</Text>
         </View>
 
         {/* Amount Input */}
         <View className="mb-6">
-          <Text className="text-base font-semibold text-text-primary mb-3">Montant à ajouter</Text>
+          <Text className="text-base font-semibold text-text-primary mb-3">Montant à recharger</Text>
           <View className="flex-row items-center bg-white rounded-xl px-4 py-4 border border-border">
             <DollarSign size={20} color="#666666" />
             <TextInput
               className="flex-1 text-2xl font-bold text-text-primary ml-2"
               value={amount}
               onChangeText={setAmount}
-              placeholder="0.00"
+              placeholder="0"
               keyboardType="decimal-pad"
               placeholderTextColor="#666666"
             />
-            <Text className="text-xl font-semibold text-text-secondary">€</Text>
+            <Text className="text-xl font-semibold text-text-secondary">FCFA</Text>
           </View>
         </View>
 
@@ -90,7 +90,7 @@ export default function AddFundsScreen() {
         <View className="mb-6">
           <Text className="text-base font-semibold text-text-primary mb-3">Montants rapides</Text>
           <View className="flex-row gap-3">
-            {[10, 25, 50, 100].map((value) => (
+            {[1000, 2500, 5000, 10000].map((value) => (
               <TouchableOpacity
                 key={value}
                 className={`flex-1 py-3 rounded-xl border ${
@@ -105,7 +105,7 @@ export default function AddFundsScreen() {
                     amount === value.toString() ? 'text-white' : 'text-text-primary'
                   }`}
                 >
-                  {value} €
+                  {value}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -120,8 +120,8 @@ export default function AddFundsScreen() {
               Informations importantes
             </Text>
             <Text className="text-[13px] text-text-secondary leading-5">
-              • Montant minimum : 5 €{'\n'}
-              • Paiement sécurisé par Stripe{'\n'}
+              • Montant minimum : 500 FCFA{'\n'}
+              • Paiement via Orange Money ou MTN MoMo{'\n'}
               • Les fonds sont disponibles immédiatement
             </Text>
           </View>
@@ -134,7 +134,7 @@ export default function AddFundsScreen() {
           disabled={loading}
         >
           <Text className="text-base font-bold text-white">
-            {loading ? 'Traitement...' : 'Ajouter'}
+            {loading ? 'Traitement...' : 'Recharger'}
           </Text>
         </TouchableOpacity>
 

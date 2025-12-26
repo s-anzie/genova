@@ -385,7 +385,7 @@ export default function ClassScheduleScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Emploi du temps" />
+        <PageHeader title="Emploi du temps" variant="primary" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -399,6 +399,7 @@ export default function ClassScheduleScreen() {
         title="Emploi du temps"
         subtitle={className}
         showBackButton={true}
+        variant="primary"
         rightElement={
           <TouchableOpacity style={styles.addButton} onPress={handleAddTimeSlot}>
             <Plus size={22} color={Colors.white} strokeWidth={2.5} />

@@ -7,7 +7,7 @@ import { Colors, Spacing } from '@/constants/colors';
 export default function TutorStudentsScreen() {
   return (
     <View style={styles.container}>
-      <PageHeader title="Mes Étudiants" />
+      <PageHeader title="Mes Étudiants" variant="primary" />
       
       <View style={styles.content}>
         <Users size={64} color={Colors.textSecondary} strokeWidth={1.5} />

@@ -22,7 +22,7 @@ export function WalletHeader({
   const router = useRouter();
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} €`;
+    return `${amount.toFixed(0)} FCFA`;
   };
 
   const totalBalance = balance?.totalBalance || 0;

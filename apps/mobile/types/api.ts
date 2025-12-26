@@ -100,8 +100,8 @@ export interface ClassResponse {
     avatarUrl: string | null;
     role: string;
   };
-  members: ClassMemberResponse[];
-  _count: {
+  members?: ClassMemberResponse[];
+  _count?: {
     members: number;
   };
 }
@@ -208,7 +208,17 @@ export interface SessionResponse {
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
   cancellationReason: string | null;
   createdAt: Date;
-  tutor?: TutorProfileResponse;
+  tutor?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+    hourlyRate?: number; // For backward compatibility
+    tutorProfile?: {
+      hourlyRate: number;
+    };
+  };
   class?: ClassResponse;
 }
 
@@ -324,3 +334,124 @@ export interface CreateSessionReportData {
   notes?: string;
 }
 
+// Progress Tracking Types
+export interface AcademicResultResponse {
+  id: string;
+  studentId: string;
+  subject: string;
+  examName: string;
+  score: number;
+  maxScore: number;
+  examDate: Date;
+  createdAt: Date;
+  student?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface CreateAcademicResultData {
+  subject: string;
+  examName: string;
+  score: number;
+  maxScore: number;
+  examDate: Date;
+}
+
+export interface ProgressData {
+  subject: string;
+  results: AcademicResultResponse[];
+  averageScore: number;
+  improvement: number | null;
+  trend: 'improving' | 'declining' | 'stable';
+}
+
+export interface ProgressDashboard {
+  totalHoursTutored: number;
+  upcomingSessions: number;
+  progressBySubject: ProgressData[];
+  overallImprovement: number | null;
+  recentResults: AcademicResultResponse[];
+}
+
+export interface ProgressVisualizationData {
+  labels: string[];
+  scores: number[];
+  averages: number[];
+}
+
+// Goal Tracking Types
+export interface LearningGoal {
+  id: string;
+  studentId: string;
+  subject: string;
+  targetScore: number;
+  currentScore: number;
+  deadline: Date;
+  description: string;
+  isCompleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateLearningGoalData {
+  subject: string;
+  targetScore: number;
+  deadline: Date;
+  description: string;
+}
+
+// Notification Types
+export interface NotificationResponse {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: string;
+  data: any;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+export interface UnreadNotificationCount {
+  count: number;
+}
+
+// Suggestion Types
+export interface TutorSuggestion {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  hourlyRate: number;
+  subjects: string[];
+  educationLevels: string[];
+  averageRating: number;
+  totalReviews: number;
+  totalHoursTaught: number;
+}
+
+export interface AvailableSessionSuggestion {
+  id: string;
+  classId: string;
+  scheduledStart: Date;
+  scheduledEnd: Date;
+  subject: string;
+  description: string | null;
+  price: number;
+  location: string | null;
+  class: {
+    id: string;
+    name: string;
+    educationLevel: string;
+    subjects: string[];
+    meetingLocation: string | null;
+    _count: {
+      members: number;
+    };
+  };
+}

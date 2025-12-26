@@ -37,7 +37,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
         <View style={[styles.quickActionIcon, { backgroundColor: Colors.primary }]}>
           <CreditCard size={22} color={Colors.white} strokeWidth={2.5} />
         </View>
-        <Text style={styles.quickActionLabel}>Cartes</Text>
+        <Text style={styles.quickActionLabel}>Comptes</Text>
       </TouchableOpacity>
       
       <TouchableOpacity
@@ -60,7 +60,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
           <View style={[styles.quickActionIcon, { backgroundColor: Colors.accent2 }]}>
             <Plus size={22} color={Colors.textPrimary} strokeWidth={2.5} />
           </View>
-          <Text style={styles.quickActionLabel}>Ajouter</Text>
+          <Text style={styles.quickActionLabel}>Recharger</Text>
         </TouchableOpacity>
       )}
     </View>

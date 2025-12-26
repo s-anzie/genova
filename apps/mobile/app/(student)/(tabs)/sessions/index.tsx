@@ -1,51 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  StyleSheet,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Calendar, Clock, MapPin, Video, ChevronRight, User, Sparkles } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, Shadows, Spacing, BorderRadius, Gradients } from '@/constants/colors';
+import { Calendar, Clock, MapPin, Video, User } from 'lucide-react-native';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse } from '@/types/api';
 import { PageHeader, TabSelector } from '@/components/PageHeader';
 
-export default function SessionsScreen() {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
-  const [sessions, setSessions] = useState<SessionResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
+// Separate component for session card to use hooks properly
+const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: () => void }) => {
+  const hasTutor = !!session.tutor && !!session.tutor.firstName;
+  const now = new Date();
+  const startTime = new Date(session.scheduledStart);
+  const endTime = new Date(session.scheduledEnd);
+  const isOngoing = now >= startTime && now <= endTime;
+  
+  // Animation for the ongoing dot
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  
   useEffect(() => {
-    loadSessions();
-  }, [activeTab]);
-
-  const loadSessions = async () => {
-    try {
-      setLoading(true);
-      const status = activeTab === 'upcoming' ? 'PENDING,CONFIRMED' : 'COMPLETED,CANCELLED';
-      const response = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>(`/sessions?status=${status}`);
-      setSessions(response.data);
-    } catch (error) {
-      console.error('Failed to load sessions:', error);
-    } finally {
-      setLoading(false);
+    if (isOngoing) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.5,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
     }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadSessions();
-    setRefreshing(false);
-  };
+  }, [isOngoing]);
 
   const formatDate = (date: Date) => {
     const d = new Date(date);
@@ -67,7 +68,7 @@ export default function SessionsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return Colors.accent2; // Gold for pending
+        return Colors.accent2;
       case 'CONFIRMED':
         return Colors.success;
       case 'COMPLETED':
@@ -79,7 +80,10 @@ export default function SessionsScreen() {
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, hasTutor: boolean) => {
+    if (!hasTutor) {
+      return 'Non assignée';
+    }
     switch (status) {
       case 'PENDING':
         return 'En attente';
@@ -94,117 +98,170 @@ export default function SessionsScreen() {
     }
   };
 
-  const renderSession = (session: SessionResponse) => (
+  return (
     <TouchableOpacity
-      key={session.id}
       style={styles.sessionCard}
-      onPress={() => router.push(`/(student)/(tabs)/sessions/${session.id}`)}
+      onPress={onPress}
       activeOpacity={0.7}
     >
-      <LinearGradient
-        colors={['rgba(13, 115, 119, 0.03)', 'rgba(20, 255, 236, 0.03)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.cardGradient}
-      >
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) }]}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>{getStatusLabel(session.status)}</Text>
-        </View>
-
-        {/* Subject & Date */}
-        <View style={styles.cardHeader}>
-          <View style={styles.subjectContainer}>
-            <View style={styles.iconCircle}>
-              <Sparkles size={18} color={Colors.primary} />
-            </View>
-            <View style={styles.subjectInfo}>
+      {/* Header: Subject and Status */}
+      <View style={styles.cardHeader}>
+        <View style={styles.subjectSection}>
+          <View style={styles.subjectIcon}>
+            <Calendar size={20} color={Colors.primary} strokeWidth={2} />
+          </View>
+          <View style={styles.subjectInfo}>
+            <View style={styles.subjectRow}>
               <Text style={styles.sessionSubject}>{session.subject}</Text>
-              <View style={styles.dateRow}>
-                <Calendar size={14} color={Colors.textSecondary} />
-                <Text style={styles.dateText}>{formatDate(session.scheduledStart)}</Text>
-              </View>
+              {isOngoing && (
+                <View style={styles.ongoingBadge}>
+                  <Animated.View style={[styles.ongoingDot, { transform: [{ scale: pulseAnim }] }]} />
+                  <Text style={styles.ongoingText}>En cours</Text>
+                </View>
+              )}
             </View>
+            <Text style={styles.sessionDate}>{formatDate(session.scheduledStart)}</Text>
           </View>
         </View>
+        <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(hasTutor ? session.status : 'PENDING')}15` }]}>
+          <Text style={[styles.statusText, { color: getStatusColor(hasTutor ? session.status : 'PENDING') }]}>
+            {getStatusLabel(session.status, hasTutor)}
+          </Text>
+        </View>
+      </View>
 
-        {/* Time & Location */}
-        <View style={styles.detailsContainer}>
-          <View style={styles.detailItem}>
-            <View style={styles.detailIconWrapper}>
-              <Clock size={16} color={Colors.primary} />
-            </View>
-            <Text style={styles.detailText}>
-              {formatTime(session.scheduledStart)} - {formatTime(session.scheduledEnd)}
+      {/* Class Info */}
+      {session.class && (
+        <View style={styles.classInfo}>
+          <Text style={styles.classLabel}>Classe: </Text>
+          <Text style={styles.className}>{session.class.name}</Text>
+        </View>
+      )}
+
+      {/* Time and Location */}
+      <View style={styles.detailsSection}>
+        <View style={styles.detailRow}>
+          <Clock size={16} color={Colors.textSecondary} strokeWidth={2} />
+          <Text style={styles.detailText}>
+            {formatTime(session.scheduledStart)} - {formatTime(session.scheduledEnd)}
+          </Text>
+        </View>
+        
+        {session.location && (
+          <View style={styles.detailRow}>
+            <MapPin size={16} color={Colors.textSecondary} strokeWidth={2} />
+            <Text style={styles.detailText} numberOfLines={1}>
+              {session.location}
             </Text>
           </View>
-
-          {session.location && (
-            <View style={styles.detailItem}>
-              <View style={styles.detailIconWrapper}>
-                <MapPin size={16} color={Colors.primary} />
-              </View>
-              <Text style={styles.detailText} numberOfLines={1}>
-                {session.location}
-              </Text>
-            </View>
-          )}
-
-          {session.onlineMeetingLink && (
-            <View style={styles.detailItem}>
-              <View style={styles.detailIconWrapper}>
-                <Video size={16} color={Colors.primary} />
-              </View>
-              <Text style={styles.detailText}>Session en ligne</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Tutor Info */}
-        {session.tutor && (
-          <View style={styles.tutorSection}>
-            <View style={styles.tutorAvatar}>
-              <User size={16} color={Colors.white} />
-            </View>
-            <View style={styles.tutorDetails}>
-              <Text style={styles.tutorLabel}>Tuteur</Text>
-              <Text style={styles.tutorName}>
-                {session.tutor.user?.firstName} {session.tutor.user?.lastName}
-              </Text>
-            </View>
+        )}
+        
+        {session.onlineMeetingLink && (
+          <View style={styles.detailRow}>
+            <Video size={16} color={Colors.textSecondary} strokeWidth={2} />
+            <Text style={styles.detailText}>En ligne</Text>
           </View>
         )}
+      </View>
 
-        {/* Footer */}
-        <View style={styles.cardFooter}>
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Prix</Text>
-            <Text style={styles.priceValue}>{session.price.toFixed(2)} €</Text>
-          </View>
-          <View style={styles.arrowButton}>
-            <ChevronRight size={20} color={Colors.primary} />
-          </View>
-        </View>
-      </LinearGradient>
+      {/* Footer: Tutor and Price */}
+      <View style={styles.cardFooter}>
+        {hasTutor ? (
+          <>
+            <View style={styles.tutorSection}>
+              <View style={styles.tutorAvatar}>
+                <User size={14} color={Colors.white} strokeWidth={2} />
+              </View>
+              <Text style={styles.tutorName} numberOfLines={1}>
+                {session.tutor!.firstName} {session.tutor!.lastName}
+              </Text>
+            </View>
+            <Text style={styles.priceText}>{Math.round(Number(session.price)).toLocaleString('fr-FR')} €</Text>
+          </>
+        ) : (
+          <Text style={styles.noTutorText}>Aucun tuteur assigné</Text>
+        )}
+      </View>
     </TouchableOpacity>
   );
+};
+
+export default function SessionsScreen() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'canceled'>('upcoming');
+  const [sessions, setSessions] = useState<SessionResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadSessions();
+  }, [activeTab]);
+
+  const loadSessions = async () => {
+    try {
+      setLoading(true);
+      
+      // Use the tab parameter for server-side filtering
+      let endpoint = '/sessions';
+      if (activeTab === 'upcoming') {
+        endpoint = '/sessions?tab=upcoming';
+      } else if (activeTab === 'past') {
+        endpoint = '/sessions?tab=past';
+      } else if (activeTab === 'canceled') {
+        endpoint = '/sessions?tab=canceled';
+      }
+      
+      const response = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>(endpoint);
+      const allSessions = response.data;
+      
+      // Sessions are already filtered by the backend based on tab parameter
+      // Just sort them appropriately
+      if (activeTab === 'upcoming') {
+        // Sort: closest first (ascending by start time)
+        allSessions.sort((a, b) => {
+          const aStart = new Date(a.scheduledStart).getTime();
+          const bStart = new Date(b.scheduledStart).getTime();
+          return aStart - bStart;
+        });
+      } else {
+        // For past and canceled, sort: most recent first (descending)
+        allSessions.sort((a, b) => {
+          const aStart = new Date(a.scheduledStart).getTime();
+          const bStart = new Date(b.scheduledStart).getTime();
+          return bStart - aStart;
+        });
+      }
+      
+      setSessions(allSessions);
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadSessions();
+    setRefreshing(false);
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header avec tabs */}
+    <View style={styles.container}>
       <PageHeader 
         title="Mes Sessions" 
         subtitle={`${sessions.length} session${sessions.length > 1 ? 's' : ''}`}
+        variant="primary"
       />
       
       <TabSelector
         tabs={[
           { key: 'upcoming', label: 'À venir' },
           { key: 'past', label: 'Passées' },
+          { key: 'canceled', label: 'Annulées' },
         ]}
         activeTab={activeTab}
-        onTabChange={(key) => setActiveTab(key as 'upcoming' | 'past')}
+        onTabChange={(key) => setActiveTab(key as 'upcoming' | 'past' | 'canceled')}
       />
 
       {loading ? (
@@ -229,25 +286,35 @@ export default function SessionsScreen() {
           {sessions.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <Calendar size={64} color={Colors.textTertiary} strokeWidth={1.5} />
+                <Calendar size={48} color={Colors.primary} strokeWidth={1.5} />
               </View>
               <Text style={styles.emptyTitle}>
                 {activeTab === 'upcoming' 
                   ? 'Aucune session à venir' 
-                  : 'Aucune session passée'}
+                  : activeTab === 'past'
+                  ? 'Aucune session passée'
+                  : 'Aucune session annulée'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {activeTab === 'upcoming'
                   ? 'Réservez une session avec un tuteur pour commencer'
-                  : 'Vos sessions terminées apparaîtront ici'}
+                  : activeTab === 'past'
+                  ? 'Vos sessions terminées apparaîtront ici'
+                  : 'Les sessions annulées apparaîtront ici'}
               </Text>
             </View>
           ) : (
-            sessions.map(renderSession)
+            sessions.map((session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onPress={() => router.push(`/(student)/(tabs)/sessions/${session.id}`)}
+              />
+            ))
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -260,7 +327,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   loadingText: {
     fontSize: 15,
@@ -272,194 +339,182 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  sessionCard: {
-    borderRadius: BorderRadius.xlarge,
-    overflow: 'hidden',
-    ...Shadows.medium,
-    backgroundColor: Colors.white,
-  },
-  cardGradient: {
-    padding: Spacing.lg,
-  },
-  statusBadge: {
-    position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.round,
-    ...Shadows.small,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.white,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.white,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardHeader: {
-    marginBottom: Spacing.md,
-    paddingRight: 100,
-  },
-  subjectContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.sm,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(13, 115, 119, 0.1)',
+  sessionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.large,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadows.small,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  subjectSection: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  subjectIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(13, 115, 119, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   subjectInfo: {
     flex: 1,
+    gap: 2,
   },
-  sessionSubject: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  dateRow: {
+  subjectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  dateText: {
+  sessionSubject: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  ongoingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.small,
+    backgroundColor: Colors.success + '15',
+  },
+  ongoingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
+  },
+  ongoingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.success,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  sessionDate: {
     fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '500',
   },
-  detailsContainer: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-    paddingVertical: Spacing.sm,
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
   },
-  detailItem: {
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  classInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
   },
-  detailIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(13, 115, 119, 0.08)',
-    justifyContent: 'center',
+  classLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  className: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  detailsSection: {
+    gap: 6,
+  },
+  detailRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   detailText: {
-    fontSize: 14,
-    color: Colors.textPrimary,
+    fontSize: 13,
+    color: Colors.textSecondary,
     fontWeight: '500',
     flex: 1,
-  },
-  tutorSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(13, 115, 119, 0.08)',
-  },
-  tutorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tutorDetails: {
-    flex: 1,
-  },
-  tutorLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  tutorName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(13, 115, 119, 0.08)',
+    borderTopColor: Colors.border,
   },
-  priceContainer: {
+  tutorSection: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tutorAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tutorName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
     flex: 1,
   },
-  priceLabel: {
-    fontSize: 11,
+  noTutorText: {
+    fontSize: 13,
+    fontWeight: '500',
     color: Colors.textSecondary,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    fontStyle: 'italic',
+    flex: 1,
   },
-  priceValue: {
-    fontSize: 20,
+  priceText: {
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  arrowButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(13, 115, 119, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    letterSpacing: -0.3,
   },
   emptyState: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xxxl,
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    paddingVertical: 60,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(13, 115, 119, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
     color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
+    marginBottom: Spacing.xs,
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
+    paddingHorizontal: Spacing.lg,
   },
 });

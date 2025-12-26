@@ -11,6 +11,7 @@ export default function TutorLayout() {
       <Stack.Screen name="consortium" options={{ headerShown: false }} />
       <Stack.Screen name="earnings" options={{ headerShown: false }} />
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="marketplace" options={{ headerShown: false }} />
     </Stack>
   );

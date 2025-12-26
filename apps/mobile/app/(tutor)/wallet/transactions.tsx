@@ -27,32 +27,7 @@ export default function TransactionsScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'credit' | 'debit'>('all');
   
-  const [transactions] = useState<Transaction[]>([
-    {
-      id: '1',
-      type: 'credit',
-      amount: 45.00,
-      description: 'Cours de mathématiques - Jean Dupont',
-      date: '2024-12-20T10:30:00',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      type: 'debit',
-      amount: 100.00,
-      description: 'Retrait vers compte bancaire',
-      date: '2024-12-19T14:20:00',
-      status: 'pending',
-    },
-    {
-      id: '3',
-      type: 'credit',
-      amount: 30.00,
-      description: 'Cours de physique - Marie Martin',
-      date: '2024-12-18T16:45:00',
-      status: 'completed',
-    },
-  ]);
+  const [transactions] = useState<Transaction[]>([]);
 
   const filteredTransactions = transactions.filter(t => {
     if (filter === 'all') return true;
@@ -100,16 +75,16 @@ export default function TransactionsScreen() {
   return (
     <View className="flex-1 bg-bg-secondary">
       {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-white border-b border-border">
+      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-primary border-b-0">
         <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-bg-secondary justify-center items-center"
+          className="w-10 h-10 rounded-full bg-white/15 justify-center items-center"
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#333333" strokeWidth={2.5} />
+          <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-text-primary">Historique</Text>
-        <TouchableOpacity className="w-10 h-10 rounded-full bg-bg-secondary justify-center items-center">
-          <Filter size={20} color="#333333" strokeWidth={2.5} />
+        <Text className="text-lg font-bold text-white">Historique</Text>
+        <TouchableOpacity className="w-10 h-10 rounded-full bg-white/15 justify-center items-center">
+          <Filter size={20} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -194,7 +169,7 @@ export default function TransactionsScreen() {
                 <Text className={`text-base font-bold ml-3 ${
                   transaction.type === 'credit' ? 'text-success' : 'text-error'
                 }`}>
-                  {transaction.type === 'credit' ? '+' : '-'}{transaction.amount.toFixed(2)} €
+                  {transaction.type === 'credit' ? '+' : '-'}{transaction.amount.toFixed(0)} FCFA
                 </Text>
               </View>
             ))}

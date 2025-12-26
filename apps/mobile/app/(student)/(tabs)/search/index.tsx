@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Search, SlidersHorizontal, Star, CheckCircle2, MapPin, TrendingUp } from 'lucide-react-native';
@@ -19,10 +20,15 @@ export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
+  // Check if we're in "assign tutor" mode
+  const sessionId = params.sessionId as string | undefined;
+  const isAssignMode = !!sessionId;
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [tutors, setTutors] = useState<TutorSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [assigning, setAssigning] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Parse filters from URL params with useMemo to prevent unnecessary re-renders
@@ -129,9 +135,70 @@ export default function SearchScreen() {
     searchTutors();
   };
 
+  const handleAssignTutor = async (tutorId: string, tutorName: string, hourlyRate: number) => {
+    if (!sessionId) return;
+
+    Alert.alert(
+      'Confirmer l\'assignation',
+      `Voulez-vous assigner ${tutorName} à cette session ?\n\nTarif: ${Math.round(hourlyRate * 650)} FCFA/h`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            try {
+              setAssigning(true);
+              
+              await ApiClient.put(`/sessions/${sessionId}`, {
+                tutorId,
+              });
+
+              console.log('Tutor assigned successfully to session:', sessionId);
+
+              Alert.alert(
+                'Succès',
+                'Le tuteur a été assigné à la session',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.back(),
+                  },
+                ]
+              );
+            } catch (error: any) {
+              console.error('Failed to assign tutor:', error);
+              const message = error.response?.data?.message || 'Impossible d\'assigner le tuteur';
+              Alert.alert('Erreur', message);
+            } finally {
+              setAssigning(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleTutorPress = (tutor: TutorSearchResult) => {
+    if (isAssignMode) {
+      handleAssignTutor(
+        tutor.userId,
+        `${tutor.firstName} ${tutor.lastName}`,
+        tutor.hourlyRate
+      );
+    } else {
+      router.push(`/tutors/${tutor.userId}`);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <PageHeader title="Rechercher" showGradient={false} />
+      <PageHeader 
+        title={isAssignMode ? "Assigner un tuteur" : "Rechercher"} 
+        subtitle={isAssignMode && params.subject ? `Matière: ${params.subject}` : undefined}
+        showBackButton={isAssignMode}
+        showGradient={false} 
+        variant="primary" 
+      />
 
       {/* Search Bar */}
       <View style={styles.searchSection}>
@@ -224,105 +291,63 @@ export default function SearchScreen() {
             <TouchableOpacity
               key={tutor.id}
               style={styles.tutorCard}
-              onPress={() => router.push(`/tutors/${tutor.userId}`)}
+              onPress={() => handleTutorPress(tutor)}
               activeOpacity={0.7}
+              disabled={assigning}
             >
-              {/* Top Section with Avatar and Info */}
-              <View style={styles.cardTop}>
-                <View style={styles.avatarSection}>
-                  <View style={styles.tutorAvatar}>
-                    <Text style={styles.tutorAvatarText}>
-                      {tutor.firstName[0]}{tutor.lastName[0]}
-                    </Text>
-                    {tutor.isVerified && (
-                      <View style={styles.verifiedBadge}>
-                        <CheckCircle2 size={14} color={Colors.white} fill={Colors.primary} strokeWidth={3} />
-                      </View>
-                    )}
-                  </View>
-                  
-                  {/* Rating Badge on Avatar */}
-                  <View style={styles.ratingBadge}>
-                    <Star size={12} color="#FFB800" fill="#FFB800" strokeWidth={2.5} />
-                    <Text style={styles.ratingBadgeText}>{tutor.averageRating.toFixed(1)}</Text>
-                  </View>
+              {/* Header: Name and Price */}
+              <View style={styles.cardHeader}>
+                <View style={styles.tutorAvatar}>
+                  <Text style={styles.tutorAvatarText}>
+                    {tutor.firstName[0]}{tutor.lastName[0]}
+                  </Text>
                 </View>
-
-                <View style={styles.tutorMainInfo}>
-                  <View style={styles.nameSection}>
+                
+                <View style={styles.headerInfo}>
+                  <View style={styles.nameRow}>
                     <Text style={styles.tutorName}>
                       {tutor.firstName} {tutor.lastName}
                     </Text>
-                    {tutor.matchingScore >= 90 && (
-                      <View style={styles.matchBadge}>
-                        <TrendingUp size={11} color="#4CAF50" strokeWidth={2.5} />
-                        <Text style={styles.matchBadgeText}>{tutor.matchingScore}%</Text>
-                      </View>
+                    {tutor.isVerified && (
+                      <CheckCircle2 size={16} color={Colors.primary} fill={Colors.primary} strokeWidth={2.5} />
                     )}
                   </View>
                   
-                  <View style={styles.metaInfo}>
-                    <View style={styles.metaItem}>
-                      <Text style={styles.metaText}>{tutor.totalReviews} avis</Text>
-                    </View>
-                    {tutor.distance && (
-                      <>
-                        <View style={styles.metaDot} />
-                        <View style={styles.metaItem}>
-                          <MapPin size={11} color={Colors.textTertiary} strokeWidth={2} />
-                          <Text style={styles.metaText}>{tutor.distance.toFixed(1)} km</Text>
-                        </View>
-                      </>
-                    )}
-                    {tutor.teachingMode === 'ONLINE' && (
-                      <>
-                        <View style={styles.metaDot} />
-                        <View style={styles.onlineBadge}>
-                          <View style={styles.onlineDot} />
-                          <Text style={styles.onlineText}>En ligne</Text>
-                        </View>
-                      </>
-                    )}
+                  <View style={styles.ratingRow}>
+                    <Star size={14} color="#FFB800" fill="#FFB800" strokeWidth={2} />
+                    <Text style={styles.ratingText}>{tutor.averageRating.toFixed(1)}</Text>
+                    <Text style={styles.reviewsText}>({tutor.totalReviews})</Text>
                   </View>
                 </View>
 
-                {/* Price Tag */}
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceAmount}>{tutor.hourlyRate}€</Text>
-                  <Text style={styles.priceLabel}>/h</Text>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.priceAmount}>{Math.round(tutor.hourlyRate).toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.priceLabel}>€/h</Text>
                 </View>
               </View>
 
-              {/* Bio Section */}
-              <Text style={styles.tutorBio} numberOfLines={2}>
-                {tutor.bio || 'Tuteur expérimenté avec un excellent historique de réussite académique. Spécialisé dans des cours clairs et efficaces.'}
-              </Text>
-
-              {/* Subjects Section */}
-              <View style={styles.subjectsSection}>
-                <View style={styles.subjectsRow}>
-                  {tutor.subjects.slice(0, 3).map((subject, index) => (
-                    <View key={index} style={styles.subjectPill}>
-                      <Text style={styles.subjectPillText}>{subject}</Text>
-                    </View>
-                  ))}
-                  {tutor.subjects.length > 3 && (
-                    <View style={[styles.subjectPill, styles.subjectPillMore]}>
-                      <Text style={styles.subjectPillTextMore}>+{tutor.subjects.length - 3}</Text>
-                    </View>
-                  )}
-                </View>
+              {/* Subjects */}
+              <View style={styles.subjectsContainer}>
+                {tutor.subjects.slice(0, 4).map((subject, index) => (
+                  <View key={index} style={styles.subjectChip}>
+                    <Text style={styles.subjectText}>{subject}</Text>
+                  </View>
+                ))}
+                {tutor.subjects.length > 4 && (
+                  <Text style={styles.moreSubjects}>+{tutor.subjects.length - 4}</Text>
+                )}
               </View>
 
-              {/* Action Footer */}
-              <View style={styles.cardFooter}>
-                <TouchableOpacity style={styles.viewProfileButton}>
-                  <Text style={styles.viewProfileText}>Voir le profil</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.favoriteButton}>
-                  <Text style={styles.favoriteIcon}>♡</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Footer: Action Button */}
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => handleTutorPress(tutor)}
+                disabled={assigning}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isAssignMode ? 'Assigner' : 'Voir le profil'}
+                </Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           ))
           ) : (
@@ -491,150 +516,65 @@ const styles = StyleSheet.create({
   },
   tutorCard: {
     backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
-    ...Shadows.medium,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 115, 119, 0.06)',
+    borderRadius: BorderRadius.large,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    ...Shadows.small,
   },
   
-  // Card Top Section
-  cardTop: {
+  // Card Header
+  cardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  avatarSection: {
-    position: 'relative',
-    marginRight: 10,
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   tutorAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
-    backgroundColor: 'rgba(13, 115, 119, 0.08)',
+    width: 52,
+    height: 52,
+    borderRadius: 50,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-    borderWidth: 1.5,
-    borderColor: 'rgba(13, 115, 119, 0.12)',
   },
   tutorAvatarText: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '700',
-    color: Colors.primary,
-    letterSpacing: -0.3,
+    color: Colors.white,
+    letterSpacing: -0.5,
   },
-  verifiedBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.small,
-  },
-  ratingBadge: {
-    position: 'absolute',
-    bottom: -4,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    backgroundColor: Colors.white,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 8,
-    ...Shadows.small,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 184, 0, 0.15)',
-  },
-  ratingBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  
-  // Main Info Section
-  tutorMainInfo: {
+  headerInfo: {
     flex: 1,
   },
-  nameSection: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 3,
+    gap: 6,
+    marginBottom: 4,
   },
   tutorName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
-  matchBadge: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 5,
-    backgroundColor: 'rgba(76, 175, 80, 0.12)',
+    gap: 4,
   },
-  matchBadgeText: {
-    fontSize: 9,
+  ratingText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#4CAF50',
+    color: Colors.textPrimary,
   },
-  metaInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    flexWrap: 'wrap',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  metaText: {
-    fontSize: 11,
-    color: Colors.textTertiary,
+  reviewsText: {
+    fontSize: 13,
     fontWeight: '500',
+    color: Colors.textSecondary,
   },
-  metaDot: {
-    width: 2,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: Colors.textTertiary,
-    opacity: 0.4,
-  },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  onlineDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4CAF50',
-  },
-  onlineText: {
-    fontSize: 11,
-    color: '#4CAF50',
-    fontWeight: '600',
-  },
-  
-  // Price Tag
-  priceTag: {
+  priceContainer: {
     alignItems: 'flex-end',
-    paddingLeft: 8,
   },
   priceAmount: {
     fontSize: 18,
@@ -646,86 +586,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Colors.textSecondary,
-    marginTop: -1,
+    marginTop: -2,
   },
   
-  // Bio Section
-  tutorBio: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-    marginBottom: 8,
-    fontWeight: '400',
-  },
-  
-  // Subjects Section
-  subjectsSection: {
-    marginBottom: 8,
-  },
-  subjectsRow: {
+  // Subjects
+  subjectsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
+    gap: 6,
+    marginBottom: Spacing.sm,
   },
-  subjectPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 7,
-    backgroundColor: 'rgba(13, 115, 119, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 115, 119, 0.12)',
+  subjectChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.small,
+    backgroundColor: Colors.bgCream,
   },
-  subjectPillText: {
-    fontSize: 11,
+  subjectText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.textPrimary,
   },
-  subjectPillMore: {
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-  },
-  subjectPillTextMore: {
-    fontSize: 11,
-    fontWeight: '700',
+  moreSubjects: {
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.textSecondary,
+    alignSelf: 'center',
   },
   
-  // Card Footer
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(13, 115, 119, 0.08)',
-  },
-  viewProfileButton: {
-    flex: 1,
-    height: 36,
-    borderRadius: 9,
+  // Action Button
+  actionButton: {
     backgroundColor: Colors.primary,
-    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.medium,
     alignItems: 'center',
-    ...Shadows.small,
   },
-  viewProfileText: {
-    fontSize: 13,
+  actionButtonText: {
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.white,
-    letterSpacing: -0.2,
-  },
-  favoriteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    backgroundColor: 'rgba(13, 115, 119, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 115, 119, 0.12)',
-  },
-  favoriteIcon: {
-    fontSize: 16,
-    color: Colors.primary,
   },
   emptyState: {
     flex: 1,

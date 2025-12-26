@@ -4,30 +4,28 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
-  StatusBar,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { 
-  ArrowLeft, 
   Calendar, 
   Clock, 
   MapPin, 
   Video, 
   User,
+  Users,
   FileText,
   QrCode,
-  Hash,
   X,
   CheckCircle,
 } from 'lucide-react-native';
-import { Colors } from '@/constants/colors';
+import { Colors, Spacing, BorderRadius } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, SessionReportResponse, AttendanceResponse } from '@/types/api';
 import { useAuth } from '@/contexts/auth-context';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -88,25 +86,69 @@ export default function SessionDetailScreen() {
 
   const handleCancelSession = async () => {
     Alert.alert(
-      'Annuler la session',
-      'Êtes-vous sûr de vouloir annuler cette session ?',
+      'Se désassigner de la session',
+      'Êtes-vous sûr de vouloir vous désassigner de cette session ? Les étudiants seront notifiés et la session sera remise en attente d\'un nouveau tuteur.',
       [
         { text: 'Non', style: 'cancel' },
         {
-          text: 'Oui',
+          text: 'Oui, me désassigner',
           style: 'destructive',
           onPress: async () => {
             try {
-              await ApiClient.delete(`/sessions/${id}`);
-              Alert.alert('Succès', 'Session annulée');
+              await ApiClient.post(`/sessions/${id}/unassign-tutor`, {
+                reason: 'Tuteur non disponible'
+              });
+              Alert.alert('Succès', 'Vous avez été désassigné de la session. Les étudiants ont été notifiés.');
               router.back();
             } catch (error) {
-              Alert.alert('Erreur', 'Impossible d\'annuler la session');
+              Alert.alert('Erreur', 'Impossible de se désassigner de la session');
             }
           },
         },
       ]
     );
+  };
+
+  const calculateTutorRevenue = () => {
+    if (!session) return 0;
+    
+    const start = new Date(session.scheduledStart);
+    const end = new Date(session.scheduledEnd);
+    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    const studentCount = session.class?._count?.members || 1;
+    
+    // Try to get hourlyRate from different possible locations
+    const hourlyRate = Number(
+      session.tutor?.hourlyRate || 
+      session.tutor?.tutorProfile?.hourlyRate || 
+      0
+    );
+    
+    console.log('Revenue calculation:', {
+      hourlyRate,
+      studentCount,
+      durationHours,
+      total: hourlyRate * studentCount * durationHours
+    });
+    
+    return hourlyRate * studentCount * durationHours;
+  };
+
+  const getDuration = () => {
+    if (!session) return '';
+    const start = new Date(session.scheduledStart);
+    const end = new Date(session.scheduledEnd);
+    const durationMs = end.getTime() - start.getTime();
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0 && minutes > 0) {
+      return `${hours}h${minutes}`;
+    } else if (hours > 0) {
+      return `${hours}h`;
+    } else {
+      return `${minutes}min`;
+    }
   };
 
   const formatDate = (date: Date) => {
@@ -188,36 +230,42 @@ export default function SessionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <PageHeader 
+          title="Détails de la session" 
+          showBackButton
+          variant="primary"
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!session) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <PageHeader 
+          title="Détails de la session" 
+          showBackButton
+          variant="primary"
+        />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Session introuvable</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détails de la session</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
+    <View style={styles.container}>
+      <PageHeader 
+        title="Détails de la session" 
+        subtitle={session.subject}
+        showBackButton
+        variant="primary"
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Status Badge */}
         <View style={[styles.statusBanner, { backgroundColor: `${getStatusColor(session.status)}15` }]}>
@@ -245,40 +293,66 @@ export default function SessionDetailScreen() {
               {formatTime(session.scheduledStart)} - {formatTime(session.scheduledEnd)}
             </Text>
           </View>
+          <Text style={styles.durationText}>Durée: {getDuration()}</Text>
         </View>
 
-        {/* Location */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lieu</Text>
-          {session.location && (
-            <View style={styles.infoRow}>
-              <MapPin size={20} color={Colors.primary} />
-              <Text style={styles.infoText}>{session.location}</Text>
-            </View>
-          )}
-          {session.onlineMeetingLink && (
-            <View style={styles.infoRow}>
-              <Video size={20} color={Colors.primary} />
-              <Text style={styles.infoText}>Session en ligne</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Tutor */}
-        {session.tutor && (
+        {/* Class Info */}
+        {session.class && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tuteur</Text>
-            <View style={styles.tutorCard}>
-              <User size={24} color={Colors.primary} />
-              <View style={styles.tutorInfo}>
-                <Text style={styles.tutorName}>
-                  {session.tutor.user?.firstName} {session.tutor.user?.lastName}
-                </Text>
-                <Text style={styles.tutorRate}>
-                  {session.tutor.hourlyRate.toFixed(2)} €/h
+            <Text style={styles.sectionTitle}>Classe</Text>
+            <View style={styles.classHeader}>
+              <Text style={styles.className}>{session.class.name}</Text>
+              <View style={styles.studentCountBadge}>
+                <Users size={14} color={Colors.primary} />
+                <Text style={styles.studentCountText}>
+                  {session.class._count?.members || 0} étudiant{(session.class._count?.members || 0) > 1 ? 's' : ''}
                 </Text>
               </View>
             </View>
+            
+            {/* Class Location */}
+            {session.class.meetingLocation && (
+              <View style={styles.infoRow}>
+                <MapPin size={20} color={Colors.primary} />
+                <Text style={styles.infoText}>{session.class.meetingLocation}</Text>
+              </View>
+            )}
+            
+            {/* Students List */}
+            {session.class.members && session.class.members.length > 0 && (
+              <View style={styles.studentsSection}>
+                <Text style={styles.studentsLabel}>Étudiants inscrits:</Text>
+                {session.class.members.map((member, index) => (
+                  <View key={member.id || `student-${index}`} style={styles.studentRow}>
+                    <View style={styles.studentAvatar}>
+                      <User size={16} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.studentName}>
+                      {member.student.firstName} {member.student.lastName}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Location - Only show if online or if no class location */}
+        {(session.onlineMeetingLink || (!session.class?.meetingLocation && session.location)) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Lieu</Text>
+            {session.location && !session.class?.meetingLocation && (
+              <View style={styles.infoRow}>
+                <MapPin size={20} color={Colors.primary} />
+                <Text style={styles.infoText}>{session.location}</Text>
+              </View>
+            )}
+            {session.onlineMeetingLink && (
+              <View style={styles.infoRow}>
+                <Video size={20} color={Colors.primary} />
+                <Text style={styles.infoText}>Session en ligne</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -361,10 +435,30 @@ export default function SessionDetailScreen() {
           </View>
         )}
 
-        {/* Price */}
+        {/* Revenue */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Prix</Text>
-          <Text style={styles.priceText}>{session.price.toFixed(2)} €</Text>
+          <Text style={styles.sectionTitle}>Revenu estimé</Text>
+          <View style={styles.revenueBreakdown}>
+            <View style={styles.revenueRow}>
+              <Text style={styles.revenueLabel}>Taux horaire:</Text>
+              <Text style={styles.revenueValue}>
+                {Number(session.tutor?.hourlyRate || session.tutor?.tutorProfile?.hourlyRate || 0).toFixed(2)} €/h
+              </Text>
+            </View>
+            <View style={styles.revenueRow}>
+              <Text style={styles.revenueLabel}>Nombre d'étudiants:</Text>
+              <Text style={styles.revenueValue}>{session.class?._count?.members || 1}</Text>
+            </View>
+            <View style={styles.revenueRow}>
+              <Text style={styles.revenueLabel}>Durée:</Text>
+              <Text style={styles.revenueValue}>{getDuration()}</Text>
+            </View>
+            <View style={styles.revenueDivider} />
+            <View style={styles.revenueRow}>
+              <Text style={styles.revenueTotalLabel}>Total:</Text>
+              <Text style={styles.revenueTotalValue}>{calculateTutorRevenue().toFixed(2)} €</Text>
+            </View>
+          </View>
         </View>
 
         {/* Action Buttons */}
@@ -386,12 +480,12 @@ export default function SessionDetailScreen() {
           {canCancel() && (
             <TouchableOpacity style={styles.dangerButton} onPress={handleCancelSession}>
               <X size={20} color={Colors.white} />
-              <Text style={styles.dangerButtonText}>Annuler la session</Text>
+              <Text style={styles.dangerButtonText}>Me désassigner</Text>
             </TouchableOpacity>
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -399,24 +493,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgCream,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.textPrimary,
   },
   loadingContainer: {
     flex: 1,
@@ -436,12 +512,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    gap: 20,
+    padding: Spacing.lg,
+    gap: Spacing.md,
   },
   statusBanner: {
-    padding: 16,
-    borderRadius: 12,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.large,
     alignItems: 'center',
   },
   statusBannerText: {
@@ -450,9 +526,9 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    borderRadius: BorderRadius.large,
+    padding: Spacing.lg,
+    gap: Spacing.sm,
   },
   sectionTitle: {
     fontSize: 14,
@@ -473,6 +549,69 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 16,
+    color: Colors.textPrimary,
+  },
+  durationText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  classHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  className: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  studentCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: Colors.primary + '15',
+    borderRadius: 8,
+  },
+  studentCountText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  studentsSection: {
+    marginTop: 12,
+    gap: 8,
+  },
+  studentsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  studentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.bgCream,
+    borderRadius: 8,
+  },
+  studentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  studentName: {
+    fontSize: 15,
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   tutorCard: {
@@ -552,9 +691,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
+  revenueBreakdown: {
+    gap: 8,
+  },
+  revenueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  revenueLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  revenueValue: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  revenueDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 8,
+  },
+  revenueTotalLabel: {
+    fontSize: 16,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+  },
+  revenueTotalValue: {
+    fontSize: 20,
+    color: Colors.primary,
+    fontWeight: '800',
+  },
   actionsContainer: {
-    gap: 12,
-    marginTop: 8,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -562,8 +735,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.large,
   },
   primaryButtonText: {
     fontSize: 16,
@@ -576,8 +749,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.error,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.large,
   },
   dangerButtonText: {
     fontSize: 16,

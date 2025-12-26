@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { PrismaClient } from '@prisma/client';
 import {
   createSession,
   getSessionById,
@@ -20,9 +21,11 @@ import {
   updateSessionReport,
   CreateSessionReportData,
 } from '../services/session-report.service';
+import { createBulkNotifications } from '../services/notification.service';
 import { authenticate } from '../middleware/auth.middleware';
-import { ValidationError } from '@repo/utils';
+import { ValidationError, NotFoundError, AuthorizationError, logger } from '@repo/utils';
 
+const prisma = new PrismaClient();
 const router = Router();
 
 // All routes require authentication
@@ -146,6 +149,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     const { id } = req.params;
     const {
+      tutorId,
       scheduledStart,
       scheduledEnd,
       location,
@@ -156,6 +160,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     const updateData: UpdateSessionData = {};
 
+    if (tutorId !== undefined) {
+      updateData.tutorId = tutorId;
+    }
     if (scheduledStart) {
       updateData.scheduledStart = new Date(scheduledStart);
     }
@@ -181,6 +188,109 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       success: true,
       data: result,
       message: 'Session updated successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/sessions/:id/unassign-tutor
+ * Tutor unassigns themselves from a session
+ */
+router.post('/:id/unassign-tutor', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new ValidationError('User not authenticated');
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Get session
+    const session = await prisma.tutoringSession.findUnique({
+      where: { id: id as string },
+      include: {
+        class: {
+          include: {
+            members: {
+              where: { isActive: true },
+              include: {
+                student: {
+                  select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        tutor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundError('Session not found');
+    }
+
+    // Only the assigned tutor can unassign themselves
+    if (session.tutorId !== req.user.userId) {
+      throw new AuthorizationError('Only the assigned tutor can unassign themselves from this session');
+    }
+
+    // Cannot unassign from completed sessions
+    if (session.status === 'COMPLETED') {
+      throw new ValidationError('Cannot unassign from a completed session');
+    }
+
+    // Cannot unassign from already cancelled sessions
+    if (session.status === 'CANCELLED') {
+      throw new ValidationError('Session is already cancelled');
+    }
+
+    // Update session: remove tutor and set status to PENDING
+    const updatedSession = await prisma.tutoringSession.update({
+      where: { id: id as string },
+      data: {
+        tutorId: null,
+        status: 'PENDING',
+        cancellationReason: reason || 'Tutor unassigned',
+      },
+    });
+
+    // Create notifications for all students in the class
+    const notifications = session.class.members.map(member => ({
+      userId: member.student.id,
+      title: 'Changement de tuteur',
+      message: `Le tuteur ${session.tutor?.firstName} ${session.tutor?.lastName} s'est désassigné de votre session "${session.subject}" prévue le ${new Date(session.scheduledStart).toLocaleDateString('fr-FR')}. Nous recherchons un nouveau tuteur.`,
+      type: 'SESSION_TUTOR_UNASSIGNED',
+      data: {
+        sessionId: session.id,
+        subject: session.subject,
+        scheduledStart: session.scheduledStart,
+        tutorName: `${session.tutor?.firstName} ${session.tutor?.lastName}`,
+        reason: reason || 'Tuteur non disponible',
+      },
+    }));
+
+    if (notifications.length > 0) {
+      await createBulkNotifications(notifications);
+      logger.info(`Created ${notifications.length} notifications for session ${id} tutor unassignment`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: updatedSession,
+      message: `Successfully unassigned from session. ${notifications.length} student(s) have been notified.`,
     });
   } catch (error) {
     next(error);
@@ -502,4 +612,99 @@ router.get('/reports/student', async (req: Request, res: Response, next: NextFun
   }
 });
 
+/**
+ * GET /api/sessions/available-suggestions
+ * Get available session suggestions for tutors
+ */
+router.get('/available-suggestions', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const limit = parseInt(req.query.limit as string) || 3;
+
+    console.log('Loading available sessions for tutor:', userId);
+
+    // Get tutor profile
+    const tutorProfile = await prisma.tutorProfile.findUnique({
+      where: { userId },
+      select: {
+        subjects: true,
+        educationLevels: true,
+      },
+    });
+
+    if (!tutorProfile) {
+      throw new NotFoundError('Tutor profile not found');
+    }
+
+    console.log('Tutor subjects:', tutorProfile.subjects);
+    console.log('Tutor education levels:', tutorProfile.educationLevels);
+
+    // Find unassigned sessions matching tutor's subjects
+    const now = new Date();
+    const candidateSessions = await prisma.tutoringSession.findMany({
+      where: {
+        tutorId: null,
+        status: 'PENDING',
+        scheduledStart: {
+          gte: now,
+        },
+        subject: {
+          in: tutorProfile.subjects,
+        },
+      },
+      include: {
+        class: {
+          select: {
+            id: true,
+            name: true,
+            educationLevel: true,
+            subjects: true,
+            meetingLocation: true,
+            _count: {
+              select: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        scheduledStart: 'asc',
+      },
+      take: limit * 3, // Get more than needed to filter by education level
+    });
+
+    console.log('Candidate sessions found:', candidateSessions.length);
+
+    // Filter by education level (client-side since educationLevel is JSON)
+    const availableSessions = candidateSessions.filter(session => {
+      const classEducationLevel = session.class.educationLevel as any;
+      let levelStr = '';
+      
+      if (typeof classEducationLevel === 'string') {
+        levelStr = classEducationLevel;
+      } else if (classEducationLevel && typeof classEducationLevel === 'object') {
+        levelStr = classEducationLevel.level || '';
+      }
+
+      console.log('Session education level:', levelStr);
+      const matches = tutorProfile.educationLevels.includes(levelStr);
+      console.log('Matches tutor levels:', matches);
+      
+      return matches;
+    }).slice(0, limit);
+
+    console.log('Available sessions after filtering:', availableSessions.length);
+
+    res.json({
+      success: true,
+      data: availableSessions,
+    });
+  } catch (error) {
+    console.error('Error loading available sessions:', error);
+    next(error);
+  }
+});
+
 export default router;
+

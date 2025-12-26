@@ -50,6 +50,8 @@ import badgeRoutes from './routes/badge.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import reviewRoutes from './routes/review.routes';
 import schedulingRoutes from './routes/scheduling.routes';
+import notificationRoutes from './routes/notification.routes';
+import suggestionRoutes from './routes/suggestion.routes';
 
 app.get('/api', (_req, res) => {
   res.json({ message: 'Genova API', version: '1.0.0' });
@@ -70,6 +72,8 @@ app.use('/api/badges', badgeRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/scheduling', schedulingRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api', suggestionRoutes);
 
 // 404 handler
 app.use((_req, res) => {

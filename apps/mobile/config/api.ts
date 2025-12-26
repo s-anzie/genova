@@ -10,14 +10,14 @@
  */
 
 // Adresse IP locale du PC pour le développement
-const LOCAL_IP = '192.168.1.149';
+const LOCAL_IP = '192.168.1.150';
 const LOCAL_IP_Phone = '10.249.157.124'
 
 // Port de l'API
 const API_PORT = '5001';
 
 // URL de base de l'API
-export const API_BASE_URL = `http://${LOCAL_IP_Phone}:${API_PORT}/api`;
+export const API_BASE_URL = `http://${LOCAL_IP}:${API_PORT}/api`;
 
 // URLs spécifiques
 export const API_ENDPOINTS = {
