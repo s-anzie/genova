@@ -5,24 +5,23 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
-  ArrowLeft,
   Clock,
-  Calendar as CalendarIcon,
 } from 'lucide-react-native';
-import { Colors } from '@/constants/colors';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
+import { PageHeader } from '@/components/PageHeader';
 import { apiClient } from '@/utils/api-client';
-import { TutorProfileResponse, SessionResponse } from '@/types/api';
+import { TutorProfileResponse } from '@/types/api';
 
 interface DateSlot {
   date: string;
-  start: string;
-  end: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isRecurring: boolean;
 }
 
 export default function ScheduleScreen() {
@@ -35,8 +34,6 @@ export default function ScheduleScreen() {
   const [tutor, setTutor] = useState<TutorProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [tutorSlots, setTutorSlots] = useState<DateSlot[]>([]);
-  const [bookedSessions, setBookedSessions] = useState<SessionResponse[]>([]);
 
   useEffect(() => {
     loadTutorData();
@@ -46,101 +43,75 @@ export default function ScheduleScreen() {
     if (tutor) {
       generateAvailableSlots();
     }
-  }, [selectedDate, tutor, tutorSlots, bookedSessions]);
+  }, [selectedDate, tutor, selectedDuration]);
 
   const loadTutorData = async () => {
     try {
       setLoading(true);
       
       // Load tutor profile
-      const tutorData = await apiClient.get<{ success: boolean; data: TutorProfileResponse }>(`/profiles/tutor/${id}`);
-      setTutor(tutorData.data);
-      
-      // Load tutor's availability slots from backend
-      try {
-        const slotsRes = await apiClient.get<{ success: boolean; data: DateSlot[] }>(
-          `/scheduling/tutor/${id}/availability`
-        );
-        console.log('Loaded tutor slots:', slotsRes.data?.length || 0);
-        setTutorSlots(slotsRes.data || []);
-      } catch (availError) {
-        console.log('Could not load availability from backend, trying local storage');
-        // Fallback sur AsyncStorage
-        const storedSlots = await AsyncStorage.getItem(`availability_${id}`);
-        if (storedSlots) {
-          setTutorSlots(JSON.parse(storedSlots));
-        }
-      }
-      
-      // Load tutor's booked sessions
-      try {
-        const sessionsRes = await apiClient.get<{ success: boolean; data: SessionResponse[] }>(
-          `/sessions?tutorId=${id}&status=PENDING,CONFIRMED`
-        );
-        setBookedSessions(sessionsRes.data || []);
-      } catch (err) {
-        console.log('Could not load sessions:', err);
-      }
+      const response = await apiClient.get<{ success: boolean; data: TutorProfileResponse }>(`/profiles/tutor/${id}`);
+      setTutor(response.data);
       
     } catch (err) {
-      console.error('Error loading tutor:', err);
+      console.error('❌ Error loading tutor:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDateKey = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+  const generateAvailableSlots = async () => {
+    if (!tutor) return;
+    
+    try {
+      // Get tutor availability from API
+      const response = await apiClient.get<{ success: boolean; data: any[] }>(`/tutors/${id}/availability`);
+      const availabilities = response.data || [];
+      
+      const slots: string[] = [];
+      const duration = parseInt(selectedDuration);
+      const dayOfWeek = selectedDate.getDay();
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      
+      // Filter availabilities for selected date
+      const relevantAvailabilities = availabilities.filter((avail: any) => {
+        if (avail.isRecurring && avail.dayOfWeek === dayOfWeek) {
+          return true;
+        }
+        if (!avail.isRecurring && avail.specificDate) {
+          const availDate = new Date(avail.specificDate).toISOString().split('T')[0];
+          return availDate === dateStr;
+        }
+        return false;
+      });
+      
+      // Generate time slots
+      relevantAvailabilities.forEach((avail: any) => {
+        const startMinutes = timeToMinutes(avail.startTime);
+        const endMinutes = timeToMinutes(avail.endTime);
+        
+        // Generate slots every 30 minutes
+        for (let minutes = startMinutes; minutes + duration <= endMinutes; minutes += 30) {
+          const hours = Math.floor(minutes / 60);
+          const mins = minutes % 60;
+          const timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+          
+          if (!slots.includes(timeStr)) {
+            slots.push(timeStr);
+          }
+        }
+      });
+      
+      setAvailableSlots(slots.sort());
+    } catch (err) {
+      console.error('❌ Error loading availability:', err);
+      setAvailableSlots([]);
+    }
   };
 
   const timeToMinutes = (time: string): number => {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
-  };
-
-  const isSlotBooked = (date: Date, time: string): boolean => {
-    const slotTime = timeToMinutes(time);
-    return bookedSessions.some(session => {
-      const sessionDate = new Date(session.scheduledStart);
-      if (sessionDate.toDateString() !== date.toDateString()) return false;
-      
-      const sessionStart = sessionDate.getHours() * 60 + sessionDate.getMinutes();
-      const sessionEnd = new Date(session.scheduledEnd).getHours() * 60 + new Date(session.scheduledEnd).getMinutes();
-      
-      return slotTime >= sessionStart && slotTime < sessionEnd;
-    });
-  };
-
-  const generateAvailableSlots = () => {
-    const dateKey = formatDateKey(selectedDate);
-    const slotsForDate = tutorSlots.filter(slot => slot.date === dateKey);
-    
-    if (slotsForDate.length === 0) {
-      setAvailableSlots([]);
-      return;
-    }
-    
-    const slots: string[] = [];
-    const duration = parseInt(selectedDuration);
-    
-    slotsForDate.forEach(slot => {
-      const startMinutes = timeToMinutes(slot.start);
-      const endMinutes = timeToMinutes(slot.end);
-      
-      // Generate slots every 30 minutes
-      for (let minutes = startMinutes; minutes + duration <= endMinutes; minutes += 30) {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        const timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-        
-        // Check if slot is not already booked
-        if (!isSlotBooked(selectedDate, timeStr)) {
-          slots.push(timeStr);
-        }
-      }
-    });
-    
-    setAvailableSlots(slots);
   };
 
   const getNext7Days = () => {
@@ -152,6 +123,33 @@ export default function ScheduleScreen() {
       days.push(date);
     }
     return days;
+  };
+
+  const handleDateSelect = (date: Date) => {
+    // Allow deselection by clicking the same date
+    if (selectedDate.toDateString() === date.toDateString()) {
+      return; // Don't deselect date, just keep it selected
+    }
+    setSelectedDate(date);
+    setSelectedTime(''); // Reset time when date changes
+  };
+
+  const handleTimeSelect = (time: string) => {
+    // Allow deselection by clicking the same time
+    if (selectedTime === time) {
+      setSelectedTime('');
+    } else {
+      setSelectedTime(time);
+    }
+  };
+
+  const handleSubjectSelect = (subject: string) => {
+    // Allow deselection by clicking the same subject
+    if (selectedSubject === subject) {
+      setSelectedSubject('');
+    } else {
+      setSelectedSubject(subject);
+    }
   };
 
   const handleContinue = () => {
@@ -207,7 +205,7 @@ export default function ScheduleScreen() {
       <TouchableOpacity
         key={time}
         style={[styles.timeSlot, isSelected && styles.timeSlotSelected]}
-        onPress={() => setSelectedTime(time)}
+        onPress={() => handleTimeSelect(time)}
       >
         <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextSelected]}>
           {time}
@@ -218,16 +216,13 @@ export default function ScheduleScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Réserver une séance</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <PageHeader
+        title="Réserver une séance"
+        showBackButton
+        centerTitle
+        showGradient={false}
+        variant="primary"
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -265,7 +260,7 @@ export default function ScheduleScreen() {
                   <TouchableOpacity
                     key={subject}
                     style={[styles.subjectChip, isSelected && styles.subjectChipSelected]}
-                    onPress={() => setSelectedSubject(subject)}
+                    onPress={() => handleSubjectSelect(subject)}
                   >
                     <Text style={[styles.subjectChipText, isSelected && styles.subjectChipTextSelected]}>
                       {subject}
@@ -281,28 +276,24 @@ export default function ScheduleScreen() {
         <View style={styles.section}>
           <View style={styles.calendarHeader}>
             <Text style={styles.monthText}>
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              {selectedDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
             </Text>
-          </View>
-          <View style={styles.weekDays}>
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-              <Text key={day} style={styles.weekDayText}>{day}</Text>
-            ))}
           </View>
           <View style={styles.datesGrid}>
             {days.map((date, index) => {
               const isSelected = date.toDateString() === selectedDate.toDateString();
+              const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short' });
               return (
                 <TouchableOpacity
                   key={index}
                   style={[styles.dateCell, isSelected && styles.dateCellSelected]}
-                  onPress={() => setSelectedDate(date)}
+                  onPress={() => handleDateSelect(date)}
                 >
+                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
+                    {dayName}
+                  </Text>
                   <Text style={[styles.dateText, isSelected && styles.dateTextSelected]}>
                     {date.getDate()}
-                  </Text>
-                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
-                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
                   </Text>
                 </TouchableOpacity>
               );
@@ -371,31 +362,7 @@ export default function ScheduleScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 16,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
     backgroundColor: Colors.bgCream,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -447,21 +414,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: Colors.bgCream,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    backgroundColor: Colors.white,
+    ...Shadows.small,
   },
   subjectChipSelected: {
     backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    ...Shadows.medium,
   },
   subjectChipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
   },
   subjectChipTextSelected: {
     color: Colors.white,
+    fontWeight: '700',
   },
   calendarHeader: {
     marginBottom: 16,
@@ -470,49 +437,43 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
-  },
-  weekDays: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-  },
-  weekDayText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    width: 40,
-    textAlign: 'center',
+    textTransform: 'capitalize',
   },
   datesGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   dateCell: {
-    width: 50,
-    height: 60,
-    borderRadius: 10,
+    flex: 1,
+    height: 70,
+    borderRadius: BorderRadius.medium,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.bgCream,
+    backgroundColor: Colors.white,
+    ...Shadows.small,
   },
   dateCellSelected: {
     backgroundColor: Colors.primary,
-  },
-  dateText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  dateTextSelected: {
-    color: Colors.white,
+    ...Shadows.medium,
   },
   dayText: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
     color: Colors.textSecondary,
+    marginBottom: 4,
+    textTransform: 'capitalize',
   },
   dayTextSelected: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  dateTextSelected: {
     color: Colors.white,
   },
   loadingContainer: {
@@ -541,13 +502,15 @@ const styles = StyleSheet.create({
   timeSlot: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: Colors.white,
     minWidth: 80,
     alignItems: 'center',
+    ...Shadows.small,
   },
   timeSlotSelected: {
     backgroundColor: Colors.primary,
+    ...Shadows.medium,
   },
   timeSlotText: {
     fontSize: 14,
@@ -556,6 +519,7 @@ const styles = StyleSheet.create({
   },
   timeSlotTextSelected: {
     color: Colors.white,
+    fontWeight: '700',
   },
   footer: {
     padding: 20,

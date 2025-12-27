@@ -415,7 +415,7 @@ export default function TutorEditProfileScreen() {
       const hourlyRate = parseFloat(tutorData.hourlyRate);
       
       if (!tutorData.hourlyRate || isNaN(hourlyRate) || hourlyRate < 5 || hourlyRate > 500) {
-        Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 5 et 500€');
+        Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 3 280 FCFA et 328 000 FCFA (5€ - 500€)');
         setIsSaving(false);
         return;
       }
@@ -709,15 +709,15 @@ export default function TutorEditProfileScreen() {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Tarif horaire (€) *</Text>
+                <Text style={styles.label}>Tarif horaire (FCFA) *</Text>
                 <TextInput
                   style={styles.input}
                   value={tutorData.hourlyRate}
                   onChangeText={(text) => setTutorData({ ...tutorData, hourlyRate: text })}
-                  placeholder="Entre 5 et 500"
+                  placeholder="Entre 3 280 et 328 000"
                   keyboardType="numeric"
                 />
-                <Text style={styles.hint}>Doit être entre 5€ et 500€</Text>
+                <Text style={styles.hint}>Doit être entre 3 280 FCFA et 328 000 FCFA</Text>
               </View>
 
               <View style={styles.inputContainer}>

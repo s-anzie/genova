@@ -1,39 +1,34 @@
 import { logger } from '@repo/utils';
 import { processExpiredSubscriptions } from './subscription.service';
+import { scheduleDailySessionGeneration, stopDailySessionGeneration } from './background-jobs.service';
 
 /**
  * Initialize all cron jobs
  * 
- * Note: This is a placeholder for cron job initialization.
- * In production, you should use a proper cron library like node-cron
- * or a job queue system like Bull/BullMQ.
- * 
- * For now, expired subscriptions can be processed by calling the
- * /api/subscriptions/process-expired endpoint manually or via a
- * system cron job.
+ * This initializes:
+ * - Daily session generation job (runs at 2 AM UTC)
+ * - Expired subscription processing (placeholder for future implementation)
  */
 export function initializeCronJobs() {
-  logger.info('Cron jobs would be initialized here');
-  logger.info('To process expired subscriptions, call POST /api/subscriptions/process-expired');
+  logger.info('Initializing cron jobs');
   
-  // Example with node-cron (requires: npm install node-cron @types/node-cron):
-  // import cron from 'node-cron';
-  // cron.schedule('0 2 * * *', async () => {
-  //   logger.info('Running scheduled job: Process expired subscriptions');
-  //   try {
-  //     const result = await processExpiredSubscriptions();
-  //     logger.info('Expired subscriptions processed', result);
-  //   } catch (error) {
-  //     logger.error('Failed to process expired subscriptions', error);
-  //   }
-  // });
+  // Initialize daily session generation job
+  scheduleDailySessionGeneration();
+  
+  logger.info('All cron jobs initialized');
+  logger.info('To process expired subscriptions, call POST /api/subscriptions/process-expired');
 }
 
 /**
  * Stop all cron jobs
  */
 export function stopCronJobs() {
-  logger.info('Cron jobs would be stopped here');
+  logger.info('Stopping all cron jobs');
+  
+  // Stop daily session generation job
+  stopDailySessionGeneration();
+  
+  logger.info('All cron jobs stopped');
 }
 
 /**

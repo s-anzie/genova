@@ -5,26 +5,24 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ImageBackground,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
-  ArrowLeft,
   Heart,
   Share2,
   CheckCircle,
-  Play,
   Calendar,
   MessageCircle,
   Star,
   Globe,
 } from 'lucide-react-native';
-import { Colors } from '@/constants/colors';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
+import { PageHeader } from '@/components/PageHeader';
 import { apiClient } from '@/utils/api-client';
 import { TutorProfileResponse, ReviewResponse } from '@/types/api';
+import { eurToFcfa } from '@/utils/currency';
 
 // Mock data for development
 const MOCK_TUTOR: Partial<TutorProfileResponse> = {
@@ -198,45 +196,36 @@ export default function TutorDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bgPrimary} />
-
-      {/* White Header */}
-      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-          </TouchableOpacity>
+      <PageHeader
+        title="Profil du tuteur"
+        showBackButton
+        centerTitle
+        showGradient={false}
+        variant="primary"
+        rightElement={
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.headerButton}>
-              <Share2 size={22} color={Colors.textPrimary} strokeWidth={2} />
+              <Share2 size={20} color={Colors.textPrimary} strokeWidth={2} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerButton}>
-              <Heart size={22} color={Colors.textPrimary} strokeWidth={2} />
+              <Heart size={20} color={Colors.textPrimary} strokeWidth={2} />
             </TouchableOpacity>
           </View>
-        </View>
-      </SafeAreaView>
+        }
+      />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Video/Image with Play Button */}
+        {/* Hero Image */}
         <View style={styles.heroContainer}>
           <ImageBackground
-            source={{ uri: 'https://via.placeholder.com/400x300' }}
+            source={{ uri: 'https://via.placeholder.com/400x200' }}
             style={styles.heroImage}
             resizeMode="cover"
-          >
-            {/* Play Button - Bottom Right */}
-            <View style={styles.playButtonContainer}>
-              <TouchableOpacity style={styles.playButton}>
-                <Play size={24} color={Colors.white} fill={Colors.white} strokeWidth={0} />
-              </TouchableOpacity>
-            </View>
-          </ImageBackground>
+          />
         </View>
 
         {/* Profile Info Card with Avatar Overlap */}
@@ -283,8 +272,8 @@ export default function TutorDetailScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>${tutor.hourlyRate}</Text>
-              <Text style={styles.statLabel}>Per Hour</Text>
+              <Text style={styles.statValue}>{eurToFcfa(tutor.hourlyRate).toLocaleString('fr-FR')} FCFA</Text>
+              <Text style={styles.statLabel}>Par heure</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -423,7 +412,7 @@ export default function TutorDetailScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
+      <View style={styles.footerContainer}>
         <View style={styles.footer}>
           <TouchableOpacity style={styles.chatButton}>
             <MessageCircle size={24} color={Colors.primary} strokeWidth={2} />
@@ -435,7 +424,7 @@ export default function TutorDetailScreen() {
             <Text style={styles.bookButtonText}>Réserver une séance</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -443,7 +432,7 @@ export default function TutorDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     justifyContent: 'center',
@@ -454,30 +443,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '600',
   },
-  headerSafeArea: {
-    backgroundColor: Colors.bgPrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: Colors.bgPrimary,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   headerActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.sm,
+  },
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.small,
   },
   scrollView: {
     flex: 1,
@@ -487,7 +464,7 @@ const styles = StyleSheet.create({
   },
   heroContainer: {
     width: '100%',
-    height: 220,
+    height: 150,
     position: 'relative',
     backgroundColor: '#e5e5e5',
   },
@@ -495,29 +472,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  playButtonContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
   profileCard: {
-    backgroundColor: Colors.bgPrimary,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    backgroundColor: Colors.white,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    borderRadius: BorderRadius.large,
+    marginHorizontal: Spacing.lg,
+    marginTop: -40,
+    ...Shadows.medium,
   },
   profileHeader: {
     flexDirection: 'row',
@@ -778,17 +741,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.success,
   },
-  footerSafeArea: {
-    backgroundColor: Colors.bgPrimary,
+  footerContainer: {
+    backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   footer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.bgPrimary,
-    gap: 12,
+    gap: Spacing.md,
   },
   chatButton: {
     width: 56,

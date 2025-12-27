@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Home, Calendar, Users, DollarSign, User } from 'lucide-react-native';
+import { Home, Calendar, Users, DollarSign, User, Wallet } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 
 export default function TutorTabLayout() {
@@ -49,12 +49,12 @@ export default function TutorTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="earnings"
+        name="wallet"
         options={{
-          title: 'Revenus',
+          title: 'Portefeuil',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <DollarSign size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <Wallet size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}

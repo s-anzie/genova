@@ -32,6 +32,7 @@ import { apiClient } from '@/utils/api-client';
 import { Colors } from '@/constants/colors';
 import { API_BASE_URL } from '@/config/api';
 import type { UserResponse, TutorProfileResponse } from '@/types/api';
+import { formatEurAsFcfa, formatHourlyRateAsFcfa } from '@/utils/currency';
 
 export default function TutorProfileScreen() {
   const router = useRouter();
@@ -194,7 +195,7 @@ export default function TutorProfileScreen() {
           <View style={styles.rateSection}>
             <DollarSign size={20} color={Colors.primary} strokeWidth={2} />
             <Text style={styles.rateText}>
-              Tarif: <Text style={styles.rateValue}>{profileData.hourlyRate}€/h</Text>
+              Tarif: <Text style={styles.rateValue}>{formatHourlyRateAsFcfa(profileData.hourlyRate)}</Text>
             </Text>
           </View>
         )}
@@ -205,7 +206,7 @@ export default function TutorProfileScreen() {
           
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => router.push('/(tutor)/profile/availability')}
+            onPress={() => router.push('/(tutor)/availability')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#E8F5F5' }]}>
@@ -267,7 +268,7 @@ export default function TutorProfileScreen() {
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>Mon portefeuille</Text>
                 <Text style={styles.menuSubtitle}>
-                  Solde: {userData?.walletBalance ? Number(userData.walletBalance).toFixed(2) : '0.00'}€
+                  Solde: {userData?.walletBalance ? formatEurAsFcfa(Number(userData.walletBalance)) : '0 FCFA'}
                 </Text>
               </View>
             </View>

@@ -10,6 +10,13 @@ import {
   rescheduleSession,
   updateSession,
   getClassSessions,
+  getUpcomingSessions,
+  getPastSessions,
+  getCancelledSessions,
+  getAssignedSessions,
+  getSuggestedSessions,
+  getTutorPastSessions,
+  getTutorCancelledSessions,
   CreateSessionData,
   UpdateSessionData,
 } from '../services/session.service';
@@ -87,6 +94,8 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 /**
  * GET /api/sessions
  * Get all sessions for the authenticated user
+ * Supports filters: upcoming, past, cancelled, suggested, assigned
+ * Validates: Requirements 9.1, 9.2, 9.3, 10.1, 10.2
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -94,8 +103,53 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
-    const { status, startDate, endDate } = req.query;
+    const { filter, status, startDate, endDate } = req.query;
 
+    // Handle new filter types
+    if (filter) {
+      let sessions;
+      
+      switch (filter) {
+        case 'upcoming':
+          sessions = await getUpcomingSessions(req.user.userId);
+          break;
+        
+        case 'past':
+          sessions = await getPastSessions(req.user.userId);
+          break;
+        
+        case 'cancelled':
+          sessions = await getCancelledSessions(req.user.userId);
+          break;
+        
+        case 'assigned':
+          sessions = await getAssignedSessions(req.user.userId);
+          break;
+        
+        case 'suggested':
+          sessions = await getSuggestedSessions(req.user.userId);
+          break;
+        
+        case 'tutor-past':
+          sessions = await getTutorPastSessions(req.user.userId);
+          break;
+        
+        case 'tutor-cancelled':
+          sessions = await getTutorCancelledSessions(req.user.userId);
+          break;
+        
+        default:
+          throw new ValidationError(`Invalid filter. Must be one of: upcoming, past, cancelled, assigned, suggested, tutor-past, tutor-cancelled`);
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: sessions,
+        filter,
+      });
+    }
+
+    // Legacy filtering by status and date range
     const filters: any = {};
     if (status) {
       filters.status = status as string;

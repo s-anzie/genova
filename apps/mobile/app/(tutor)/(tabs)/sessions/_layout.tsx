@@ -22,13 +22,6 @@ export default function TutorSessionsLayout() {
           presentation: 'modal',
         }}
       />
-      <Stack.Screen
-        name="attendance"
-        options={{
-          title: 'Présences',
-          presentation: 'modal',
-        }}
-      />
     </Stack>
   );
 }

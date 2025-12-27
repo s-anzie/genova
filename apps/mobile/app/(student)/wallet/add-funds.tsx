@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft, DollarSign, AlertCircle } from 'lucide-react-native';
 import { useWallet } from '@/hooks/useWallet';
+import { formatEurAsFcfa, fcfaToEur, eurToFcfa } from '@/utils/currency';
 
 export default function AddFundsScreen() {
   const router = useRouter();
@@ -20,21 +21,25 @@ export default function AddFundsScreen() {
   const currentBalance = balance?.totalBalance || 0;
 
   const handleAddFunds = async () => {
-    const addAmount = parseFloat(amount);
+    const addAmountFcfa = parseFloat(amount);
     
-    if (!addAmount || addAmount <= 0) {
+    if (!addAmountFcfa || addAmountFcfa <= 0) {
       Alert.alert('Erreur', 'Veuillez entrer un montant valide');
       return;
     }
 
-    if (addAmount < 500) {
-      Alert.alert('Erreur', 'Le montant minimum est de 500 FCFA');
+    const minFcfa = eurToFcfa(0.76); // ~500 FCFA
+    if (addAmountFcfa < minFcfa) {
+      Alert.alert('Erreur', `Le montant minimum est de ${minFcfa.toLocaleString('fr-FR')} FCFA`);
       return;
     }
 
     setLoading(true);
     try {
+      // Convert FCFA to EUR for API call
+      const addAmountEur = fcfaToEur(addAmountFcfa);
       // TODO: Implement add funds API call with Orange Money / MTN MoMo
+      // API expects amount in EUR
       Alert.alert('Succès', 'Fonds ajoutés avec succès');
       router.back();
     } catch (error) {
@@ -66,7 +71,7 @@ export default function AddFundsScreen() {
         {/* Current Balance */}
         <View className="bg-primary rounded-2xl p-6 items-center mb-6">
           <Text className="text-sm text-white/80 font-medium mb-2">Solde actuel</Text>
-          <Text className="text-4xl font-extrabold text-white">{currentBalance.toFixed(2)} FCFA</Text>
+          <Text className="text-4xl font-extrabold text-white">{formatEurAsFcfa(currentBalance)}</Text>
         </View>
 
         {/* Amount Input */}
@@ -90,22 +95,22 @@ export default function AddFundsScreen() {
         <View className="mb-6">
           <Text className="text-base font-semibold text-text-primary mb-3">Montants rapides</Text>
           <View className="flex-row gap-3">
-            {[1000, 2500, 5000, 10000].map((value) => (
+            {[500, 1000, 2500, 5000].map((valueInFcfa) => (
               <TouchableOpacity
-                key={value}
+                key={valueInFcfa}
                 className={`flex-1 py-3 rounded-xl border ${
-                  amount === value.toString()
+                  amount === valueInFcfa.toString()
                     ? 'bg-primary border-primary'
                     : 'bg-white border-border'
                 } items-center`}
-                onPress={() => setQuickAmount(value)}
+                onPress={() => setQuickAmount(valueInFcfa)}
               >
                 <Text
                   className={`text-sm font-semibold ${
-                    amount === value.toString() ? 'text-white' : 'text-text-primary'
+                    amount === valueInFcfa.toString() ? 'text-white' : 'text-text-primary'
                   }`}
                 >
-                  {value}
+                  {valueInFcfa}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -120,7 +125,7 @@ export default function AddFundsScreen() {
               Informations importantes
             </Text>
             <Text className="text-[13px] text-text-secondary leading-5">
-              • Montant minimum : 500 FCFA{'\n'}
+              • Montant minimum : {eurToFcfa(0.76).toLocaleString('fr-FR')} FCFA{'\n'}
               • Paiement via Orange Money ou MTN MoMo{'\n'}
               • Les fonds sont disponibles immédiatement
             </Text>

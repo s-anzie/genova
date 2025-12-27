@@ -26,6 +26,7 @@ import { ApiClient } from '@/utils/api';
 import { SessionResponse, SessionReportResponse, AttendanceResponse } from '@/types/api';
 import { useAuth } from '@/contexts/auth-context';
 import { PageHeader } from '@/components/PageHeader';
+import { formatHourlyRateAsFcfa, formatEurAsFcfa } from '@/utils/currency';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -442,7 +443,7 @@ export default function SessionDetailScreen() {
             <View style={styles.revenueRow}>
               <Text style={styles.revenueLabel}>Taux horaire:</Text>
               <Text style={styles.revenueValue}>
-                {Number(session.tutor?.hourlyRate || session.tutor?.tutorProfile?.hourlyRate || 0).toFixed(2)} €/h
+                {formatHourlyRateAsFcfa(Number(session.tutor?.hourlyRate || session.tutor?.tutorProfile?.hourlyRate || 0))}
               </Text>
             </View>
             <View style={styles.revenueRow}>
@@ -456,7 +457,7 @@ export default function SessionDetailScreen() {
             <View style={styles.revenueDivider} />
             <View style={styles.revenueRow}>
               <Text style={styles.revenueTotalLabel}>Total:</Text>
-              <Text style={styles.revenueTotalValue}>{calculateTutorRevenue().toFixed(2)} €</Text>
+              <Text style={styles.revenueTotalValue}>{formatEurAsFcfa(calculateTutorRevenue())}</Text>
             </View>
           </View>
         </View>

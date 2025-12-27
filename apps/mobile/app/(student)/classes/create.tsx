@@ -9,12 +9,15 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, MapPin, Globe } from 'lucide-react-native';
+import { MapPin, Globe } from 'lucide-react-native';
 import { Colors, Spacing } from '@/constants/colors';
-import { ApiClient } from '@/utils/api';
+import { apiClient } from '@/utils/api-client';
 import { CreateClassData } from '@/types/api';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { PageHeader } from '@/components/PageHeader';
 
 const EDUCATION_LEVELS = [
   { 
@@ -135,6 +138,11 @@ const SUBJECTS = [
 export default function CreateClassScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [createdClassId, setCreatedClassId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -208,27 +216,34 @@ export default function CreateClassScreen() {
   const handleSubmit = async () => {
     // Validation
     if (!formData.name.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un nom pour la classe');
+      setErrorMessage('Veuillez entrer un nom pour la classe');
+      setShowErrorModal(true);
       return;
     }
     if (!formData.educationLevel) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un niveau d\'éducation');
+      setErrorMessage('Veuillez sélectionner un niveau d\'éducation');
+      setShowErrorModal(true);
       return;
     }
     if (!formData.specificLevel) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un niveau spécifique');
+      setErrorMessage('Veuillez sélectionner un niveau spécifique');
+      setShowErrorModal(true);
       return;
     }
     if (formData.subjects.length === 0) {
-      Alert.alert('Erreur', 'Veuillez sélectionner au moins une matière');
+      setErrorMessage('Veuillez sélectionner au moins une matière');
+      setShowErrorModal(true);
       return;
     }
     if (formData.meetingType === 'IN_PERSON' && !formData.meetingLocation.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un lieu de rencontre pour les cours en présentiel');
+      setErrorMessage('Veuillez entrer un lieu de rencontre pour les cours en présentiel');
+      setShowErrorModal(true);
       return;
     }
 
     setLoading(true);
+    setShowLoadingModal(true);
+    
     try {
       const classData: CreateClassData = {
         name: formData.name.trim(),
@@ -239,39 +254,27 @@ export default function CreateClassScreen() {
           specificLevel: formData.specificLevel || undefined,
           stream: formData.stream || undefined,
         },
-        subjects: formData.subjects, // Array of subjects
+        subjects: formData.subjects,
         maxStudents: formData.maxStudents ? parseInt(formData.maxStudents) : undefined,
         meetingType: formData.meetingType,
         meetingLocation: formData.meetingLocation.trim() || undefined,
       };
 
-      const response = await ApiClient.post<{ success: boolean; data: any }>(
-        '/classes',
-        classData
-      );
+      console.log('🔄 Creating class...', classData);
+      const response = await apiClient.post('/classes', classData);
 
       // API returns { success: true, data: ClassResponse }
-      const classId = (response as any).data.id;
+      const classId = response.data.id;
+      console.log('✅ Class created successfully:', classId);
 
-      // Propose to create schedule immediately
-      Alert.alert(
-        'Succès', 
-        'Classe créée avec succès! Voulez-vous créer l\'emploi du temps maintenant?',
-        [
-          {
-            text: 'Plus tard',
-            style: 'cancel',
-            onPress: () => router.push(`/classes/${classId}`),
-          },
-          {
-            text: 'Créer l\'emploi du temps',
-            onPress: () => router.push(`/classes/${classId}/schedule`),
-          },
-        ]
-      );
+      setCreatedClassId(classId);
+      setShowLoadingModal(false);
+      setShowSuccessModal(true);
     } catch (error: any) {
-      console.error('Failed to create class:', error);
-      Alert.alert('Erreur', error.message || 'Impossible de créer la classe');
+      console.error('❌ Failed to create class:', error);
+      setShowLoadingModal(false);
+      setErrorMessage(error.message || 'Impossible de créer la classe');
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -279,13 +282,12 @@ export default function CreateClassScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Créer une classe</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <PageHeader 
+        title="Créer une classe"
+        showBackButton={true}
+        centerTitle={true}
+        showGradient={false}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -563,12 +565,60 @@ export default function CreateClassScreen() {
             onPress={handleSubmit}
             disabled={loading}
           >
-            <Text style={styles.submitButtonText}>
-              {loading ? 'Création...' : 'Créer la classe'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Text style={styles.submitButtonText}>Créer la classe</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Loading Modal */}
+      <StyledModal
+        visible={showLoadingModal}
+        type="loading"
+        title="Création en cours..."
+        message="Veuillez patienter pendant la création de votre classe"
+        showCloseButton={false}
+      />
+
+      {/* Success Modal */}
+      <StyledModal
+        visible={showSuccessModal}
+        type="success"
+        title="Classe créée avec succès!"
+        message="Voulez-vous créer l'emploi du temps maintenant?"
+        primaryButton={{
+          text: "Créer l'emploi du temps",
+          onPress: () => {
+            setShowSuccessModal(false);
+            if (createdClassId) {
+              router.push(`/(student)/classes/schedule?id=${createdClassId}`);
+            }
+          },
+        }}
+        secondaryButton={{
+          text: 'Plus tard',
+          onPress: () => {
+            setShowSuccessModal(false);
+            router.back();
+          },
+        }}
+      />
+
+      {/* Error Modal */}
+      <StyledModal
+        visible={showErrorModal}
+        type="error"
+        title="Erreur"
+        message={errorMessage}
+        primaryButton={{
+          text: 'OK',
+          onPress: () => setShowErrorModal(false),
+        }}
+        onClose={() => setShowErrorModal(false)}
+      />
     </View>
   );
 }
@@ -577,31 +627,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgCream,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 60, // Status bar spacing
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  placeholder: {
-    width: 40,
   },
   keyboardView: {
     flex: 1,

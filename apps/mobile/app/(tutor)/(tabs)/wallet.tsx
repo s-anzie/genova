@@ -5,6 +5,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth-context';
 import { useWallet } from '@/hooks/useWallet';
@@ -20,25 +21,25 @@ export default function TutorWalletScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-bgCream">
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text className="text-sm text-gray-500 mt-3 font-medium">Chargement...</Text>
+        <Text style={styles.loadingText}>Chargement...</Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-bgCream">
+    <View style={styles.container}>
       <WalletHeader
         balance={balance}
         balanceVisible={balanceVisible}
         onToggleVisibility={() => setBalanceVisible(!balanceVisible)}
-        showBackButton={true}
+        showBackButton={false}
       />
 
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 20, gap: 24 }}
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -46,10 +47,36 @@ export default function TutorWalletScreen() {
       >
         <QuickActions userRole={user?.role || 'TUTOR'} />
         
-        <RecentTransactions transactions={recentTransactions} />
+        <RecentTransactions transactions={recentTransactions} userRole={user?.role || 'TUTOR'} />
 
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bgSecondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.bgSecondary,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    gap: 24,
+  },
+});

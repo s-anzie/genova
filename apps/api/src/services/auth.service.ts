@@ -144,7 +144,11 @@ export async function register(data: RegisterData): Promise<AuthTokens> {
 
   // Create user and profile in a transaction
   const user = await prisma.$transaction(async (tx) => {
-    // Create user with initial wallet balance (650000 FCFA ≈ 1000 EUR)
+    // Create user with initial wallet balance
+    // Students get 1000€ initial credit for testing (bypass Stripe)
+    // Tutors start with 0€ and earn through sessions
+    const initialBalance = roleValue === Role.STUDENT ? 1000 : 0;
+    
     const newUser = await tx.user.create({
       data: {
         email: data.email.toLowerCase(),
@@ -154,7 +158,7 @@ export async function register(data: RegisterData): Promise<AuthTokens> {
         role: roleValue,
         birthDate: data.birthDate,
         preferredLanguage: data.preferredLanguage || 'en',
-        walletBalance: 650000, // Initial balance for testing (bypass Stripe)
+        walletBalance: initialBalance,
       },
     });
 

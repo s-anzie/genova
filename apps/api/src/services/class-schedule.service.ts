@@ -3,8 +3,11 @@ import {
   ValidationError, 
   NotFoundError, 
   AuthorizationError,
-  ConflictError 
+  ConflictError,
+  logger
 } from '@repo/utils';
+import { cancelFutureSessionsForTimeSlot, generateSessionsForTimeSlot } from './session-generator.service';
+import { createBulkNotifications } from './notification.service';
 
 const prisma = new PrismaClient();
 
@@ -301,6 +304,12 @@ export async function deleteTimeSlot(
     throw new AuthorizationError('Only the class creator can delete time slots');
   }
 
+  // Cancel all future sessions for this time slot (Requirement 1.3)
+  await cancelFutureSessionsForTimeSlot(
+    timeSlotId,
+    `Time slot deleted: ${timeSlot.subject} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`
+  );
+
   // Soft delete
   await prisma.classTimeSlot.update({
     where: { id: timeSlotId },
@@ -318,7 +327,7 @@ export async function deleteTimeSlot(
 
 /**
  * Cancel a time slot for a specific week
- * Validates: Requirements 3.1, 3.2
+ * Validates: Requirements 7.1, 7.2
  */
 export async function cancelTimeSlotForWeek(
   userId: string,
@@ -355,7 +364,7 @@ export async function cancelTimeSlotForWeek(
   }
 
   // Create cancellation
-  await prisma.classSlotCancellation.create({
+  const cancellation = await prisma.classSlotCancellation.create({
     data: {
       timeSlotId: data.timeSlotId,
       weekStart,
@@ -364,11 +373,13 @@ export async function cancelTimeSlotForWeek(
     },
   });
 
-  // TODO: Send notifications to class members and assigned tutors
+  // Cancel related sessions for this week (Requirement 7.1)
+  await cancelSessionsForSlotCancellation(cancellation.id, timeSlot, weekStart);
 }
 
 /**
  * Reinstate a cancelled time slot for a specific week
+ * Validates: Requirement 7.3
  */
 export async function reinstateTimeSlotForWeek(
   timeSlotId: string,
@@ -403,9 +414,13 @@ export async function reinstateTimeSlotForWeek(
     throw new NotFoundError('No cancellation found for this time slot and week');
   }
 
+  // Delete the cancellation
   await prisma.classSlotCancellation.delete({
     where: { id: cancellation.id },
   });
+
+  // Regenerate sessions for this specific week (Requirement 7.3)
+  await regenerateSessionsForWeek(timeSlotId, monday);
 }
 
 /**
@@ -665,4 +680,163 @@ export async function getWeekCancellations(
 function getDayName(dayOfWeek: number): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return days[dayOfWeek] || 'Unknown';
+}
+
+/**
+ * Cancel sessions for a specific slot cancellation
+ * Validates: Requirements 7.1, 7.2, 7.4
+ */
+async function cancelSessionsForSlotCancellation(
+  cancellationId: string,
+  timeSlot: ClassTimeSlot & { class: any },
+  weekStart: Date
+): Promise<void> {
+  // Calculate the week end (Sunday)
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  // Find all sessions for this time slot in this week
+  const sessionsToCancel = await prisma.tutoringSession.findMany({
+    where: {
+      classId: timeSlot.classId,
+      subject: timeSlot.subject,
+      scheduledStart: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
+      status: {
+        in: ['PENDING', 'CONFIRMED'],
+      },
+    },
+  });
+
+  // Filter sessions that match this time slot's day of week and time
+  const matchingSessions = sessionsToCancel.filter(session => {
+    const sessionDay = session.scheduledStart.getDay();
+    const sessionStartTime = `${session.scheduledStart.getHours().toString().padStart(2, '0')}:${session.scheduledStart.getMinutes().toString().padStart(2, '0')}`;
+    const sessionEndTime = `${session.scheduledEnd.getHours().toString().padStart(2, '0')}:${session.scheduledEnd.getMinutes().toString().padStart(2, '0')}`;
+    
+    return sessionDay === timeSlot.dayOfWeek &&
+           sessionStartTime === timeSlot.startTime &&
+           sessionEndTime === timeSlot.endTime;
+  });
+
+  // Cancel each matching session with reference to slot cancellation (Requirement 7.2)
+  const cancellationReason = `Slot cancelled for week of ${weekStart.toISOString().split('T')[0]}: ${timeSlot.subject} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} (Cancellation ID: ${cancellationId})`;
+
+  const updatePromises = matchingSessions.map(session =>
+    prisma.tutoringSession.update({
+      where: { id: session.id },
+      data: {
+        status: 'CANCELLED',
+        cancellationReason,
+      },
+    })
+  );
+
+  await Promise.all(updatePromises);
+
+  logger.info('Cancelled sessions for slot cancellation', {
+    cancellationId,
+    timeSlotId: timeSlot.id,
+    weekStart: weekStart.toISOString(),
+    cancelledCount: matchingSessions.length,
+  });
+
+  // Create notifications for all class members and assigned tutors (Requirement 7.4)
+  if (matchingSessions.length > 0) {
+    await createCancellationNotifications(matchingSessions, timeSlot, weekStart);
+  }
+}
+
+/**
+ * Create notifications for slot cancellation
+ * Validates: Requirement 7.4
+ */
+async function createCancellationNotifications(
+  cancelledSessions: any[],
+  timeSlot: ClassTimeSlot & { class: any },
+  weekStart: Date
+): Promise<void> {
+  // Get all class members
+  const classMembers = await prisma.classMember.findMany({
+    where: {
+      classId: timeSlot.classId,
+      isActive: true,
+    },
+    select: {
+      studentId: true,
+    },
+  });
+
+  // Collect unique tutor IDs from cancelled sessions
+  const tutorIds = new Set<string>();
+  cancelledSessions.forEach(session => {
+    if (session.tutorId) {
+      tutorIds.add(session.tutorId);
+    }
+  });
+
+  const notifications = [];
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+
+  // Create notifications for all class members
+  for (const member of classMembers) {
+    notifications.push({
+      userId: member.studentId,
+      title: 'Session Cancelled',
+      message: `The ${timeSlot.subject} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
+      type: 'SESSION_CANCELLED',
+      data: {
+        classId: timeSlot.classId,
+        timeSlotId: timeSlot.id,
+        subject: timeSlot.subject,
+        weekStart: weekStartStr,
+      },
+    });
+  }
+
+  // Create notifications for assigned tutors
+  for (const tutorId of tutorIds) {
+    notifications.push({
+      userId: tutorId,
+      title: 'Session Cancelled',
+      message: `Your ${timeSlot.subject} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
+      type: 'SESSION_CANCELLED',
+      data: {
+        classId: timeSlot.classId,
+        timeSlotId: timeSlot.id,
+        subject: timeSlot.subject,
+        weekStart: weekStartStr,
+      },
+    });
+  }
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications);
+    logger.info('Created cancellation notifications', {
+      timeSlotId: timeSlot.id,
+      weekStart: weekStartStr,
+      notificationCount: notifications.length,
+    });
+  }
+}
+
+/**
+ * Regenerate sessions for a specific week after slot reinstatement
+ * Validates: Requirement 7.3
+ */
+async function regenerateSessionsForWeek(
+  timeSlotId: string,
+  weekStart: Date
+): Promise<void> {
+  // Generate sessions for this specific week (1 week ahead from the weekStart)
+  const sessions = await generateSessionsForTimeSlot(timeSlotId, 1, weekStart);
+
+  logger.info('Regenerated sessions for reinstated slot', {
+    timeSlotId,
+    weekStart: weekStart.toISOString(),
+    generatedCount: sessions.length,
+  });
 }

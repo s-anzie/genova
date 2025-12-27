@@ -12,9 +12,28 @@ export function useNotifications(enablePolling = true) {
   const [refreshing, setRefreshing] = useState(false);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastLoadTimeRef = useRef<number>(0);
+  const isLoadingRef = useRef(false);
 
   const loadNotifications = useCallback(async (showLoading = true) => {
+    // Prevent concurrent requests
+    if (isLoadingRef.current) {
+      console.log('⚠️ Notifications already loading, skipping...');
+      return;
+    }
+
+    // Throttle requests - don't load more than once every 5 seconds
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    if (timeSinceLastLoad < 5000) {
+      console.log('⚠️ Throttling notifications request (last load was', timeSinceLastLoad, 'ms ago)');
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
+      lastLoadTimeRef.current = now;
+      
       if (showLoading) setLoading(true);
       
       const [notificationsRes, countRes] = await Promise.all([
@@ -24,11 +43,15 @@ export function useNotifications(enablePolling = true) {
 
       setNotifications(notificationsRes.data);
       setUnreadCount(countRes.data.count);
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
+    } catch (error: any) {
+      // Don't log errors if we're logging out
+      if (error?.message !== 'Déconnexion en cours...') {
+        console.error('Failed to load notifications:', error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
+      isLoadingRef.current = false;
     }
   }, []);
 
@@ -72,11 +95,16 @@ export function useNotifications(enablePolling = true) {
     loadNotifications(false);
   }, [loadNotifications]);
 
-  // Setup polling
+  // Setup polling - only run once on mount
   useEffect(() => {
     loadNotifications();
 
     if (enablePolling) {
+      // Clear any existing interval first
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
       // Start polling
       pollingIntervalRef.current = setInterval(() => {
         // Only poll if app is in foreground
@@ -99,11 +127,13 @@ export function useNotifications(enablePolling = true) {
       return () => {
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
         }
         subscription.remove();
       };
     }
-  }, [loadNotifications, enablePolling]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enablePolling]); // Only depend on enablePolling, not loadNotifications
 
   return {
     notifications,

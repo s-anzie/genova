@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, TutorSuggestion } from '@/types/api';
+import { eurToFcfa } from '@/utils/currency';
 
 export default function StudentHomeScreen() {
   const router = useRouter();
@@ -44,13 +45,31 @@ export default function StudentHomeScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const lastLoadTimeRef = useRef<number>(0);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
+    // Prevent concurrent requests
+    if (isLoadingRef.current) {
+      console.log('⚠️ Dashboard already loading, skipping...');
+      return;
+    }
+
+    // Throttle requests - don't load more than once every 5 seconds
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    if (timeSinceLastLoad < 5000 && !refreshing) {
+      console.log('⚠️ Throttling dashboard request (last load was', timeSinceLastLoad, 'ms ago)');
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
+      lastLoadTimeRef.current = now;
       setLoading(true);
       const [sessionsRes, walletRes] = await Promise.all([
         ApiClient.get<{ success: boolean; data: SessionResponse[] }>('/sessions'),
@@ -62,14 +81,14 @@ export default function StudentHomeScreen() {
       
       const allSessions = sessionsRes.data;
 
-      const now = new Date();
-      const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const sessionNow = new Date();
+      const weekFromNow = new Date(sessionNow.getTime() + 7 * 24 * 60 * 60 * 1000);
 
       // Filter upcoming sessions
       const upcoming = allSessions
         .filter(s => {
           const start = new Date(s.scheduledStart);
-          return s.status === 'CONFIRMED' && start > now && start < weekFromNow;
+          return s.status === 'CONFIRMED' && start > sessionNow && start < weekFromNow;
         })
         .sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime())
         .slice(0, 3);
@@ -80,7 +99,7 @@ export default function StudentHomeScreen() {
       const unassigned = allSessions.find(s => 
         s.status === 'PENDING' && 
         !s.tutorId && 
-        new Date(s.scheduledStart) > now
+        new Date(s.scheduledStart) > sessionNow
       );
 
       if (unassigned) {
@@ -101,8 +120,8 @@ export default function StudentHomeScreen() {
       }
 
       // Calculate stats
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
+      const weekStart = new Date(sessionNow);
+      weekStart.setDate(sessionNow.getDate() - sessionNow.getDay());
       weekStart.setHours(0, 0, 0, 0);
 
       const sessionsThisWeek = allSessions.filter(s => {
@@ -117,7 +136,7 @@ export default function StudentHomeScreen() {
 
       setStats({
         totalSessions: allSessions.filter(s => s.status !== 'CANCELLED').length,
-        upcomingCount: allSessions.filter(s => new Date(s.scheduledStart) > now && s.status === 'CONFIRMED').length,
+        upcomingCount: allSessions.filter(s => new Date(s.scheduledStart) > sessionNow && s.status === 'CONFIRMED').length,
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
         walletBalance: Math.round(walletRes.data.totalBalance || 0),
       });
@@ -126,6 +145,7 @@ export default function StudentHomeScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      isLoadingRef.current = false;
     }
   };
 
@@ -246,7 +266,7 @@ export default function StudentHomeScreen() {
             </View>
             <View style={styles.walletContent}>
               <Text style={styles.walletLabel}>Solde du portefeuille</Text>
-              <Text style={styles.walletBalance}>{stats.walletBalance} €</Text>
+              <Text style={styles.walletBalance}>{eurToFcfa(stats.walletBalance).toLocaleString('fr-FR')} FCFA</Text>
             </View>
             <ChevronRight size={24} color={Colors.white} />
           </TouchableOpacity>
@@ -331,7 +351,7 @@ export default function StudentHomeScreen() {
                         {tutor.averageRating.toFixed(1)} ({tutor.totalReviews})
                       </Text>
                     </View>
-                    <Text style={styles.tutorRate}>{tutor.hourlyRate}€/h</Text>
+                    <Text style={styles.tutorRate}>{eurToFcfa(tutor.hourlyRate).toLocaleString('fr-FR')} FCFA/h</Text>
                   </View>
                   <Text style={styles.tutorSubjects} numberOfLines={1}>
                     {tutor.subjects.join(', ')}

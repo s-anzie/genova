@@ -4,15 +4,15 @@ export default function TutorLayout() {
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="sessions" options={{ headerShown: false }} />
       <Stack.Screen name="profile/edit" options={{ headerShown: false }} />
       <Stack.Screen name="profile/availability" options={{ headerShown: false }} />
       <Stack.Screen name="profile/documents" options={{ headerShown: false }} />
-      <Stack.Screen name="consortium" options={{ headerShown: false }} />
-      <Stack.Screen name="earnings" options={{ headerShown: false }} />
-      <Stack.Screen name="wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="availability" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
-      <Stack.Screen name="marketplace" options={{ headerShown: false }} />
+      <Stack.Screen name="requests" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet/payment-methods" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet/transactions" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet/withdraw" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -22,7 +22,7 @@ export function useWallet() {
       // Load recent transactions (last 5)
       try {
         const transactionsResponse = await ApiClient.get<{ success: boolean; data: any[] }>(
-          '/payments/transactions?limit=5'
+          '/payments/history?limit=5'
         );
         setRecentTransactions(transactionsResponse.data || []);
       } catch (error) {

@@ -3,27 +3,24 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { TrendingUp, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-
-interface Transaction {
-  id: string;
-  type: 'credit' | 'debit';
-  description: string;
-  amount: number;
-  createdAt: string;
-}
+import { formatEurAsFcfa } from '@/utils/currency';
+import { TransactionResponse } from '@/types/api';
 
 interface RecentTransactionsProps {
-  transactions: Transaction[];
+  transactions: TransactionResponse[];
+  userRole?: 'student' | 'tutor' | 'STUDENT' | 'TUTOR' | 'ADMIN' | 'admin';
 }
 
-export function RecentTransactions({ transactions }: RecentTransactionsProps) {
+export function RecentTransactions({ transactions, userRole = 'student' }: RecentTransactionsProps) {
   const router = useRouter();
+  const isTutor = userRole === 'tutor' || userRole === 'TUTOR';
+  const transactionsPath = isTutor ? '/(tutor)/wallet/transactions' : '/(student)/wallet/transactions';
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} €`;
+    return formatEurAsFcfa(amount);
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date) => {
     const date = new Date(dateString);
     const today = new Date();
     const yesterday = new Date(today);
@@ -38,11 +35,31 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
     }
   };
 
+  const getTransactionType = (tx: TransactionResponse) => {
+    switch (tx.type) {
+      case 'SESSION_PAYMENT': return 'Paiement session';
+      case 'SUBSCRIPTION': return 'Abonnement';
+      case 'SHOP_PURCHASE': return 'Achat boutique';
+      case 'WITHDRAWAL': return 'Retrait';
+      default: return 'Transaction';
+    }
+  };
+
+  // For students: SESSION_PAYMENT, SUBSCRIPTION, SHOP_PURCHASE are expenses
+  // For tutors: SESSION_PAYMENT is income, WITHDRAWAL is expense
+  const isExpense = (tx: TransactionResponse) => {
+    if (isTutor) {
+      return tx.type === 'WITHDRAWAL' || tx.type === 'SUBSCRIPTION' || tx.type === 'SHOP_PURCHASE';
+    } else {
+      return tx.type === 'SESSION_PAYMENT' || tx.type === 'SUBSCRIPTION' || tx.type === 'SHOP_PURCHASE';
+    }
+  };
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Transactions récentes</Text>
-        <TouchableOpacity onPress={() => router.push('/transactions')}>
+        <TouchableOpacity onPress={() => router.push(transactionsPath as any)}>
           <Text style={styles.seeAllText}>Tout voir</Text>
         </TouchableOpacity>
       </View>
@@ -68,28 +85,40 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
               <View style={styles.transactionLeft}>
                 <View style={[
                   styles.transactionIcon,
-                  { backgroundColor: transaction.type === 'credit' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)' }
+                  { backgroundColor: isExpense(transaction) ? 'rgba(239, 68, 68, 0.1)' : 'rgba(74, 222, 128, 0.1)' }
                 ]}>
-                  {transaction.type === 'credit' ? (
-                    <ArrowDownLeft size={20} color="#4ADE80" strokeWidth={2.5} />
-                  ) : (
+                  {isExpense(transaction) ? (
                     <ArrowUpRight size={20} color="#EF4444" strokeWidth={2.5} />
+                  ) : (
+                    <ArrowDownLeft size={20} color="#4ADE80" strokeWidth={2.5} />
                   )}
                 </View>
                 <View style={styles.transactionInfo}>
                   <Text style={styles.transactionTitle}>
-                    {transaction.description || 'Transaction'}
+                    {getTransactionType(transaction)}
                   </Text>
-                  <Text style={styles.transactionDate}>
-                    {formatDate(transaction.createdAt)}
-                  </Text>
+                  {transaction.session && (
+                    <Text style={styles.transactionSubtitle}>
+                      {transaction.session.subject}
+                    </Text>
+                  )}
+                  {transaction.payee && !transaction.session && (
+                    <Text style={styles.transactionSubtitle}>
+                      {transaction.payee.firstName} {transaction.payee.lastName}
+                    </Text>
+                  )}
+                  {!transaction.session && !transaction.payee && (
+                    <Text style={styles.transactionDate}>
+                      {formatDate(transaction.createdAt)}
+                    </Text>
+                  )}
                 </View>
               </View>
               <Text style={[
                 styles.transactionAmount,
-                { color: transaction.type === 'credit' ? '#4ADE80' : '#EF4444' }
+                { color: isExpense(transaction) ? '#EF4444' : '#4ADE80' }
               ]}>
-                {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
+                {isExpense(transaction) ? '-' : '+'}{formatCurrency(Math.abs(transaction.amount))}
               </Text>
             </TouchableOpacity>
           ))}
@@ -158,6 +187,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 4,
+  },
+  transactionSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   transactionDate: {
     fontSize: 13,

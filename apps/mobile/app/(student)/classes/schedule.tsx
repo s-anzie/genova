@@ -209,6 +209,16 @@ export default function ClassScheduleScreen() {
     );
   };
 
+  const handleTimeSlotPress = (slotId: string) => {
+    router.push({
+      pathname: '/(student)/classes/time-slots/[timeSlotId]',
+      params: {
+        timeSlotId: slotId,
+        classId: id,
+      },
+    } as any);
+  };
+
   const timeToMinutes = (time: string): number => {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
@@ -363,6 +373,7 @@ export default function ClassScheduleScreen() {
                   height: position.height,
                 },
               ]}
+              onPress={() => handleTimeSlotPress(slot.id)}
               onLongPress={() => handleDeleteTimeSlot(slot.id, slot.subject)}
               activeOpacity={0.8}
             >
@@ -385,7 +396,11 @@ export default function ClassScheduleScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Emploi du temps" variant="primary" />
+        <PageHeader
+          title="Planning"
+          variant="primary"
+          showBackButton={true}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -396,7 +411,7 @@ export default function ClassScheduleScreen() {
   return (
     <View style={styles.container}>
       <PageHeader 
-        title="Emploi du temps"
+        title="Planning"
         subtitle={className}
         showBackButton={true}
         variant="primary"
@@ -489,45 +504,52 @@ export default function ClassScheduleScreen() {
               </ScrollView>
             </View>
 
-            {/* Statistics Section */}
-            <View style={styles.statsContainer}>
-              <Text style={styles.statsTitle}>Statistiques</Text>
-              <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{getStatistics().totalSlots}</Text>
-                  <Text style={styles.statLabel}>Créneaux</Text>
+            {/* Scrollable Statistics and Legend Section */}
+            <ScrollView 
+              style={styles.bottomSection}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.bottomSectionContent}
+            >
+              {/* Statistics Section */}
+              <View style={styles.statsContainer}>
+                <Text style={styles.statsTitle}>Statistiques</Text>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{getStatistics().totalSlots}</Text>
+                    <Text style={styles.statLabel}>Créneaux</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{getStatistics().totalHours}h</Text>
+                    <Text style={styles.statLabel}>Par semaine</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{getStatistics().subjects.length}</Text>
+                    <Text style={styles.statLabel}>Matières</Text>
+                  </View>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{getStatistics().totalHours}h</Text>
-                  <Text style={styles.statLabel}>Par semaine</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{getStatistics().subjects.length}</Text>
-                  <Text style={styles.statLabel}>Matières</Text>
-                </View>
+                
+                {/* Subject breakdown */}
+                {getStatistics().subjects.length > 0 && (
+                  <View style={styles.subjectsBreakdown}>
+                    <Text style={styles.breakdownTitle}>Par matière</Text>
+                    {getStatistics().subjects.map(({ subject, count }) => (
+                      <View key={subject} style={styles.subjectRow}>
+                        <View style={styles.subjectDot} />
+                        <Text style={styles.subjectName}>{subject}</Text>
+                        <Text style={styles.subjectCount}>{count} créneau{count > 1 ? 'x' : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
-              
-              {/* Subject breakdown */}
-              {getStatistics().subjects.length > 0 && (
-                <View style={styles.subjectsBreakdown}>
-                  <Text style={styles.breakdownTitle}>Par matière</Text>
-                  {getStatistics().subjects.map(({ subject, count }) => (
-                    <View key={subject} style={styles.subjectRow}>
-                      <View style={styles.subjectDot} />
-                      <Text style={styles.subjectName}>{subject}</Text>
-                      <Text style={styles.subjectCount}>{count} créneau{count > 1 ? 'x' : ''}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
 
-            <View style={styles.legend}>
-              <View style={styles.legendIconContainer}>
-                <Info size={16} color={Colors.primary} strokeWidth={2} />
+              <View style={styles.legend}>
+                <View style={styles.legendIconContainer}>
+                  <Info size={16} color={Colors.primary} strokeWidth={2} />
+                </View>
+                <Text style={styles.legendText}>Appuyez sur un créneau pour gérer les tuteurs • Appuyez longuement pour supprimer</Text>
               </View>
-              <Text style={styles.legendText}>Appuyez longuement sur un créneau pour le supprimer</Text>
-            </View>
+            </ScrollView>
           </>
         )}
       </View>
@@ -740,6 +762,12 @@ const styles = StyleSheet.create({
   slotTutor: {
     fontSize: 10,
     color: Colors.textSecondary,
+  },
+  bottomSection: {
+    flex: 1,
+  },
+  bottomSectionContent: {
+    paddingBottom: Spacing.md,
   },
   statsContainer: {
     marginTop: Spacing.md,

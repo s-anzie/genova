@@ -228,10 +228,10 @@ export default function ProfileSetupScreen() {
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Hourly Rate (€)</Text>
+        <Text style={styles.label}>Hourly Rate (FCFA)</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g., 25"
+          placeholder="e.g., 16400"
           value={tutorData.hourlyRate}
           onChangeText={(text) => setTutorData({ ...tutorData, hourlyRate: text })}
           keyboardType="numeric"

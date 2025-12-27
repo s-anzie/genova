@@ -9,14 +9,6 @@ export default function SearchLayout() {
           headerShown: false,
         }} 
       />
-      <Stack.Screen 
-        name="filters" 
-        options={{ 
-          presentation: 'transparentModal',
-          headerShown: false,
-          animation: 'slide_from_bottom',
-        }} 
-      />
     </Stack>
   );
 }

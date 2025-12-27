@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, AvailableSessionSuggestion } from '@/types/api';
+import { eurToFcfa } from '@/utils/currency';
 
 export default function TutorHomeScreen() {
   const router = useRouter();
@@ -42,13 +43,31 @@ export default function TutorHomeScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const lastLoadTimeRef = useRef<number>(0);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
+    // Prevent concurrent requests
+    if (isLoadingRef.current) {
+      console.log('⚠️ Dashboard already loading, skipping...');
+      return;
+    }
+
+    // Throttle requests - don't load more than once every 5 seconds
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    if (timeSinceLastLoad < 5000 && !refreshing) {
+      console.log('⚠️ Throttling dashboard request (last load was', timeSinceLastLoad, 'ms ago)');
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
+      lastLoadTimeRef.current = now;
       setLoading(true);
       const [sessionsRes, availableRes] = await Promise.all([
         ApiClient.get<{ success: boolean; data: SessionResponse[]}>('/sessions'),
@@ -57,8 +76,8 @@ export default function TutorHomeScreen() {
       
       const allSessions = sessionsRes.data;
 
-      const now = new Date();
-      const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const sessionNow = new Date();
+      const weekFromNow = new Date(sessionNow.getTime() + 7 * 24 * 60 * 60 * 1000);
 
       // Filter pending sessions
       const pending = allSessions
@@ -72,7 +91,7 @@ export default function TutorHomeScreen() {
       const upcoming = allSessions
         .filter(s => {
           const start = new Date(s.scheduledStart);
-          return s.status === 'CONFIRMED' && start > now && start < weekFromNow;
+          return s.status === 'CONFIRMED' && start > sessionNow && start < weekFromNow;
         })
         .sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime())
         .slice(0, 3);
@@ -83,8 +102,8 @@ export default function TutorHomeScreen() {
       setAvailableSessions(availableRes.data || []);
 
       // Calculate stats
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
+      const weekStart = new Date(sessionNow);
+      weekStart.setDate(sessionNow.getDate() - sessionNow.getDay());
       weekStart.setHours(0, 0, 0, 0);
 
       const sessionsThisWeek = allSessions.filter(s => {
@@ -102,7 +121,7 @@ export default function TutorHomeScreen() {
 
       setStats({
         pendingCount: allSessions.filter(s => s.status === 'PENDING').length,
-        upcomingCount: allSessions.filter(s => new Date(s.scheduledStart) > now && s.status === 'CONFIRMED').length,
+        upcomingCount: allSessions.filter(s => new Date(s.scheduledStart) > sessionNow && s.status === 'CONFIRMED').length,
         totalEarnings: Math.round(totalEarnings),
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
       });
@@ -111,6 +130,7 @@ export default function TutorHomeScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      isLoadingRef.current = false;
     }
   };
 
@@ -223,7 +243,7 @@ export default function TutorHomeScreen() {
         {/* Earnings Card */}
         <TouchableOpacity
           style={styles.earningsCard}
-          onPress={() => router.push('/(tutor)/(tabs)/earnings/wallet')}
+          onPress={() => router.push('/(tutor)/(tabs)/wallet')}
         >
           <View style={styles.earningsContent}>
             <View style={styles.earningsIconContainer}>
@@ -231,7 +251,7 @@ export default function TutorHomeScreen() {
             </View>
             <View style={styles.earningsInfo}>
               <Text style={styles.earningsLabel}>Revenus totaux</Text>
-              <Text style={styles.earningsValue}>{stats.totalEarnings.toLocaleString('fr-FR')} €</Text>
+              <Text style={styles.earningsValue}>{eurToFcfa(stats.totalEarnings).toLocaleString('fr-FR')} FCFA</Text>
             </View>
           </View>
           <ChevronRight size={24} color={Colors.white} />
@@ -263,7 +283,7 @@ export default function TutorHomeScreen() {
 
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => router.push('/(tutor)/(tabs)/earnings/wallet')}
+              onPress={() => router.push('/(tutor)/(tabs)/wallet')}
             >
               <View style={[styles.actionIcon, { backgroundColor: Colors.success + '15' }]}>
                 <DollarSign size={24} color={Colors.success} strokeWidth={2} />

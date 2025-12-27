@@ -15,6 +15,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse } from '@/types/api';
 import { PageHeader, TabSelector } from '@/components/PageHeader';
+import { formatEurAsFcfa } from '@/utils/currency';
 
 // Separate component for session card to use hooks properly
 const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: () => void }) => {
@@ -23,6 +24,11 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
   const startTime = new Date(session.scheduledStart);
   const endTime = new Date(session.scheduledEnd);
   const isOngoing = now >= startTime && now <= endTime;
+  
+  // Check if session is urgent (< 24h and no tutor)
+  // Validates: Requirement 4.5
+  const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const isUrgent = !hasTutor && hoursUntilStart < 24 && hoursUntilStart > 0;
   
   // Animation for the ongoing dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -81,8 +87,9 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
   };
 
   const getStatusLabel = (status: string, hasTutor: boolean) => {
+    // Validates: Requirement 4.3, 4.4
     if (!hasTutor) {
-      return 'Non assignée';
+      return 'Tuteur non assigné';
     }
     switch (status) {
       case 'PENDING':
@@ -100,10 +107,20 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
 
   return (
     <TouchableOpacity
-      style={styles.sessionCard}
+      style={[
+        styles.sessionCard,
+        isUrgent && styles.urgentCard, // Highlight urgent sessions
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {/* Urgent Badge - Top Left */}
+      {isUrgent && (
+        <View style={styles.urgentBadge}>
+          <Text style={styles.urgentText}>⚠️ URGENT</Text>
+        </View>
+      )}
+
       {/* Header: Subject and Status */}
       <View style={styles.cardHeader}>
         <View style={styles.subjectSection}>
@@ -176,7 +193,7 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
                 {session.tutor!.firstName} {session.tutor!.lastName}
               </Text>
             </View>
-            <Text style={styles.priceText}>{Math.round(Number(session.price)).toLocaleString('fr-FR')} €</Text>
+            <Text style={styles.priceText}>{formatEurAsFcfa(Number(session.price))}</Text>
           </>
         ) : (
           <Text style={styles.noTutorText}>Aucun tuteur assigné</Text>
@@ -201,37 +218,21 @@ export default function SessionsScreen() {
     try {
       setLoading(true);
       
-      // Use the tab parameter for server-side filtering
+      // Use the filter parameter for server-side filtering
+      // Validates: Requirements 9.1, 9.2, 9.3
       let endpoint = '/sessions';
       if (activeTab === 'upcoming') {
-        endpoint = '/sessions?tab=upcoming';
+        endpoint = '/sessions?filter=upcoming';
       } else if (activeTab === 'past') {
-        endpoint = '/sessions?tab=past';
+        endpoint = '/sessions?filter=past';
       } else if (activeTab === 'canceled') {
-        endpoint = '/sessions?tab=canceled';
+        endpoint = '/sessions?filter=cancelled';
       }
       
       const response = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>(endpoint);
       const allSessions = response.data;
       
-      // Sessions are already filtered by the backend based on tab parameter
-      // Just sort them appropriately
-      if (activeTab === 'upcoming') {
-        // Sort: closest first (ascending by start time)
-        allSessions.sort((a, b) => {
-          const aStart = new Date(a.scheduledStart).getTime();
-          const bStart = new Date(b.scheduledStart).getTime();
-          return aStart - bStart;
-        });
-      } else {
-        // For past and canceled, sort: most recent first (descending)
-        allSessions.sort((a, b) => {
-          const aStart = new Date(a.scheduledStart).getTime();
-          const bStart = new Date(b.scheduledStart).getTime();
-          return bStart - aStart;
-        });
-      }
-      
+      // Sessions are already filtered and sorted by the backend
       setSessions(allSessions);
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -347,6 +348,28 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.sm,
     ...Shadows.small,
+  },
+  urgentCard: {
+    borderWidth: 2,
+    borderColor: Colors.error,
+    backgroundColor: Colors.error + '05',
+  },
+  urgentBadge: {
+    position: 'absolute',
+    top: -8,
+    left: Spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
+    backgroundColor: Colors.error,
+    zIndex: 10,
+    ...Shadows.small,
+  },
+  urgentText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.5,
   },
   cardHeader: {
     flexDirection: 'row',

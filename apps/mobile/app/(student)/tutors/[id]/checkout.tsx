@@ -5,33 +5,36 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   Modal,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
-  ArrowLeft,
   CheckCircle,
   AlertCircle,
   Users,
 } from 'lucide-react-native';
-import { Colors } from '@/constants/colors';
-import StripePayment from '@/components/payment/stripe-payment';
-import { ApiClient } from '@/utils/api';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
+import { PageHeader } from '@/components/PageHeader';
+import { StyledModal, ModalType } from '@/components/ui/StyledModal';
+import { apiClient } from '@/utils/api-client';
 import { ClassResponse } from '@/types/api';
+import { formatEurAsFcfa, fcfaToEur } from '@/utils/currency';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const { id, tutorId, startTime, endTime, duration, price, subject } = useLocalSearchParams();
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassResponse | null>(null);
   const [classes, setClasses] = useState<ClassResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
+  
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<ModalType>('error');
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
 
   useEffect(() => {
     loadUserClasses();
@@ -40,7 +43,7 @@ export default function CheckoutScreen() {
   const loadUserClasses = async () => {
     try {
       setLoading(true);
-      const response = await ApiClient.get<{ success: boolean; data: ClassResponse[] }>('/classes');
+      const response = await apiClient.get<{ success: boolean; data: ClassResponse[] }>('/classes');
       setClasses(response.data || []);
       
       // Auto-select first class if only one exists
@@ -48,7 +51,7 @@ export default function CheckoutScreen() {
         setSelectedClass(response.data[0]);
       }
     } catch (err) {
-      console.error('Error loading classes:', err);
+      console.error('❌ Error loading classes:', err);
       setClasses([]);
     } finally {
       setLoading(false);
@@ -86,11 +89,28 @@ export default function CheckoutScreen() {
       return;
     }
 
-    // Create session first
+    // Create session and process payment with wallet
     try {
       setCreatingSession(true);
 
-      const response = await ApiClient.post<{ success: boolean; data: { id: string } }>('/sessions', {
+      // Step 1: Check wallet balance BEFORE creating session
+      const walletResponse = await apiClient.get<{ success: boolean; data: { availableBalance: number } }>('/payments/wallet');
+      const availableBalance = walletResponse.data.availableBalance;
+
+      if (availableBalance < booking.price) {
+        // Insufficient balance - show error with recharge button
+        setModalType('error');
+        setModalTitle('Solde insuffisant');
+        setModalMessage(
+          `Vous avez ${formatEurAsFcfa(availableBalance)} mais la séance coûte ${formatEurAsFcfa(booking.price)}. Veuillez recharger votre compte.`
+        );
+        setModalVisible(true);
+        setCreatingSession(false);
+        return;
+      }
+
+      // Step 2: Create session
+      const sessionResponse = await apiClient.post<{ success: boolean; data: { id: string } }>('/sessions', {
         tutorId: tutorId as string,
         classId: selectedClass.id,
         scheduledStart: startTime as string,
@@ -99,33 +119,47 @@ export default function CheckoutScreen() {
         price: booking.price,
       });
 
-      setSessionId(response.data.id);
-      setShowPaymentModal(true);
+      const newSessionId = sessionResponse.data.id;
+
+      // Step 3: Process payment with wallet
+      // Note: Backend automatically cancels session if payment fails
+      await apiClient.post('/payments/wallet-payment', {
+        sessionId: newSessionId,
+        amount: booking.price,
+      });
+
+      // Show success modal
+      setModalType('success');
+      setModalTitle('Succès');
+      setModalMessage('Votre séance a été réservée et payée avec succès!');
+      setModalVisible(true);
+      
+      // Redirect after 2 seconds
+      setTimeout(() => {
+        setModalVisible(false);
+        router.push('/(student)/(tabs)/sessions');
+      }, 2000);
+
     } catch (error: any) {
-      console.error('Session creation error:', error);
-      Alert.alert('Erreur', error.message || 'Impossible de créer la session');
+      console.error('❌ Payment error:', error);
+      setModalType('error');
+      setModalTitle('Erreur');
+      setModalMessage(error.message || 'Impossible de traiter le paiement');
+      setModalVisible(true);
     } finally {
       setCreatingSession(false);
     }
   };
 
-  const handlePaymentSuccess = () => {
-    setShowPaymentModal(false);
-    router.push('/(student)/(tabs)/sessions');
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Paiement</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <PageHeader
+        title="Paiement"
+        showBackButton
+        centerTitle
+        showGradient={false}
+        variant="primary"
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -165,7 +199,7 @@ export default function CheckoutScreen() {
               <Text style={styles.statLabel}>Verified</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>${tutor.hourlyRate}</Text>
+              <Text style={styles.statValue}>{formatEurAsFcfa(tutor.hourlyRate)}</Text>
               <Text style={styles.statLabel}>Per Lesson</Text>
             </View>
             <View style={styles.statItem}>
@@ -218,7 +252,7 @@ export default function CheckoutScreen() {
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Price</Text>
-              <Text style={styles.detailValue}>${booking.price}</Text>
+              <Text style={styles.detailValue}>{formatEurAsFcfa(booking.price)}</Text>
             </View>
           </View>
         </View>
@@ -235,7 +269,7 @@ export default function CheckoutScreen() {
         <View style={styles.section}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>${booking.price}</Text>
+            <Text style={styles.totalValue}>{formatEurAsFcfa(booking.price)}</Text>
           </View>
         </View>
         
@@ -266,7 +300,7 @@ export default function CheckoutScreen() {
             <ActivityIndicator color={Colors.white} />
           ) : (
             <Text style={styles.confirmButtonText}>
-              {selectedClass ? 'Confirm Payment' : 'Select a class first'}
+              {selectedClass ? 'Confirmer et payer' : 'Sélectionner une classe'}
             </Text>
           )}
         </TouchableOpacity>
@@ -344,26 +378,36 @@ export default function CheckoutScreen() {
         </View>
       </Modal>
 
-      {/* Payment Modal */}
-      <Modal
-        visible={showPaymentModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowPaymentModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {sessionId && (
-              <StripePayment
-                sessionId={sessionId}
-                amount={booking.price}
-                onSuccess={handlePaymentSuccess}
-                onCancel={() => setShowPaymentModal(false)}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
+      {/* Error/Success Modal */}
+      <StyledModal
+        visible={modalVisible}
+        type={modalType}
+        title={modalTitle}
+        message={modalMessage}
+        primaryButton={
+          modalType === 'error' && modalMessage.includes('Solde insuffisant')
+            ? {
+                text: 'Recharger mon compte',
+                onPress: () => {
+                  setModalVisible(false);
+                  router.push('/(student)/wallet');
+                },
+              }
+            : {
+                text: 'OK',
+                onPress: () => setModalVisible(false),
+              }
+        }
+        secondaryButton={
+          modalType === 'error' && modalMessage.includes('Solde insuffisant')
+            ? {
+                text: 'Annuler',
+                onPress: () => setModalVisible(false),
+              }
+            : undefined
+        }
+        onClose={() => setModalVisible(false)}
+      />
     </View>
   );
 }
@@ -372,28 +416,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgCream,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 16,
-    backgroundColor: Colors.white,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.bgCream,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -617,10 +639,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
   },
   classModalContent: {
     width: '90%',

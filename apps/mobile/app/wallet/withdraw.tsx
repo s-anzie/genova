@@ -16,6 +16,7 @@ import { ArrowLeft, Wallet, AlertCircle, Building2 } from 'lucide-react-native';
 import { ApiClient } from '@/utils/api';
 import { WalletBalance } from '@/types/api';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
+import { formatEurAsFcfa, fcfaToEur, eurToFcfa } from '@/utils/currency';
 
 const MIN_WITHDRAWAL = 20;
 
@@ -53,10 +54,11 @@ export default function WithdrawScreen() {
       return;
     }
 
+    const minFcfa = eurToFcfa(MIN_WITHDRAWAL);
     if (withdrawAmount < MIN_WITHDRAWAL) {
       Alert.alert(
         'Montant minimum',
-        `Le montant minimum de retrait est de €${MIN_WITHDRAWAL}`
+        `Le montant minimum de retrait est de ${minFcfa.toLocaleString('fr-FR')} FCFA`
       );
       return;
     }
@@ -95,13 +97,14 @@ export default function WithdrawScreen() {
 
   const setQuickAmount = (percentage: number) => {
     if (balance) {
-      const quickAmount = (balance.availableBalance * percentage) / 100;
-      setAmount(quickAmount.toFixed(2));
+      const quickAmountEur = (balance.availableBalance * percentage) / 100;
+      const quickAmountFcfa = eurToFcfa(quickAmountEur);
+      setAmount(quickAmountFcfa.toString());
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return `€${amount.toFixed(2)}`;
+    return formatEurAsFcfa(amount);
   };
 
   if (loading) {
@@ -143,12 +146,12 @@ export default function WithdrawScreen() {
             </View>
             <Text style={styles.balanceLabel}>Solde disponible</Text>
             <Text style={styles.balanceAmount}>
-              {balance ? formatCurrency(balance.availableBalance) : '€0.00'}
+              {balance ? formatCurrency(balance.availableBalance) : formatEurAsFcfa(0)}
             </Text>
             <View style={styles.minWithdrawalBadge}>
               <AlertCircle size={14} color={Colors.primary} strokeWidth={2.5} />
               <Text style={styles.minWithdrawalText}>
-                Minimum de retrait: €{MIN_WITHDRAWAL}
+                Minimum de retrait: {eurToFcfa(MIN_WITHDRAWAL).toLocaleString('fr-FR')} FCFA
               </Text>
             </View>
           </View>
@@ -158,10 +161,10 @@ export default function WithdrawScreen() {
             <Text style={styles.sectionTitle}>Montant du retrait</Text>
             
             <View style={styles.inputCard}>
-              <Text style={styles.currencySymbol}>€</Text>
+              <Text style={styles.currencySymbol}>FCFA</Text>
               <TextInput
                 style={styles.input}
-                placeholder="0.00"
+                placeholder="0"
                 placeholderTextColor={Colors.textTertiary}
                 keyboardType="decimal-pad"
                 value={amount}

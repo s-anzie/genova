@@ -30,6 +30,7 @@ import { apiClient } from '@/utils/api-client';
 import { Colors } from '@/constants/colors';
 import { API_BASE_URL } from '@/config/api';
 import type { UserResponse, StudentProfileResponse } from '@/types/api';
+import { formatEurAsFcfa } from '@/utils/currency';
 
 const EDUCATION_LEVELS: Record<string, string> = {
   primary: 'École primaire',
@@ -268,7 +269,7 @@ export default function StudentProfileScreen() {
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>Mon portefeuille</Text>
                 <Text style={styles.menuSubtitle}>
-                  Solde: {userData?.walletBalance ? Number(userData.walletBalance).toFixed(2) : '0.00'}€
+                  Solde: {userData?.walletBalance ? formatEurAsFcfa(Number(userData.walletBalance)) : '0 FCFA'}
                 </Text>
               </View>
             </View>

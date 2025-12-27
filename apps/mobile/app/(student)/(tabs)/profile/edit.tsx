@@ -786,12 +786,12 @@ export default function StudentEditProfileScreen() {
               <DollarSign size={20} color={Colors.primary} strokeWidth={2} />
             </View>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Budget par heure (€, optionnel)</Text>
+              <Text style={styles.inputLabel}>Budget par heure (FCFA, optionnel)</Text>
               <TextInput
                 style={styles.input}
                 value={studentData.budgetPerHour}
                 onChangeText={(text) => setStudentData({ ...studentData, budgetPerHour: text })}
-                placeholder="ex: 25"
+                placeholder="ex: 16 400"
                 placeholderTextColor={Colors.textTertiary}
                 keyboardType="numeric"
               />

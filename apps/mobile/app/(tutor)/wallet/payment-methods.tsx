@@ -1,33 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   Alert,
+  StyleSheet,
+  StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, CreditCard, Plus, Trash2, Check } from 'lucide-react-native';
-
-interface PaymentMethod {
-  id: string;
-  type: 'orange' | 'mtn';
-  phoneNumber: string;
-  name: string;
-  isDefault: boolean;
-}
+import { ArrowLeft, CreditCard, Plus } from 'lucide-react-native';
+import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
+import { AddPaymentMethodModal } from '@/components/wallet/AddPaymentMethodModal';
+import { PaymentMethodCard } from '@/components/wallet/PaymentMethodCard';
+import { ApiClient } from '@/utils/api';
+import { PaymentMethod, MobileMoneyOperator } from '@/types/api';
 
 export default function PaymentMethodsScreen() {
   const router = useRouter();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [operators, setOperators] = useState<MobileMoneyOperator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  const handleSetDefault = (id: string) => {
-    setPaymentMethods(methods =>
-      methods.map(method => ({
-        ...method,
-        isDefault: method.id === id,
-      }))
-    );
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadPaymentMethods(),
+        loadOperators(),
+      ]);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    try {
+      const response = await ApiClient.get<{ success: boolean; data: PaymentMethod[] }>(
+        '/payment-methods'
+      );
+      setPaymentMethods(response.data);
+    } catch (error) {
+      console.error('Failed to load payment methods:', error);
+      Alert.alert('Erreur', 'Impossible de charger les comptes');
+    }
+  };
+
+  const loadOperators = async () => {
+    try {
+      const response = await ApiClient.get<{ success: boolean; data: MobileMoneyOperator[] }>(
+        '/operators?country=CM'
+      );
+      setOperators(response.data);
+    } catch (error) {
+      console.error('Failed to load operators:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      await ApiClient.patch(`/payment-methods/${id}/default`, {});
+      await loadPaymentMethods();
+      Alert.alert('Succès', 'Compte par défaut mis à jour');
+    } catch (error) {
+      console.error('Failed to set default:', error);
+      Alert.alert('Erreur', 'Impossible de définir le compte par défaut');
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -39,116 +93,215 @@ export default function PaymentMethodsScreen() {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setPaymentMethods(methods => methods.filter(m => m.id !== id));
+          onPress: async () => {
+            try {
+              await ApiClient.delete(`/payment-methods/${id}`);
+              await loadPaymentMethods();
+              Alert.alert('Succès', 'Compte supprimé');
+            } catch (error) {
+              console.error('Failed to delete:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer le compte');
+            }
           },
         },
       ]
     );
   };
 
-  const handleAddPaymentMethod = () => {
-    Alert.alert('Info', 'Fonctionnalité à venir');
+  const handleAddPaymentMethod = async (
+    operatorId: string,
+    phoneNumber: string,
+    accountName: string,
+    accountHolder?: string
+  ) => {
+    try {
+      await ApiClient.post('/payment-methods', {
+        operatorId,
+        phoneNumber,
+        accountName,
+        accountHolder,
+      });
+      
+      await loadPaymentMethods();
+      setModalVisible(false);
+      Alert.alert('Succès', 'Compte ajouté avec succès');
+    } catch (error: any) {
+      console.error('Failed to add payment method:', error);
+      Alert.alert('Erreur', error.message || 'Impossible d\'ajouter le compte');
+    }
   };
 
-  const getProviderColor = (type: 'orange' | 'mtn') => {
-    return type === 'orange' ? '#FF6600' : '#FFCC00';
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View className="flex-1 bg-bg-secondary">
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
       {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-primary border-b-0">
+      <View style={styles.header}>
         <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-white/15 justify-center items-center"
+          style={styles.backButton}
           onPress={() => router.back()}
+          activeOpacity={0.7}
         >
-          <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
+          <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-white">Comptes Mobile Money</Text>
-        <View className="w-10" />
+        <Text style={styles.headerTitle}>Mes comptes</Text>
+        <View style={styles.backButton} />
       </View>
 
-      <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Add Payment Method Button */}
         <TouchableOpacity
-          className="flex-row items-center bg-white rounded-xl p-4 mb-6 border-2 border-primary border-dashed"
-          onPress={handleAddPaymentMethod}
+          style={styles.addButton}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.7}
         >
-          <View className="w-10 h-10 rounded-full bg-bg-secondary justify-center items-center mr-3">
-            <Plus size={24} color="#0d7377" strokeWidth={2.5} />
+          <View style={styles.addIconContainer}>
+            <Plus size={24} color={Colors.primary} strokeWidth={2.5} />
           </View>
-          <Text className="text-base font-semibold text-primary">
-            Ajouter un compte
-          </Text>
+          <Text style={styles.addButtonText}>Ajouter un compte</Text>
         </TouchableOpacity>
 
         {/* Payment Methods List */}
-        <View className="mb-6">
-          <Text className="text-base font-semibold text-text-primary mb-4">
-            Vos comptes enregistrés
-          </Text>
-          
-          {paymentMethods.length === 0 ? (
-            <View className="items-center py-12 gap-4">
-              <CreditCard size={48} color="#666666" />
-              <Text className="text-base text-text-secondary font-medium">
-                Aucun compte enregistré
-              </Text>
-            </View>
-          ) : (
-            <View className="gap-3">
-              {paymentMethods.map((method) => (
-                <View key={method.id} className="bg-white rounded-xl p-4 border border-border">
-                  <View className="flex-row items-center mb-3">
-                    <View 
-                      className="w-12 h-12 rounded-full justify-center items-center mr-3"
-                      style={{ backgroundColor: `${getProviderColor(method.type)}20` }}
-                    >
-                      <CreditCard size={24} color={getProviderColor(method.type)} strokeWidth={2} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-base font-semibold text-text-primary">
-                        {method.name}
-                      </Text>
-                      <Text className="text-[13px] text-text-secondary">
-                        {method.phoneNumber}
-                      </Text>
-                    </View>
-                  </View>
+        {paymentMethods.length === 0 ? (
+          <View style={styles.emptyState}>
+            <CreditCard size={64} color={Colors.textTertiary} strokeWidth={1.5} />
+            <Text style={styles.emptyTitle}>Aucun compte enregistré</Text>
+            <Text style={styles.emptyText}>
+              Ajoutez votre premier compte Mobile Money pour commencer
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.methodsList}>
+            {paymentMethods.map((method) => (
+              <PaymentMethodCard
+                key={method.id}
+                method={method}
+                onSetDefault={handleSetDefault}
+                onDelete={handleDelete}
+              />
+            ))}
+          </View>
+        )}
 
-                  <View className="flex-row justify-between items-center">
-                    {method.isDefault ? (
-                      <View className="flex-row items-center bg-success px-3 py-1.5 rounded-full gap-1">
-                        <Check size={14} color="#FFFFFF" strokeWidth={3} />
-                        <Text className="text-xs font-semibold text-white">Par défaut</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        className="px-3 py-1.5 rounded-full border border-primary"
-                        onPress={() => handleSetDefault(method.id)}
-                      >
-                        <Text className="text-xs font-semibold text-primary">
-                          Définir par défaut
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                      className="w-9 h-9 rounded-full bg-bg-secondary justify-center items-center"
-                      onPress={() => handleDelete(method.id)}
-                    >
-                      <Trash2 size={18} color="#ef4444" strokeWidth={2} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <View className="h-10" />
+        <View style={{ height: 20 }} />
       </ScrollView>
+
+      <AddPaymentMethodModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onAdd={handleAddPaymentMethod}
+        operators={operators}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bgSecondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.bgSecondary,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 50,
+    paddingBottom: Spacing.md,
+    backgroundColor: Colors.primary,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.white,
+    letterSpacing: -0.3,
+  },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: Spacing.lg,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xlarge,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+  },
+  addIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: Colors.bgSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxxl * 2,
+    gap: Spacing.md,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: Spacing.md,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  methodsList: {
+    gap: Spacing.sm,
+  },
+});

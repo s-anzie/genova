@@ -289,6 +289,56 @@ export interface WithdrawalRequest {
   status: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
+// Payment Methods Types
+export interface MobileMoneyOperator {
+  id: string;
+  code: string;
+  name: string;
+  displayName: string;
+  provider: 'ORANGE_MONEY' | 'MTN_MOBILE_MONEY' | 'MOOV_MONEY';
+  country: string;
+  countryName: string;
+  currency: string;
+  phonePrefix: string;
+  phoneFormat: string;
+  phoneLength: number;
+  color: string;
+  logoUrl: string | null;
+  isActive: boolean;
+  supportedFeatures: {
+    withdrawal?: boolean;
+    deposit?: boolean;
+    transfer?: boolean;
+  };
+  fees: any;
+  limits: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PaymentMethod {
+  id: string;
+  userId: string;
+  operatorId: string;
+  phoneNumber: string;
+  accountName: string;
+  accountHolder: string | null;
+  isDefault: boolean;
+  isVerified: boolean;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
+  operator?: MobileMoneyOperator;
+}
+
+export interface CreatePaymentMethodData {
+  operatorId: string;
+  phoneNumber: string;
+  accountName: string;
+  accountHolder?: string;
+}
+
 // Attendance Types
 export interface AttendanceResponse {
   id: string;

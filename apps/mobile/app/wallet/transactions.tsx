@@ -14,6 +14,7 @@ import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { ApiClient } from '@/utils/api';
 import { TransactionResponse } from '@/types/api';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
+import { formatEurAsFcfa } from '@/utils/currency';
 
 export default function TransactionsScreen() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function TransactionsScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} €`;
+    return formatEurAsFcfa(amount);
   };
 
   const formatDate = (date: Date) => {

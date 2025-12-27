@@ -224,6 +224,140 @@ export async function confirmPayment(data: PaymentConfirmationData) {
 }
 
 /**
+ * Process payment using wallet balance (bypass Stripe)
+ * This is a transactional operation - either everything succeeds or everything fails
+ */
+export async function processWalletPayment(data: PaymentIntentData) {
+  const { sessionId, payerId, amount } = data;
+
+  // Validate amount
+  if (amount <= 0) {
+    throw new ValidationError('Payment amount must be greater than zero');
+  }
+
+  // Verify session exists
+  const session = await prisma.tutoringSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      class: true,
+      tutor: true,
+      consortium: {
+        include: {
+          members: true,
+        },
+      },
+    },
+  });
+
+  if (!session) {
+    throw new ValidationError('Session not found');
+  }
+
+  // Verify payer exists and has sufficient balance
+  const payer = await prisma.user.findUnique({
+    where: { id: payerId },
+  });
+
+  if (!payer) {
+    throw new ValidationError('Payer not found');
+  }
+
+  const currentBalance = payer.walletBalance.toNumber();
+  if (currentBalance < amount) {
+    throw new ValidationError(
+      `Solde insuffisant. Vous avez ${currentBalance.toFixed(2)}€ mais la séance coûte ${amount.toFixed(2)}€. Veuillez recharger votre compte.`
+    );
+  }
+
+  // Use a transaction to ensure atomicity
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Calculate fees
+      const platformFee = calculatePlatformFee(amount);
+      const netAmount = amount - platformFee;
+
+      // Debit payer wallet
+      const updatedPayer = await tx.user.update({
+        where: { id: payerId },
+        data: {
+          walletBalance: {
+            decrement: amount,
+          },
+        },
+      });
+
+      // Create completed transaction record
+      const transaction = await tx.transaction.create({
+        data: {
+          sessionId,
+          payerId,
+          payeeId: session.tutorId || undefined,
+          amount,
+          platformFee,
+          netAmount,
+          paymentMethod: 'wallet',
+          status: TransactionStatus.COMPLETED,
+          transactionType: TransactionType.SESSION_PAYMENT,
+        },
+      });
+
+      // Distribute funds
+      if (session.consortiumId && session.consortium) {
+        // Distribute to consortium members
+        for (const member of session.consortium.members) {
+          const memberAmount = (netAmount * member.revenueShare.toNumber()) / 100;
+          await tx.user.update({
+            where: { id: member.tutorId },
+            data: {
+              walletBalance: {
+                increment: memberAmount,
+              },
+            },
+          });
+        }
+      } else if (session.tutorId) {
+        // Credit tutor wallet
+        await tx.user.update({
+          where: { id: session.tutorId },
+          data: {
+            walletBalance: {
+              increment: netAmount,
+            },
+          },
+        });
+      }
+
+      // Update session status to confirmed
+      await tx.tutoringSession.update({
+        where: { id: sessionId },
+        data: { status: 'CONFIRMED' },
+      });
+
+      return { transaction, updatedPayer };
+    });
+
+    logger.info('Wallet payment processed successfully', {
+      transactionId: result.transaction.id,
+      sessionId,
+      amount,
+      payerId,
+      newBalance: result.updatedPayer.walletBalance.toNumber(),
+    });
+
+    return result.transaction;
+  } catch (error) {
+    logger.error('Failed to process wallet payment', error);
+    
+    // If it's a validation error (like insufficient balance), rethrow it
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    
+    throw new PaymentError('Failed to process wallet payment');
+  }
+}
+
+/**
  * Calculate platform fee (15%)
  */
 export function calculatePlatformFee(amount: number): number {

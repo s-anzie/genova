@@ -10,19 +10,22 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Search, SlidersHorizontal, Star, CheckCircle2, MapPin, TrendingUp } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Star, CheckCircle2 } from 'lucide-react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
-import { ApiClient } from '@/utils/api';
+import { apiClient } from '@/utils/api-client';
 import { TutorSearchResult, TutorSearchCriteria } from '@/types/api';
+import { eurToFcfa, formatHourlyRateAsFcfa } from '@/utils/currency';
 
 export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  // Check if we're in "assign tutor" mode
+  // Check if we're in "assign tutor" mode (for session or time-slot)
   const sessionId = params.sessionId as string | undefined;
-  const isAssignMode = !!sessionId;
+  const timeSlotId = params.timeSlotId as string | undefined;
+  const classId = params.classId as string | undefined;
+  const isAssignMode = !!(sessionId || timeSlotId);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [tutors, setTutors] = useState<TutorSearchResult[]>([]);
@@ -106,7 +109,7 @@ export default function SearchScreen() {
         }
       }
 
-      const response = await ApiClient.post<TutorSearchResult[]>('/tutors/search', criteria);
+      const response = await apiClient.post<TutorSearchResult[]>('/tutors/search', criteria);
       
       // Handle different response formats
       let tutorData: TutorSearchResult[] = [];
@@ -135,12 +138,12 @@ export default function SearchScreen() {
     searchTutors();
   };
 
-  const handleAssignTutor = async (tutorId: string, tutorName: string, hourlyRate: number) => {
+  const handleAssignTutorToSession = async (tutorId: string, tutorName: string, hourlyRate: number) => {
     if (!sessionId) return;
 
     Alert.alert(
       'Confirmer l\'assignation',
-      `Voulez-vous assigner ${tutorName} à cette session ?\n\nTarif: ${Math.round(hourlyRate * 650)} FCFA/h`,
+      `Voulez-vous assigner ${tutorName} à cette session ?\n\nTarif: ${formatHourlyRateAsFcfa(hourlyRate)}`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -148,12 +151,13 @@ export default function SearchScreen() {
           onPress: async () => {
             try {
               setAssigning(true);
+              console.log('🔄 Assigning tutor to session:', sessionId);
               
-              await ApiClient.put(`/sessions/${sessionId}`, {
+              await apiClient.put(`/sessions/${sessionId}`, {
                 tutorId,
               });
 
-              console.log('Tutor assigned successfully to session:', sessionId);
+              console.log('✅ Tutor assigned successfully to session:', sessionId);
 
               Alert.alert(
                 'Succès',
@@ -166,7 +170,57 @@ export default function SearchScreen() {
                 ]
               );
             } catch (error: any) {
-              console.error('Failed to assign tutor:', error);
+              console.error('❌ Failed to assign tutor to session:', error);
+              const message = error.response?.data?.message || 'Impossible d\'assigner le tuteur';
+              Alert.alert('Erreur', message);
+            } finally {
+              setAssigning(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleAssignTutorToTimeSlot = async (tutorId: string, tutorName: string, hourlyRate: number) => {
+    if (!timeSlotId || !classId) return;
+
+    Alert.alert(
+      'Confirmer l\'assignation',
+      `Voulez-vous assigner ${tutorName} à ce créneau ?\n\nTarif: ${formatHourlyRateAsFcfa(hourlyRate)}`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            try {
+              setAssigning(true);
+              console.log('🔄 Creating tutor assignment for time-slot:', timeSlotId);
+              
+              // Create the assignment with default ROUND_ROBIN pattern
+              await apiClient.post(
+                `/classes/${classId}/time-slots/${timeSlotId}/assignments`,
+                {
+                  tutorId,
+                  recurrencePattern: 'ROUND_ROBIN',
+                  recurrenceConfig: null,
+                }
+              );
+
+              console.log('✅ Tutor assigned successfully to time-slot:', timeSlotId);
+
+              Alert.alert(
+                'Succès',
+                'Le tuteur a été assigné au créneau',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.back(),
+                  },
+                ]
+              );
+            } catch (error: any) {
+              console.error('❌ Failed to assign tutor to time-slot:', error);
               const message = error.response?.data?.message || 'Impossible d\'assigner le tuteur';
               Alert.alert('Erreur', message);
             } finally {
@@ -180,11 +234,19 @@ export default function SearchScreen() {
 
   const handleTutorPress = (tutor: TutorSearchResult) => {
     if (isAssignMode) {
-      handleAssignTutor(
-        tutor.userId,
-        `${tutor.firstName} ${tutor.lastName}`,
-        tutor.hourlyRate
-      );
+      if (sessionId) {
+        handleAssignTutorToSession(
+          tutor.userId,
+          `${tutor.firstName} ${tutor.lastName}`,
+          tutor.hourlyRate
+        );
+      } else if (timeSlotId) {
+        handleAssignTutorToTimeSlot(
+          tutor.userId,
+          `${tutor.firstName} ${tutor.lastName}`,
+          tutor.hourlyRate
+        );
+      }
     } else {
       router.push(`/tutors/${tutor.userId}`);
     }
@@ -195,7 +257,7 @@ export default function SearchScreen() {
       <PageHeader 
         title={isAssignMode ? "Assigner un tuteur" : "Rechercher"} 
         subtitle={isAssignMode && params.subject ? `Matière: ${params.subject}` : undefined}
-        showBackButton={isAssignMode}
+        showBackButton={false}
         showGradient={false} 
         variant="primary" 
       />
@@ -216,7 +278,7 @@ export default function SearchScreen() {
         </View>
         <TouchableOpacity
           style={styles.filterButton}
-          onPress={() => router.push('/(student)/(tabs)/search/filters')}
+          onPress={() => router.push('/(student)/filters')}
         >
           <SlidersHorizontal size={20} color={Colors.white} strokeWidth={2} />
         </TouchableOpacity>
@@ -321,8 +383,8 @@ export default function SearchScreen() {
                 </View>
 
                 <View style={styles.priceContainer}>
-                  <Text style={styles.priceAmount}>{Math.round(tutor.hourlyRate).toLocaleString('fr-FR')}</Text>
-                  <Text style={styles.priceLabel}>€/h</Text>
+                  <Text style={styles.priceAmount}>{eurToFcfa(tutor.hourlyRate).toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.priceLabel}>FCFA/h</Text>
                 </View>
               </View>
 

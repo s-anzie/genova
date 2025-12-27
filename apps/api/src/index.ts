@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { envConfig, logger, AppError } from '@repo/utils';
+import { initializeCronJobs, stopCronJobs } from './services/cron.service';
 
 const app = express();
 const PORT = envConfig.getNumber('PORT', 5001);
@@ -41,9 +42,14 @@ import profileRoutes from './routes/profile.routes';
 import classRoutes from './routes/class.routes';
 import classScheduleRoutes from './routes/class-schedule.routes';
 import tutorRoutes from './routes/tutor.routes';
+import tutorAvailabilityRoutes from './routes/tutor-availability.routes';
+import timeSlotManagementRoutes from './routes/time-slot-management.routes';
+import studentAssignmentRequestRoutes from './routes/student-assignment-request.routes';
 import consortiumRoutes from './routes/consortium.routes';
 import sessionRoutes from './routes/session.routes';
 import paymentRoutes from './routes/payment.routes';
+import paymentMethodRoutes from './routes/payment-methods.routes';
+import operatorRoutes from './routes/operators.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import progressRoutes from './routes/progress.routes';
 import badgeRoutes from './routes/badge.routes';
@@ -62,10 +68,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/classes', classScheduleRoutes); // Schedule routes under /api/classes/:classId/schedule/*
+app.use('/api/classes', timeSlotManagementRoutes); // Time slot management routes under /api/classes/:classId/time-slots/*
 app.use('/api/tutors', tutorRoutes);
+app.use('/api/tutors', tutorAvailabilityRoutes); // Tutor availability routes under /api/tutors/*
+app.use('/api', studentAssignmentRequestRoutes); // Assignment request routes under /api/sessions/* and /api/assignment-requests/*
 app.use('/api/consortiums', consortiumRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/payment-methods', paymentMethodRoutes);
+app.use('/api/operators', operatorRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/badges', badgeRoutes);
@@ -108,16 +119,21 @@ app.use(
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${envConfig.get('NODE_ENV', 'development')}`);
+  
+  // Initialize cron jobs after server starts
+  initializeCronJobs();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
+  stopCronJobs();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT signal received: closing HTTP server');
+  stopCronJobs();
   process.exit(0);
 });
 

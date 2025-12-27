@@ -53,11 +53,15 @@ model User {
   reviewsReceived       Review[]         @relation("Reviewee")
   transactionsAsPayer   Transaction[]    @relation("Payer")
   transactionsAsPayee   Transaction[]    @relation("Payee")
+  paymentMethods        PaymentMethod[]
   badges                UserBadge[]
   academicResults       AcademicResult[]
   shopProducts          ShopProduct[]
   shopPurchases         ShopPurchase[]
   notifications         Notification[]
+  tutorAvailability     TutorAvailability[]
+  studentRequests       TutorAssignmentRequest[] @relation("StudentRequests")
+  tutorRequests         TutorAssignmentRequest[] @relation("TutorRequests")
 
   @@index([email])
   @@map("users")
@@ -137,6 +141,25 @@ model TutorProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("tutor_profiles")
+}
+
+model TutorAvailability {
+  id           String    @id @default(uuid())
+  tutorId      String
+  dayOfWeek    Int?      // 0-6 for recurring, null for one-time
+  specificDate DateTime? // null for recurring, specific date for one-time
+  startTime    String    // Format: "HH:MM"
+  endTime      String    // Format: "HH:MM"
+  isRecurring  Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  tutor User @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@index([tutorId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+  @@map("tutor_availability")
 }
 
 // ============================================================================
@@ -309,6 +332,7 @@ model TutoringSession {
   reports      SessionReport[]
   reviews      Review[]
   transactions Transaction[]
+  assignmentRequests TutorAssignmentRequest[]
 
   @@index([classId])
   @@index([tutorId])
@@ -354,6 +378,27 @@ model SessionReport {
   @@map("session_reports")
 }
 
+model TutorAssignmentRequest {
+  id          String        @id @default(uuid())
+  sessionId   String
+  studentId   String
+  tutorId     String
+  status      RequestStatus @default(PENDING)
+  message     String?
+  createdAt   DateTime      @default(now())
+  respondedAt DateTime?
+
+  session TutoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User            @relation("StudentRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  tutor   User            @relation("TutorRequests", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([status])
+  @@map("tutor_assignment_requests")
+}
+
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
@@ -380,6 +425,57 @@ model Review {
 // ============================================================================
 // PAYMENTS & TRANSACTIONS
 // ============================================================================
+
+model MobileMoneyOperator {
+  id              String              @id @default(uuid())
+  code            String              @unique // e.g., "ORANGE_MONEY_CM", "MTN_MOMO_CM"
+  name            String              // e.g., "Orange Money"
+  displayName     String              // e.g., "Orange Money Cameroun"
+  provider        MobileMoneyProvider
+  country         String              // ISO country code (e.g., "CM", "CI", "SN")
+  countryName     String              // e.g., "Cameroun"
+  currency        String              // e.g., "XAF", "XOF"
+  phonePrefix     String              // e.g., "+237"
+  phoneFormat     String              // e.g., "XX XX XX XX XX"
+  phoneLength     Int                 // Number of digits after country code
+  color           String              // Hex color for UI
+  logoUrl         String?
+  isActive        Boolean             @default(true)
+  supportedFeatures Json              @default("{}") // { "withdrawal": true, "deposit": true, "transfer": true }
+  fees            Json                @default("{}") // Fee structure
+  limits          Json                @default("{}") // Transaction limits
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  paymentMethods  PaymentMethod[]
+
+  @@index([country])
+  @@index([provider])
+  @@index([isActive])
+  @@map("mobile_money_operators")
+}
+
+model PaymentMethod {
+  id              String              @id @default(uuid())
+  userId          String
+  operatorId      String
+  phoneNumber     String
+  accountName     String
+  accountHolder   String?             // Full name of account holder
+  isDefault       Boolean             @default(false)
+  isVerified      Boolean             @default(false)
+  lastUsedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  isActive        Boolean             @default(true)
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operator  MobileMoneyOperator  @relation(fields: [operatorId], references: [id])
+
+  @@index([userId])
+  @@index([operatorId])
+  @@map("payment_methods")
+}
 
 model Transaction {
   id                  String            @id @default(uuid())
@@ -585,6 +681,13 @@ enum TransactionType {
   SESSION_PAYMENT
   SUBSCRIPTION
   SHOP_PURCHASE
+  WITHDRAWAL
+}
+
+enum MobileMoneyProvider {
+  ORANGE_MONEY
+  MTN_MOBILE_MONEY
+  MOOV_MONEY
 }
 
 enum BadgeCategory {
@@ -613,4 +716,10 @@ enum AssignmentStatus {
   ACCEPTED         // Tutor accepted the assignment
   DECLINED         // Tutor declined the assignment
   CANCELLED        // Assignment was cancelled
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }

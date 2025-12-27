@@ -39,6 +39,45 @@ router.post(
 );
 
 /**
+ * POST /api/payments/wallet-payment
+ * Pay for a session using wallet balance (bypass Stripe)
+ */
+router.post(
+  '/wallet-payment',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { sessionId, amount } = req.body;
+      const payerId = req.user!.userId;
+
+      if (!sessionId || !amount) {
+        throw new ValidationError('Session ID and amount are required');
+      }
+
+      const transaction = await paymentService.processWalletPayment({
+        sessionId,
+        payerId,
+        amount: parseFloat(amount),
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          transactionId: transaction.id,
+          status: transaction.status,
+          amount: transaction.amount.toNumber(),
+          platformFee: transaction.platformFee.toNumber(),
+          netAmount: transaction.netAmount.toNumber(),
+        },
+        message: 'Payment processed successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/payments/confirm
  * Confirm a payment after successful Stripe processing
  */

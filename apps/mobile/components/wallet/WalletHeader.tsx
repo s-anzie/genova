@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Eye, EyeOff, Wallet } from 'lucide-react-native';
 import { Colors, Gradients } from '@/constants/colors';
 import { WalletBalance } from '@/types/api';
+import { formatEurAsFcfa } from '@/utils/currency';
 
 interface WalletHeaderProps {
   balance: WalletBalance | null;
@@ -22,7 +23,7 @@ export function WalletHeader({
   const router = useRouter();
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(0)} FCFA`;
+    return formatEurAsFcfa(amount);
   };
 
   const totalBalance = balance?.totalBalance || 0;

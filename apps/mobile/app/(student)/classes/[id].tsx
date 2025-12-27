@@ -10,20 +10,20 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
-  ArrowLeft,
   BookOpen,
   MapPin,
   Globe,
-  Settings,
   UserPlus,
   Trash2,
   Calendar,
   Edit,
+  ChevronRight,
 } from 'lucide-react-native';
-import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
-import { ApiClient } from '@/utils/api';
+import { Colors, Spacing } from '@/constants/colors';
+import { apiClient } from '@/utils/api-client';
 import { ClassResponse } from '@/types/api';
 import { useAuth } from '@/contexts/auth-context';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function ClassDetailScreen() {
   const router = useRouter();
@@ -41,12 +41,8 @@ export default function ClassDetailScreen() {
     }
     
     try {
-      const response = await ApiClient.get<{ success: boolean; data: ClassResponse }>(
-        `/classes/${id}`
-      );
-      // API returns { success: true, data: ClassResponse }
-      // ApiClient.get returns the full response, so we need response.data
-      setClassData((response as any).data);
+      const response = await apiClient.get(`/classes/${id}`);
+      setClassData(response.data);
     } catch (error) {
       console.error('Failed to load class:', error);
       Alert.alert('Erreur', 'Impossible de charger les détails de la classe');
@@ -90,7 +86,7 @@ export default function ClassDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ApiClient.delete(`/classes/${id}/members/${studentId}`);
+              await apiClient.delete(`/classes/${id}/members/${studentId}`);
               Alert.alert('Succès', 'Membre retiré avec succès');
               loadClassData();
             } catch (error: any) {
@@ -114,7 +110,7 @@ export default function ClassDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ApiClient.delete(`/classes/${id}/members/${user?.id}`);
+              await apiClient.delete(`/classes/${id}/members/${user?.id}`);
               Alert.alert('Succès', 'Vous avez quitté la classe', [
                 { text: 'OK', onPress: () => router.back() },
               ]);
@@ -139,7 +135,7 @@ export default function ClassDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ApiClient.delete(`/classes/${id}`);
+              await apiClient.delete(`/classes/${id}`);
               Alert.alert('Succès', 'Classe supprimée avec succès', [
                 { text: 'OK', onPress: () => router.back() },
               ]);
@@ -156,13 +152,12 @@ export default function ClassDetailScreen() {
   if (loading || !classData) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Détails</Text>
-          <View style={styles.placeholder} />
-        </View>
+        <PageHeader 
+          title="Détails"
+          showBackButton={true}
+          centerTitle={true}
+          showGradient={false}
+        />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Chargement...</Text>
         </View>
@@ -195,18 +190,20 @@ export default function ClassDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détails</Text>
-        {isCreator && (
-          <TouchableOpacity style={styles.settingsButton} onPress={handleEditClass}>
-            <Edit size={22} color={Colors.textPrimary} strokeWidth={2} />
-          </TouchableOpacity>
-        )}
-        {!isCreator && <View style={styles.placeholder} />}
-      </View>
+      <PageHeader 
+        title="Détails"
+        showBackButton={true}
+        centerTitle={true}
+        showGradient={false}
+        variant='primary'
+        rightElement={
+          isCreator ? (
+            <TouchableOpacity style={styles.editButton} onPress={handleEditClass}>
+              <Edit size={22} color={Colors.white} strokeWidth={2} />
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -306,11 +303,10 @@ export default function ClassDetailScreen() {
                 Voir les créneaux planifiés
               </Text>
             </View>
-            <ArrowLeft
+            <ChevronRight
               size={20}
               color={Colors.textSecondary}
               strokeWidth={2}
-              style={{ transform: [{ rotate: '180deg' }] }}
             />
           </TouchableOpacity>
         </View>
@@ -319,7 +315,7 @@ export default function ClassDetailScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Membres ({classData._count.members})
+              Membres ({classData._count?.members || 0})
             </Text>
             {isCreator && (
               <TouchableOpacity style={styles.inviteButton} onPress={handleInviteMembers}>
@@ -330,7 +326,7 @@ export default function ClassDetailScreen() {
           </View>
 
           <View style={styles.membersList}>
-            {classData.members.map((member) => (
+            {classData.members?.map((member) => (
               <View key={member.id} style={styles.memberCard}>
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>
@@ -389,36 +385,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bgCream,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 60, // Status bar spacing
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  backButton: {
+  editButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholder: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

@@ -16,17 +16,18 @@ import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse } from '@/types/api';
 import { PageHeader, TabSelector } from '@/components/PageHeader';
+import { formatEurAsFcfa } from '@/utils/currency';
 
 // Separate component for session card to use hooks properly
 const SessionCard = ({ 
   session, 
   onPress, 
-  showActions,
+  showAcceptButton,
   onActionComplete 
 }: { 
   session: SessionResponse; 
   onPress: () => void; 
-  showActions?: boolean;
+  showAcceptButton?: boolean;
   onActionComplete?: () => void;
 }) => {
   const now = new Date();
@@ -134,43 +135,19 @@ const SessionCard = ({
     }
   };
 
-  const handleConfirm = async (e: any) => {
+  const handleAccept = async (e: any) => {
     e.stopPropagation();
     try {
+      // Assign tutor to session and confirm
+      await ApiClient.put(`/sessions/${session.id}`, { tutorId: 'current' });
       await ApiClient.put(`/sessions/${session.id}/status`, { status: 'CONFIRMED' });
-      Alert.alert('Succès', 'Session confirmée avec succès', [
+      Alert.alert('Succès', 'Session acceptée avec succès', [
         { text: 'OK', onPress: () => onActionComplete?.() }
       ]);
     } catch (error) {
-      console.error('Failed to confirm session:', error);
-      Alert.alert('Erreur', 'Impossible de confirmer la session');
+      console.error('Failed to accept session:', error);
+      Alert.alert('Erreur', 'Impossible d\'accepter la session');
     }
-  };
-
-  const handleReject = async (e: any) => {
-    e.stopPropagation();
-    Alert.alert(
-      'Refuser la session',
-      'Êtes-vous sûr de vouloir refuser cette session ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Refuser',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await ApiClient.put(`/sessions/${session.id}/status`, { status: 'CANCELLED' });
-              Alert.alert('Succès', 'Session refusée', [
-                { text: 'OK', onPress: () => onActionComplete?.() }
-              ]);
-            } catch (error) {
-              console.error('Failed to reject session:', error);
-              Alert.alert('Erreur', 'Impossible de refuser la session');
-            }
-          }
-        }
-      ]
-    );
   };
 
   return (
@@ -257,33 +234,24 @@ const SessionCard = ({
           )}
         </View>
 
-        {/* Actions for pending sessions */}
-        {showActions && session.status === 'PENDING' && (
-          <View style={styles.actionsSection}>
-            <TouchableOpacity 
-              style={styles.rejectButton}
-              onPress={handleReject}
-            >
-              <XCircle size={18} color={Colors.error} strokeWidth={2} />
-              <Text style={styles.rejectButtonText}>Refuser</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.confirmButton}
-              onPress={handleConfirm}
-            >
-              <CheckCircle size={18} color={Colors.white} strokeWidth={2} />
-              <Text style={styles.confirmButtonText}>Confirmer</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Accept button for suggested sessions */}
+        {showAcceptButton && (
+          <TouchableOpacity 
+            style={styles.acceptButton}
+            onPress={handleAccept}
+          >
+            <CheckCircle size={18} color={Colors.white} strokeWidth={2} />
+            <Text style={styles.acceptButtonText}>Accepter cette session</Text>
+          </TouchableOpacity>
         )}
 
         {/* Footer: Price */}
         <View style={styles.cardFooter}>
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Revenu</Text>
-            <Text style={styles.priceValue}>{Math.round(Number(session.price)).toLocaleString('fr-FR')} €</Text>
+            <Text style={styles.priceValue}>{formatEurAsFcfa(Number(session.price))}</Text>
           </View>
-          {!showActions && (
+          {!showAcceptButton && (
             <View style={styles.arrowCircle}>
               <Text style={styles.arrowText}>→</Text>
             </View>
@@ -296,7 +264,7 @@ const SessionCard = ({
 
 export default function SessionsScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'past' | 'cancelled'>('confirmed');
+  const [activeTab, setActiveTab] = useState<'assigned' | 'suggested' | 'past' | 'cancelled'>('assigned');
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -308,73 +276,25 @@ export default function SessionsScreen() {
   const loadSessions = async () => {
     try {
       setLoading(true);
-      // Load all sessions and filter/sort on client side
-      const response = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>('/sessions');
+      
+      // Use the filter parameter for server-side filtering
+      // Validates: Requirements 10.1, 10.2, 10.3, 10.4
+      let endpoint = '/sessions';
+      if (activeTab === 'assigned') {
+        endpoint = '/sessions?filter=assigned';
+      } else if (activeTab === 'suggested') {
+        endpoint = '/sessions?filter=suggested';
+      } else if (activeTab === 'past') {
+        endpoint = '/sessions?filter=tutor-past';
+      } else if (activeTab === 'cancelled') {
+        endpoint = '/sessions?filter=tutor-cancelled';
+      }
+      
+      const response = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>(endpoint);
       const allSessions = response.data;
       
-      const now = new Date();
-      
-      if (activeTab === 'pending') {
-        // Filter: PENDING sessions that haven't ended yet
-        const pendingSessions = allSessions.filter(session => {
-          const endTime = new Date(session.scheduledEnd);
-          return session.status === 'PENDING' && endTime > now;
-        });
-        
-        // Sort: closest first (ascending by start time)
-        pendingSessions.sort((a, b) => {
-          const aStart = new Date(a.scheduledStart).getTime();
-          const bStart = new Date(b.scheduledStart).getTime();
-          return aStart - bStart;
-        });
-        
-        setSessions(pendingSessions);
-      } else if (activeTab === 'confirmed') {
-        // Filter: CONFIRMED sessions that haven't ended yet
-        const confirmedSessions = allSessions.filter(session => {
-          const endTime = new Date(session.scheduledEnd);
-          return session.status === 'CONFIRMED' && endTime > now;
-        });
-        
-        // Sort: closest first (ascending by start time)
-        confirmedSessions.sort((a, b) => {
-          const aStart = new Date(a.scheduledStart).getTime();
-          const bStart = new Date(b.scheduledStart).getTime();
-          return aStart - bStart;
-        });
-        
-        setSessions(confirmedSessions);
-      } else if (activeTab === 'cancelled') {
-        // Filter: CANCELLED sessions only
-        const cancelledSessions = allSessions.filter(session => 
-          session.status === 'CANCELLED'
-        );
-        
-        // Sort: most recent first (descending by scheduled start time)
-        cancelledSessions.sort((a, b) => {
-          const aStart = new Date(a.scheduledStart).getTime();
-          const bStart = new Date(b.scheduledStart).getTime();
-          return bStart - aStart;
-        });
-        
-        setSessions(cancelledSessions);
-      } else {
-        // Filter: COMPLETED sessions OR any session whose end time has passed
-        const pastSessions = allSessions.filter(session => {
-          const endTime = new Date(session.scheduledEnd);
-          return session.status === 'COMPLETED' || 
-                 (endTime <= now && session.status !== 'CANCELLED');
-        });
-        
-        // Sort: most recent first (descending by end time)
-        pastSessions.sort((a, b) => {
-          const aEnd = new Date(a.scheduledEnd).getTime();
-          const bEnd = new Date(b.scheduledEnd).getTime();
-          return bEnd - aEnd;
-        });
-        
-        setSessions(pastSessions);
-      }
+      // Sessions are already filtered and sorted by the backend
+      setSessions(allSessions);
     } catch (error) {
       console.error('Failed to load sessions:', error);
     } finally {
@@ -398,13 +318,13 @@ export default function SessionsScreen() {
       
       <TabSelector
         tabs={[
-          { key: 'pending', label: 'En attente' },
-          { key: 'confirmed', label: 'Confirmées' },
+          { key: 'assigned', label: 'Assignées' },
+          { key: 'suggested', label: 'Suggérées' },
           { key: 'past', label: 'Terminées' },
           { key: 'cancelled', label: 'Annulées' },
         ]}
         activeTab={activeTab}
-        onTabChange={(key) => setActiveTab(key as 'pending' | 'confirmed' | 'past' | 'cancelled')}
+        onTabChange={(key) => setActiveTab(key as 'assigned' | 'suggested' | 'past' | 'cancelled')}
       />
 
       {loading ? (
@@ -432,19 +352,19 @@ export default function SessionsScreen() {
                 <Calendar size={48} color={Colors.primary} strokeWidth={1.5} />
               </View>
               <Text style={styles.emptyTitle}>
-                {activeTab === 'pending' 
-                  ? 'Aucune session en attente' 
-                  : activeTab === 'confirmed'
-                  ? 'Aucune session confirmée'
+                {activeTab === 'assigned' 
+                  ? 'Aucune session assignée' 
+                  : activeTab === 'suggested'
+                  ? 'Aucune session suggérée'
                   : activeTab === 'cancelled'
                   ? 'Aucune session annulée'
                   : 'Aucune session terminée'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {activeTab === 'pending'
-                  ? 'Les nouvelles demandes de session apparaîtront ici'
-                  : activeTab === 'confirmed'
-                  ? 'Vos sessions confirmées apparaîtront ici'
+                {activeTab === 'assigned'
+                  ? 'Vos sessions assignées apparaîtront ici'
+                  : activeTab === 'suggested'
+                  ? 'Les sessions correspondant à vos compétences apparaîtront ici'
                   : activeTab === 'cancelled'
                   ? 'Les sessions annulées apparaîtront ici'
                   : 'Vos sessions terminées apparaîtront ici'}
@@ -456,7 +376,7 @@ export default function SessionsScreen() {
                 key={session.id}
                 session={session}
                 onPress={() => router.push(`/(tutor)/(tabs)/sessions/${session.id}`)}
-                showActions={activeTab === 'pending'}
+                showAcceptButton={activeTab === 'suggested'}
                 onActionComplete={loadSessions}
               />
             ))
@@ -641,39 +561,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.textSecondary,
   },
-  actionsSection: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    paddingTop: Spacing.sm,
-  },
-  rejectButton: {
-    flex: 1,
+  acceptButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.medium,
-    backgroundColor: Colors.error + '15',
-  },
-  rejectButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.error,
-  },
-  confirmButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing.sm,
+    gap: 8,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.medium,
     backgroundColor: Colors.success,
+    marginTop: Spacing.xs,
   },
-  confirmButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  acceptButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.white,
   },
   // Footer

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { 
@@ -21,11 +22,13 @@ import {
   BookOpen,
   AlertCircle,
   ChevronRight,
+  UserPlus,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
-import { SessionResponse, SessionReportResponse, AttendanceResponse } from '@/types/api';
+import { SessionResponse, SessionReportResponse, AttendanceResponse, TutorSearchResult } from '@/types/api';
 import { useAuth } from '@/contexts/auth-context';
+import { eurToFcfa, formatHourlyRateAsFcfa, formatEurAsFcfa } from '@/utils/currency';
 import { PageHeader } from '@/components/PageHeader';
 
 export default function SessionDetailScreen() {
@@ -36,6 +39,7 @@ export default function SessionDetailScreen() {
   const [report, setReport] = useState<SessionReportResponse | null>(null);
   const [attendance, setAttendance] = useState<AttendanceResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showTutorModal, setShowTutorModal] = useState(false);
 
   useEffect(() => {
     loadSessionDetails();
@@ -120,8 +124,8 @@ export default function SessionDetailScreen() {
   };
 
   const handleAssignTutor = () => {
-    // Navigate to search page in assign mode
-    router.push(`/(student)/(tabs)/search?sessionId=${id}&subject=${encodeURIComponent(session?.subject || '')}`);
+    // Open tutor selection modal
+    setShowTutorModal(true);
   };
 
   const handleViewTutorProfile = () => {
@@ -327,9 +331,9 @@ export default function SessionDetailScreen() {
                 </Text>
                 <Text style={styles.tutorRate}>
                   {session.tutor?.tutorProfile?.hourlyRate 
-                    ? `${Math.round(Number(session.tutor.tutorProfile.hourlyRate))} €/h` 
+                    ? formatHourlyRateAsFcfa(Number(session.tutor.tutorProfile.hourlyRate))
                     : session.tutor?.hourlyRate 
-                    ? `${Math.round(Number(session.tutor.hourlyRate) )} €/h`
+                    ? formatHourlyRateAsFcfa(Number(session.tutor.hourlyRate))
                     : '0 FCFA/h'}
                 </Text>
               </View>
@@ -337,24 +341,23 @@ export default function SessionDetailScreen() {
             </TouchableOpacity>
           ) : (
             <>
-              {canCancel() ? (
+              <View style={styles.emptyCard}>
+                <AlertCircle size={18} color={Colors.textTertiary} strokeWidth={2} />
+                <Text style={styles.emptyText}>
+                  Aucun tuteur n'a été assigné à cette session
+                </Text>
+              </View>
+              {canCancel() && (
                 <TouchableOpacity 
-                  style={styles.emptyCard}
+                  style={styles.requestTutorButton}
                   onPress={handleAssignTutor}
                   activeOpacity={0.7}
                 >
-                  <AlertCircle size={18} color={Colors.accent2} strokeWidth={2} />
-                  <Text style={[styles.emptyText, { color: Colors.accent2 }]}>
-                    Aucun tuteur assigné - Appuyez pour en choisir un
+                  <UserPlus size={18} color={Colors.primary} strokeWidth={2} />
+                  <Text style={styles.requestTutorButtonText}>
+                    Demander un tuteur
                   </Text>
                 </TouchableOpacity>
-              ) : (
-                <View style={styles.emptyCard}>
-                  <AlertCircle size={18} color={Colors.textTertiary} strokeWidth={2} />
-                  <Text style={styles.emptyText}>
-                    Aucun tuteur n'a été assigné à cette session
-                  </Text>
-                </View>
               )}
             </>
           )}
@@ -444,7 +447,7 @@ export default function SessionDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Prix</Text>
             <Text style={styles.priceText}>
-              {session.price ? Math.round(Number(session.price) * 650).toLocaleString('fr-FR') : '0'} FCFA
+              {session.price ? formatEurAsFcfa(Number(session.price)) : '0 FCFA'}
             </Text>
           </View>
         )}
@@ -473,7 +476,181 @@ export default function SessionDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Tutor Selection Modal */}
+      <TutorSelectionModal
+        visible={showTutorModal}
+        sessionId={id as string}
+        onClose={() => setShowTutorModal(false)}
+        onRequestSent={() => {
+          setShowTutorModal(false);
+          loadSessionDetails();
+        }}
+      />
     </View>
+  );
+}
+
+// Tutor Selection Modal Component
+interface TutorSelectionModalProps {
+  visible: boolean;
+  sessionId: string;
+  onClose: () => void;
+  onRequestSent: () => void;
+}
+
+function TutorSelectionModal({ visible, sessionId, onClose, onRequestSent }: TutorSelectionModalProps) {
+  const [tutors, setTutors] = useState<TutorSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [requesting, setRequesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      loadAvailableTutors();
+    }
+  }, [visible, sessionId]);
+
+  const loadAvailableTutors = async () => {
+    try {
+      setLoading(true);
+      const response = await ApiClient.get<{ success: boolean; data: TutorSearchResult[] }>(
+        `/sessions/${sessionId}/available-tutors`
+      );
+      setTutors(response.data);
+    } catch (error) {
+      console.error('Failed to load available tutors:', error);
+      Alert.alert('Erreur', 'Impossible de charger les tuteurs disponibles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestTutor = async (tutorId: string) => {
+    try {
+      setRequesting(tutorId);
+      await ApiClient.post(`/sessions/${sessionId}/request-tutor`, {
+        tutorId,
+        message: 'Je souhaiterais que vous soyez mon tuteur pour cette session.',
+      });
+      Alert.alert(
+        'Demande envoyée',
+        'Votre demande a été envoyée au tuteur. Vous serez notifié de sa réponse.',
+        [{ text: 'OK', onPress: onRequestSent }]
+      );
+    } catch (error: any) {
+      console.error('Failed to request tutor:', error);
+      Alert.alert(
+        'Erreur',
+        error.message || 'Impossible d\'envoyer la demande au tuteur'
+      );
+    } finally {
+      setRequesting(null);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Tuteurs disponibles</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseIcon}>
+              <X size={24} color={Colors.textSecondary} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Content */}
+          {loading ? (
+            <View style={styles.modalLoadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.modalLoadingText}>Chargement des tuteurs...</Text>
+            </View>
+          ) : tutors.length === 0 ? (
+            <View style={styles.modalEmptyContainer}>
+              <AlertCircle size={48} color={Colors.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.modalEmptyTitle}>Aucun tuteur disponible</Text>
+              <Text style={styles.modalEmptyText}>
+                Il n'y a pas de tuteurs disponibles pour cette session pour le moment.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {tutors.map((tutor) => (
+                <View key={tutor.id} style={styles.tutorModalCard}>
+                  <View style={styles.tutorModalHeader}>
+                    <View style={styles.tutorModalAvatar}>
+                      <User size={24} color={Colors.white} strokeWidth={2} />
+                    </View>
+                    <View style={styles.tutorModalInfo}>
+                      <Text style={styles.tutorModalName}>
+                        {tutor.firstName} {tutor.lastName}
+                      </Text>
+                      <View style={styles.tutorModalMeta}>
+                        <Text style={styles.tutorModalRate}>
+                          {formatHourlyRateAsFcfa(tutor.hourlyRate)}
+                        </Text>
+                        {tutor.averageRating > 0 && (
+                          <>
+                            <Text style={styles.tutorModalDivider}>•</Text>
+                            <Text style={styles.tutorModalRating}>
+                              ⭐ {tutor.averageRating.toFixed(1)} ({tutor.totalReviews})
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {tutor.bio && (
+                    <Text style={styles.tutorModalBio} numberOfLines={2}>
+                      {tutor.bio}
+                    </Text>
+                  )}
+
+                  <View style={styles.tutorModalSubjects}>
+                    {tutor.subjects.slice(0, 3).map((subject, index) => (
+                      <View key={index} style={styles.tutorModalSubjectBadge}>
+                        <Text style={styles.tutorModalSubjectText}>{subject}</Text>
+                      </View>
+                    ))}
+                    {tutor.subjects.length > 3 && (
+                      <Text style={styles.tutorModalSubjectMore}>
+                        +{tutor.subjects.length - 3}
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.tutorModalRequestButton,
+                      requesting === tutor.userId && styles.tutorModalRequestButtonDisabled,
+                    ]}
+                    onPress={() => handleRequestTutor(tutor.userId)}
+                    disabled={requesting !== null}
+                    activeOpacity={0.7}
+                  >
+                    {requesting === tutor.userId ? (
+                      <ActivityIndicator size="small" color={Colors.white} />
+                    ) : (
+                      <>
+                        <UserPlus size={18} color={Colors.white} strokeWidth={2} />
+                        <Text style={styles.tutorModalRequestButtonText}>Demander</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -728,6 +905,194 @@ const styles = StyleSheet.create({
     ...Shadows.small,
   },
   dangerButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  requestTutorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary + '15',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    marginTop: Spacing.xs,
+  },
+  requestTutorButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: BorderRadius.large,
+    borderTopRightRadius: BorderRadius.large,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.bgCream,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  modalCloseIcon: {
+    padding: 4,
+  },
+  modalScrollView: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  modalLoadingContainer: {
+    paddingVertical: Spacing.xl * 2,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  modalLoadingText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+  },
+  modalEmptyContainer: {
+    paddingVertical: Spacing.xl * 2,
+    paddingHorizontal: Spacing.lg,
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  modalEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: Spacing.sm,
+  },
+  modalEmptyText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  tutorModalCard: {
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.large,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  tutorModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  tutorModalAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tutorModalInfo: {
+    flex: 1,
+  },
+  tutorModalName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  tutorModalMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tutorModalRate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  tutorModalDivider: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+  },
+  tutorModalRating: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  tutorModalBio: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  tutorModalSubjects: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+  },
+  tutorModalSubjectBadge: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
+  },
+  tutorModalSubjectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  tutorModalSubjectMore: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  tutorModalRequestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.medium,
+    marginTop: Spacing.xs,
+  },
+  tutorModalRequestButtonDisabled: {
+    opacity: 0.6,
+  },
+  tutorModalRequestButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  modalText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+  },
+  modalCloseButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
     fontSize: 15,
     fontWeight: '700',
     color: Colors.white,

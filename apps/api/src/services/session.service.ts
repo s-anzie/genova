@@ -7,6 +7,8 @@ import {
   logger
 } from '@repo/utils';
 import { checkMentorBadge, checkPedagogueBadge } from './badge.service';
+import { checkAvailability } from './tutor-availability.service';
+import { createBulkNotifications } from './notification.service';
 
 const prisma = new PrismaClient();
 
@@ -407,6 +409,424 @@ export async function getUserSessions(
 }
 
 /**
+ * Get upcoming sessions for a student
+ * Validates: Requirements 9.1
+ */
+export async function getUpcomingSessions(studentId: string): Promise<SessionWithDetails[]> {
+  const now = new Date();
+  
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      class: {
+        members: {
+          some: {
+            studentId,
+            isActive: true,
+          },
+        },
+      },
+      scheduledEnd: {
+        gt: now,
+      },
+      status: {
+        not: 'CANCELLED',
+      },
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledStart: 'asc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
+ * Get past sessions for a student
+ * Validates: Requirements 9.2
+ */
+export async function getPastSessions(studentId: string): Promise<SessionWithDetails[]> {
+  const now = new Date();
+  
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      class: {
+        members: {
+          some: {
+            studentId,
+            isActive: true,
+          },
+        },
+      },
+      scheduledEnd: {
+        lte: now,
+      },
+      status: {
+        not: 'CANCELLED',
+      },
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledEnd: 'desc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
+ * Get cancelled sessions for a student
+ * Validates: Requirements 9.3
+ */
+export async function getCancelledSessions(studentId: string): Promise<SessionWithDetails[]> {
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      class: {
+        members: {
+          some: {
+            studentId,
+            isActive: true,
+          },
+        },
+      },
+      status: 'CANCELLED',
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledStart: 'desc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
+ * Get assigned sessions for a tutor
+ * Validates: Requirements 10.1
+ */
+export async function getAssignedSessions(tutorId: string): Promise<SessionWithDetails[]> {
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      tutorId,
+      status: {
+        in: ['PENDING', 'CONFIRMED'],
+      },
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledStart: 'asc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
+ * Get suggested sessions for a tutor
+ * Validates: Requirements 10.2
+ * 
+ * Returns unassigned sessions where:
+ * - The session has no tutor assigned (tutorId is null)
+ * - The subject matches one of the tutor's subjects
+ * - The tutor is available at the session time
+ */
+export async function getSuggestedSessions(tutorId: string): Promise<SessionWithDetails[]> {
+  // Get tutor profile with subjects
+  const tutorProfile = await prisma.tutorProfile.findUnique({
+    where: { userId: tutorId },
+    select: {
+      subjects: true,
+    },
+  });
+
+  if (!tutorProfile) {
+    throw new NotFoundError('Tutor profile not found');
+  }
+
+  // Get all unassigned sessions with matching subjects
+  const unassignedSessions = await prisma.tutoringSession.findMany({
+    where: {
+      tutorId: null,
+      status: {
+        in: ['PENDING', 'CONFIRMED'],
+      },
+      subject: {
+        in: tutorProfile.subjects,
+      },
+      scheduledStart: {
+        gte: new Date(), // Only future sessions
+      },
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledStart: 'asc',
+    },
+  });
+
+  // Filter by tutor availability
+  const suggestedSessions: SessionWithDetails[] = [];
+  
+  for (const session of unassignedSessions) {
+    const duration = (session.scheduledEnd.getTime() - session.scheduledStart.getTime()) / (1000 * 60 * 60);
+    
+    try {
+      const isAvailable = await checkAvailability(tutorId, session.scheduledStart, duration);
+      
+      if (isAvailable) {
+        suggestedSessions.push(session as SessionWithDetails);
+      }
+    } catch (error) {
+      // If availability check fails, skip this session
+      logger.warn('Failed to check availability for session', {
+        sessionId: session.id,
+        tutorId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return suggestedSessions;
+}
+
+/**
+ * Get past sessions for a tutor
+ * Validates: Requirements 10.3
+ */
+export async function getTutorPastSessions(tutorId: string): Promise<SessionWithDetails[]> {
+  const now = new Date();
+  
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      tutorId,
+      scheduledEnd: {
+        lte: now,
+      },
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledEnd: 'desc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
+ * Get cancelled sessions for a tutor
+ * Validates: Requirements 10.4
+ */
+export async function getTutorCancelledSessions(tutorId: string): Promise<SessionWithDetails[]> {
+  const sessions = await prisma.tutoringSession.findMany({
+    where: {
+      tutorId,
+      status: 'CANCELLED',
+    },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          educationLevel: true,
+          subjects: true,
+          members: {
+            where: { isActive: true },
+            select: { studentId: true },
+          },
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      },
+      tutor: {
+        select: tutorSelect,
+      },
+      consortium: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      attendances: true,
+    },
+    orderBy: {
+      scheduledStart: 'desc',
+    },
+  });
+
+  return sessions as SessionWithDetails[];
+}
+
+/**
  * Confirm a pending session
  * Validates: Requirements 6.5
  */
@@ -475,8 +895,8 @@ export async function confirmSession(
     },
   });
 
-  // TODO: Send confirmation notifications to all class members
-  // This would be implemented in a notification service
+  // Send confirmation notifications to all class members (Requirement 11.3)
+  await createTutorConfirmationNotifications(updatedSession as SessionWithDetails);
 
   return updatedSession as SessionWithDetails;
 }
@@ -582,8 +1002,15 @@ export async function updateSessionStatus(
     });
   }
 
-  // TODO: Send status update notifications
-  // This would be implemented in a notification service
+  // Send confirmation notifications when status changes to CONFIRMED (Requirement 11.3)
+  if (status === 'CONFIRMED' && session.status !== 'CONFIRMED') {
+    await createTutorConfirmationNotifications(updatedSession as SessionWithDetails);
+  }
+
+  // Send cancellation notifications when status changes to CANCELLED (Requirement 11.4)
+  if (status === 'CANCELLED' && session.status !== 'CANCELLED') {
+    await createSessionCancellationNotifications(updatedSession as SessionWithDetails, cancellationReason);
+  }
 
   return updatedSession as SessionWithDetails;
 }
@@ -615,6 +1042,206 @@ export function calculateRefundAmount(
   const refundAmount = Math.round(sessionPrice * refundPercentage * 100) / 100;
 
   return { refundAmount, refundPercentage };
+}
+
+/**
+ * Create notifications when a tutor is assigned to a session
+ * Validates: Requirement 11.2
+ */
+async function createTutorAssignmentNotifications(
+  session: SessionWithDetails
+): Promise<void> {
+  if (!session.tutorId) {
+    return;
+  }
+
+  const notifications = [];
+
+  // Get tutor details
+  const tutor = await prisma.user.findUnique({
+    where: { id: session.tutorId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+    },
+  });
+
+  if (!tutor) {
+    logger.warn('Tutor not found for notification', { tutorId: session.tutorId });
+    return;
+  }
+
+  const tutorName = `${tutor.firstName} ${tutor.lastName}`;
+  const sessionDateStr = session.scheduledStart.toLocaleDateString();
+  const sessionTimeStr = `${session.scheduledStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${session.scheduledEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Notify the tutor
+  notifications.push({
+    userId: session.tutorId,
+    title: 'New Session Assignment',
+    message: `You have been assigned to teach ${session.subject} for ${session.class.name} on ${sessionDateStr} at ${sessionTimeStr}.`,
+    type: 'TUTOR_ASSIGNED',
+    data: {
+      sessionId: session.id,
+      classId: session.classId,
+      className: session.class.name,
+      subject: session.subject,
+      scheduledStart: session.scheduledStart.toISOString(),
+      scheduledEnd: session.scheduledEnd.toISOString(),
+    },
+  });
+
+  // Notify all class members
+  for (const member of session.class.members) {
+    notifications.push({
+      userId: member.studentId,
+      title: 'Tutor Assigned',
+      message: `${tutorName} has been assigned to your ${session.subject} session on ${sessionDateStr} at ${sessionTimeStr}.`,
+      type: 'TUTOR_ASSIGNED',
+      data: {
+        sessionId: session.id,
+        classId: session.classId,
+        className: session.class.name,
+        subject: session.subject,
+        tutorId: session.tutorId,
+        tutorName,
+        scheduledStart: session.scheduledStart.toISOString(),
+        scheduledEnd: session.scheduledEnd.toISOString(),
+      },
+    });
+  }
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications);
+    logger.info('Created tutor assignment notifications', {
+      sessionId: session.id,
+      tutorId: session.tutorId,
+      notificationCount: notifications.length,
+    });
+  }
+}
+
+/**
+ * Create notifications when a tutor confirms a session
+ * Validates: Requirement 11.3
+ */
+async function createTutorConfirmationNotifications(
+  session: SessionWithDetails
+): Promise<void> {
+  if (!session.tutorId) {
+    return;
+  }
+
+  const notifications = [];
+
+  // Get tutor details
+  const tutor = await prisma.user.findUnique({
+    where: { id: session.tutorId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+    },
+  });
+
+  if (!tutor) {
+    logger.warn('Tutor not found for notification', { tutorId: session.tutorId });
+    return;
+  }
+
+  const tutorName = `${tutor.firstName} ${tutor.lastName}`;
+  const sessionDateStr = session.scheduledStart.toLocaleDateString();
+  const sessionTimeStr = `${session.scheduledStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${session.scheduledEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Notify all class members
+  for (const member of session.class.members) {
+    notifications.push({
+      userId: member.studentId,
+      title: 'Session Confirmed',
+      message: `${tutorName} has confirmed your ${session.subject} session on ${sessionDateStr} at ${sessionTimeStr}.`,
+      type: 'SESSION_CONFIRMED',
+      data: {
+        sessionId: session.id,
+        classId: session.classId,
+        className: session.class.name,
+        subject: session.subject,
+        tutorId: session.tutorId,
+        tutorName,
+        scheduledStart: session.scheduledStart.toISOString(),
+        scheduledEnd: session.scheduledEnd.toISOString(),
+      },
+    });
+  }
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications);
+    logger.info('Created tutor confirmation notifications', {
+      sessionId: session.id,
+      tutorId: session.tutorId,
+      notificationCount: notifications.length,
+    });
+  }
+}
+
+/**
+ * Create notifications when a session is cancelled
+ * Validates: Requirement 11.4
+ */
+async function createSessionCancellationNotifications(
+  session: SessionWithDetails,
+  cancellationReason?: string
+): Promise<void> {
+  const notifications = [];
+
+  const sessionDateStr = session.scheduledStart.toLocaleDateString();
+  const sessionTimeStr = `${session.scheduledStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${session.scheduledEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Notify the tutor if assigned
+  if (session.tutorId) {
+    notifications.push({
+      userId: session.tutorId,
+      title: 'Session Cancelled',
+      message: `Your ${session.subject} session for ${session.class.name} on ${sessionDateStr} at ${sessionTimeStr} has been cancelled.${cancellationReason ? ` Reason: ${cancellationReason}` : ''}`,
+      type: 'SESSION_CANCELLED',
+      data: {
+        sessionId: session.id,
+        classId: session.classId,
+        className: session.class.name,
+        subject: session.subject,
+        scheduledStart: session.scheduledStart.toISOString(),
+        scheduledEnd: session.scheduledEnd.toISOString(),
+        cancellationReason,
+      },
+    });
+  }
+
+  // Notify all class members
+  for (const member of session.class.members) {
+    notifications.push({
+      userId: member.studentId,
+      title: 'Session Cancelled',
+      message: `Your ${session.subject} session on ${sessionDateStr} at ${sessionTimeStr} has been cancelled.${cancellationReason ? ` Reason: ${cancellationReason}` : ''}`,
+      type: 'SESSION_CANCELLED',
+      data: {
+        sessionId: session.id,
+        classId: session.classId,
+        className: session.class.name,
+        subject: session.subject,
+        scheduledStart: session.scheduledStart.toISOString(),
+        scheduledEnd: session.scheduledEnd.toISOString(),
+        cancellationReason,
+      },
+    });
+  }
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications);
+    logger.info('Created session cancellation notifications', {
+      sessionId: session.id,
+      notificationCount: notifications.length,
+    });
+  }
 }
 
 /**
@@ -784,8 +1411,8 @@ export async function cancelSession(
     await processRefund(sessionId, refundAmount, refundPercentage);
   }
 
-  // TODO: Send cancellation notifications to tutor and all class members (Requirement 15.4)
-  // This would be implemented in a notification service
+  // Send cancellation notifications to tutor and all class members (Requirement 11.4)
+  await createSessionCancellationNotifications(updatedSession as SessionWithDetails, reason);
 
   logger.info('Session cancelled', {
     sessionId,
@@ -942,6 +1569,11 @@ export async function updateSession(
       attendances: true,
     },
   });
+
+  // Send notifications when tutor is assigned (Requirement 11.2)
+  if (data.tutorId && !session.tutorId) {
+    await createTutorAssignmentNotifications(updatedSession as SessionWithDetails);
+  }
 
   return updatedSession as SessionWithDetails;
 }

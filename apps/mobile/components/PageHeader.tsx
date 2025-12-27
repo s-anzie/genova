@@ -14,6 +14,7 @@ interface PageHeaderProps {
   onBackPress?: () => void;
   showGradient?: boolean;
   variant?: 'default' | 'primary'; // New prop for header style
+  centerTitle?: boolean; // New prop to center the title
 }
 
 export function PageHeader({ 
@@ -24,7 +25,8 @@ export function PageHeader({
   showBackButton = false,
   onBackPress,
   showGradient = true,
-  variant = 'default' // Default to cream/white style
+  variant = 'default', // Default to cream/white style
+  centerTitle = false // Default to left-aligned title
 }: PageHeaderProps) {
   const router = useRouter();
 
@@ -46,7 +48,7 @@ export function PageHeader({
         barStyle={isPrimary ? "light-content" : "dark-content"} 
         backgroundColor={isPrimary ? Colors.primary : Colors.bgCream} 
       />
-      <View style={styles.content}>
+      <View style={[styles.content, centerTitle && styles.contentCentered]}>
         {(showBackButton || leftElement) && (
           <View style={styles.leftElement}>
             {leftElement || (
@@ -60,11 +62,12 @@ export function PageHeader({
             )}
           </View>
         )}
-        <View style={styles.titleContainer}>
-          <Text style={[styles.title, { color: textColor }]}>{title}</Text>
-          {subtitle && <Text style={[styles.subtitle, { color: subtitleColor }]}>{subtitle}</Text>}
+        <View style={[styles.titleContainer, centerTitle && styles.titleContainerCentered]}>
+          <Text style={[styles.title, centerTitle && styles.titleCentered, { color: textColor }]}>{title}</Text>
+          {subtitle && <Text style={[styles.subtitle, centerTitle && styles.subtitleCentered, { color: subtitleColor }]}>{subtitle}</Text>}
         </View>
         {rightElement && <View style={styles.rightElement}>{rightElement}</View>}
+        {!rightElement && centerTitle && <View style={styles.placeholder} />}
       </View>
     </View>
   );
@@ -147,6 +150,9 @@ const styles = StyleSheet.create({
     paddingTop: 60, // Espace pour la barre de statut
     paddingBottom: Spacing.sm,
   },
+  contentCentered: {
+    alignItems: 'center',
+  },
   leftElement: {
     marginRight: Spacing.sm,
     paddingTop: 4,
@@ -166,6 +172,9 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
   },
+  titleContainerCentered: {
+    alignItems: 'center',
+  },
   title: {
     fontSize: 32,
     fontWeight: '800',
@@ -173,10 +182,22 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginBottom: 4,
   },
+  titleCentered: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0,
+    textAlign: 'center',
+  },
   subtitle: {
     fontSize: 15,
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  subtitleCentered: {
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
   },
   rightElement: {
     marginLeft: Spacing.md,

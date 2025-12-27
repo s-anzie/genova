@@ -47,7 +47,7 @@ export default function StudentWalletScreen() {
       >
         <QuickActions userRole={user?.role || 'student'} />
         
-        <RecentTransactions transactions={recentTransactions} />
+        <RecentTransactions transactions={recentTransactions} userRole={user?.role || 'student'} />
 
         <View style={{ height: 40 }} />
       </ScrollView>

@@ -28,6 +28,7 @@ import {
 import { ApiClient } from '@/utils/api';
 import { useAuth } from '@/contexts/auth-context';
 import { WalletBalance } from '@/types/api';
+import { formatEurAsFcfa } from '@/utils/currency';
 import { Colors } from '@/constants/colors';
 
 const { width } = Dimensions.get('window');
@@ -80,7 +81,7 @@ export default function WalletScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} €`;
+    return formatEurAsFcfa(amount);
   };
 
   const formatDate = (dateString: string) => {

@@ -9,6 +9,14 @@ export default function StudentLayout() {
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="marketplace" options={{ headerShown: false }} />
+      <Stack.Screen 
+        name="filters" 
+        options={{ 
+          presentation: 'transparentModal',
+          headerShown: false,
+          animation: 'slide_from_bottom',
+        }} 
+      />
     </Stack>
   );
 }

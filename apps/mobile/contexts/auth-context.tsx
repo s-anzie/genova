@@ -168,17 +168,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log('🔒 Logging out user...');
+      
       if (tokenRefreshTimeout) {
         clearTimeout(tokenRefreshTimeout);
         setTokenRefreshTimeout(null);
       }
       
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
-      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-      await SecureStore.deleteItemAsync(USER_KEY);
+      // Clear all auth-related data from SecureStore
+      await Promise.all([
+        SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {}),
+        SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => {}),
+        SecureStore.deleteItemAsync(USER_KEY).catch(() => {}),
+        SecureStore.deleteItemAsync(BIOMETRIC_ENABLED_KEY).catch(() => {}),
+      ]);
+      
       setUser(null);
+      console.log('✅ User logged out successfully');
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('❌ Logout failed:', error);
+      // Still clear user state even if SecureStore fails
+      setUser(null);
     }
   };
 
@@ -187,9 +197,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const refreshTokenValue = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
       
       if (!refreshTokenValue) {
-        throw new Error('No refresh token available');
+        console.error('❌ No refresh token available');
+        await logout();
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
       }
 
+      console.log('🔄 Refreshing access token...');
       const response = await fetch(API_ENDPOINTS.auth.refresh, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,16 +210,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        throw new Error('Token refresh failed');
+        console.error('❌ Token refresh failed:', response.status);
+        await logout();
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
       }
 
       const result = await response.json();
       const data = result.data;
       await SecureStore.setItemAsync(TOKEN_KEY, data.accessToken);
       
+      console.log('✅ Token refreshed successfully');
+      
       // Schedule next refresh
       scheduleTokenRefresh(14 * 60 * 1000);
     } catch (error) {
+      console.error('❌ Token refresh error:', error);
       await logout();
       throw error;
     }

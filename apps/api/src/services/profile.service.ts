@@ -5,6 +5,7 @@ import {
   AuthorizationError 
 } from '@repo/utils';
 import { checkExpertVerifieBadge } from './badge.service';
+import { recalculatePricesForTutor } from './session-generator.service';
 
 const prisma = new PrismaClient();
 
@@ -346,6 +347,10 @@ export async function updateTutorProfile(userId: string, data: UpdateTutorProfil
     validateTeachingMode(data.teachingMode);
   }
 
+  // Check if hourly rate is changing
+  const hourlyRateChanged = data.hourlyRate !== undefined && 
+                            Number(data.hourlyRate) !== Number(existingProfile.hourlyRate);
+
   // Update profile
   const profile = await prisma.tutorProfile.update({
     where: { userId },
@@ -363,6 +368,13 @@ export async function updateTutorProfile(userId: string, data: UpdateTutorProfil
       teachingSkillsDetails: data.teachingSkillsDetails as any,
     },
   });
+
+  // If hourly rate changed, recalculate prices for future PENDING sessions (Requirement 6.3)
+  if (hourlyRateChanged && data.hourlyRate !== undefined) {
+    recalculatePricesForTutor(userId, data.hourlyRate).catch((err: Error) => {
+      console.error('Error recalculating prices for tutor sessions:', err);
+    });
+  }
 
   return profile;
 }

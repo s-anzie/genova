@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft, DollarSign, AlertCircle } from 'lucide-react-native';
 import { useWallet } from '@/hooks/useWallet';
+import { formatEurAsFcfa, fcfaToEur, eurToFcfa } from '@/utils/currency';
 
 export default function WithdrawScreen() {
   const router = useRouter();
@@ -20,26 +21,31 @@ export default function WithdrawScreen() {
   const availableBalance = balance?.availableBalance || 0;
 
   const handleWithdraw = async () => {
-    const withdrawAmount = parseFloat(amount);
+    const withdrawAmountFcfa = parseFloat(amount);
     
-    if (!withdrawAmount || withdrawAmount <= 0) {
+    if (!withdrawAmountFcfa || withdrawAmountFcfa <= 0) {
       Alert.alert('Erreur', 'Veuillez entrer un montant valide');
       return;
     }
 
-    if (withdrawAmount > availableBalance) {
+    const availableBalanceFcfa = eurToFcfa(availableBalance);
+    if (withdrawAmountFcfa > availableBalanceFcfa) {
       Alert.alert('Erreur', 'Montant supérieur au solde disponible');
       return;
     }
 
-    if (withdrawAmount < 1000) {
-      Alert.alert('Erreur', 'Le montant minimum de retrait est de 1000 FCFA');
+    const minFcfa = eurToFcfa(1.52); // ~1000 FCFA
+    if (withdrawAmountFcfa < minFcfa) {
+      Alert.alert('Erreur', `Le montant minimum de retrait est de ${minFcfa.toLocaleString('fr-FR')} FCFA`);
       return;
     }
 
     setLoading(true);
     try {
+      // Convert FCFA to EUR for API call
+      const withdrawAmountEur = fcfaToEur(withdrawAmountFcfa);
       // TODO: Implement withdrawal API call
+      // API expects amount in EUR
       Alert.alert('Succès', 'Votre demande de retrait a été enregistrée');
       router.back();
     } catch (error) {
@@ -71,7 +77,7 @@ export default function WithdrawScreen() {
         {/* Available Balance */}
         <View className="bg-primary rounded-2xl p-6 items-center mb-6">
           <Text className="text-sm text-white/80 font-medium mb-2">Solde disponible</Text>
-          <Text className="text-4xl font-extrabold text-white">{availableBalance.toFixed(2)} FCFA</Text>
+          <Text className="text-4xl font-extrabold text-white">{formatEurAsFcfa(availableBalance)}</Text>
         </View>
 
         {/* Amount Input */}
@@ -95,22 +101,22 @@ export default function WithdrawScreen() {
         <View className="mb-6">
           <Text className="text-base font-semibold text-text-primary mb-3">Montants rapides</Text>
           <View className="flex-row gap-3">
-            {[5000, 10000, 25000, 50000].map((value) => (
+            {[1000, 2500, 5000, 10000].map((valueInFcfa) => (
               <TouchableOpacity
-                key={value}
+                key={valueInFcfa}
                 className={`flex-1 py-3 rounded-xl border ${
-                  amount === value.toString()
+                  amount === valueInFcfa.toString()
                     ? 'bg-primary border-primary'
                     : 'bg-white border-border'
                 } items-center`}
-                onPress={() => setQuickAmount(value)}
+                onPress={() => setQuickAmount(valueInFcfa)}
               >
                 <Text
                   className={`text-sm font-semibold ${
-                    amount === value.toString() ? 'text-white' : 'text-text-primary'
+                    amount === valueInFcfa.toString() ? 'text-white' : 'text-text-primary'
                   }`}
                 >
-                  {value}
+                  {valueInFcfa}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -125,7 +131,7 @@ export default function WithdrawScreen() {
               Informations importantes
             </Text>
             <Text className="text-[13px] text-text-secondary leading-5">
-              • Montant minimum : 1000 FCFA{'\n'}
+              • Montant minimum : {eurToFcfa(1.52).toLocaleString('fr-FR')} FCFA{'\n'}
               • Délai de traitement : 24-48 heures{'\n'}
               • Retrait via Orange Money ou MTN MoMo
             </Text>

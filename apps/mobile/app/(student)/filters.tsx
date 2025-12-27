@@ -60,10 +60,10 @@ const TEACHING_MODE_OPTIONS = [
 ];
 
 const PRICE_RANGES = [
-  { label: 'Moins de 20€', value: '0-20' },
-  { label: '20€ - 40€', value: '20-40' },
-  { label: '40€ - 60€', value: '40-60' },
-  { label: 'Plus de 60€', value: '60+' },
+  { label: 'Moins de 13 000 FCFA', value: '0-20' },
+  { label: '13 000 - 26 000 FCFA', value: '20-40' },
+  { label: '26 000 - 39 000 FCFA', value: '40-60' },
+  { label: 'Plus de 39 000 FCFA', value: '60+' },
 ];
 
 const GENDER_OPTIONS = [
