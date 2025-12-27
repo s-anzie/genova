@@ -1,6 +1,7 @@
 
 import { RegisterUser } from '../RegisterUser';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
+import { IPasswordService } from '../services/IPasswordService';
 import { UserRole } from '../../../domain/entities/User';
 import { RegisterUserDto } from '../dtos/RegisterUserDto';
 
@@ -11,11 +12,20 @@ const mockUserRepository = {
   exists: jest.fn(),
 };
 
+// Mock IPasswordService
+const mockPasswordService = {
+  hash: jest.fn(),
+  compare: jest.fn(),
+};
+
 describe('RegisterUser Use Case', () => {
   let registerUser: RegisterUser;
 
   beforeEach(() => {
-    registerUser = new RegisterUser(mockUserRepository as unknown as IUserRepository);
+    registerUser = new RegisterUser(
+      mockUserRepository as unknown as IUserRepository,
+      mockPasswordService as unknown as IPasswordService
+    );
     jest.clearAllMocks();
   });
 
@@ -30,11 +40,13 @@ describe('RegisterUser Use Case', () => {
 
     mockUserRepository.exists.mockResolvedValue(false);
     mockUserRepository.save.mockResolvedValue(undefined);
+    mockPasswordService.hash.mockResolvedValue('hashed_password');
 
     const result = await registerUser.execute(request);
 
     expect(result.isSuccess).toBe(true);
     expect(mockUserRepository.exists).toHaveBeenCalledWith(request.email);
+    expect(mockPasswordService.hash).toHaveBeenCalledWith(request.password);
     expect(mockUserRepository.save).toHaveBeenCalled();
   });
 
@@ -52,5 +64,6 @@ describe('RegisterUser Use Case', () => {
 
     expect(result.isSuccess).toBe(false);
     expect(mockUserRepository.save).not.toHaveBeenCalled();
+    expect(mockPasswordService.hash).not.toHaveBeenCalled();
   });
 });

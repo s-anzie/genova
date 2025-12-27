@@ -2,16 +2,21 @@
 import { IUseCase } from '../../../../shared/application/UseCase';
 import { RegisterUserDto } from '../dtos/RegisterUserDto';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
+import { IPasswordService } from '../services/IPasswordService';
 import { User, UserRole } from '../../domain/entities/User';
 import { Result } from '../../../../shared/domain/Result';
 import { AppError, ConflictError } from '@repo/utils';
-import bcrypt from 'bcrypt';
 
 export class RegisterUser implements IUseCase<RegisterUserDto, void> {
   private userRepository: IUserRepository;
+  private passwordService: IPasswordService;
 
-  constructor(userRepository: IUserRepository) {
+  constructor(
+    userRepository: IUserRepository,
+    passwordService: IPasswordService
+  ) {
     this.userRepository = userRepository;
+    this.passwordService = passwordService;
   }
 
   async execute(request: RegisterUserDto): Promise<Result<void>> {
@@ -23,7 +28,7 @@ export class RegisterUser implements IUseCase<RegisterUserDto, void> {
       return Result.fail(new ConflictError('Email already registered'));
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await this.passwordService.hash(password);
 
     const userOrError = User.create({
       email,
