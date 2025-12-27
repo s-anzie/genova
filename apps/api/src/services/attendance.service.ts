@@ -7,6 +7,8 @@ import {
 } from '@repo/utils';
 import crypto from 'crypto';
 import { checkAssiduBadge } from './badge.service';
+import { createNotification, createBulkNotifications } from './notification.service';
+import { creditWallet } from './payment.service';
 
 const prisma = new PrismaClient();
 
@@ -295,6 +297,15 @@ export async function checkOutSession(data: CheckOutData): Promise<{
   // Get session
   const session = await prisma.tutoringSession.findUnique({
     where: { id: sessionId },
+    include: {
+      class: {
+        include: {
+          members: {
+            where: { isActive: true },
+          },
+        },
+      },
+    },
   });
 
   if (!session) {
@@ -317,12 +328,16 @@ export async function checkOutSession(data: CheckOutData): Promise<{
     throw new ValidationError('Cannot check out before session start time');
   }
 
-  // Record actual end time
+  // Mark absent students who didn't check in
+  await markAbsentStudents(sessionId);
+
+  // Record actual end time and mark as completed
   const updatedSession = await prisma.tutoringSession.update({
     where: { id: sessionId },
     data: {
       actualStart: session.actualStart || session.scheduledStart,
       actualEnd: now,
+      status: 'COMPLETED',
     },
   });
 
@@ -348,6 +363,9 @@ export async function checkOutSession(data: CheckOutData): Promise<{
       },
     });
   }
+
+  // Process payments based on attendance
+  await processSessionPayments(sessionId);
 
   return {
     session: updatedSession,
@@ -664,4 +682,232 @@ export async function updateAttendanceStatus(
   });
 
   return updatedAttendance;
+}
+
+/**
+ * Process payments based on attendance after session completion
+ * - Present students: payment goes to tutor (100%)
+ * - Absent students: refund 85%, keep 15% as platform fee
+ */
+export async function processSessionPayments(sessionId: string): Promise<void> {
+  try {
+    const session = await prisma.tutoringSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        tutor: true,
+        consortium: {
+          include: {
+            members: true,
+          },
+        },
+        class: {
+          include: {
+            members: {
+              include: {
+                student: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      return;
+    }
+
+    // Get all attendance records
+    const attendances = await prisma.attendance.findMany({
+      where: { sessionId: session.id },
+      include: {
+        student: true,
+      },
+    });
+
+    const notifications = [];
+
+    for (const attendance of attendances) {
+      // Find the transaction for this student
+      const transaction = await prisma.transaction.findFirst({
+        where: {
+          sessionId: session.id,
+          payerId: attendance.studentId,
+          status: 'PENDING',
+        },
+      });
+
+      if (!transaction) {
+        continue;
+      }
+
+      if (attendance.status === 'PRESENT') {
+        // Student was present - complete payment to tutor or consortium
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'COMPLETED',
+          },
+        });
+
+        const netAmount = transaction.netAmount.toNumber();
+
+        // Distribute funds based on session type
+        if (session.consortiumId && session.consortium) {
+          // Distribute to consortium members
+          for (const member of session.consortium.members) {
+            const memberAmount = (netAmount * member.revenueShare.toNumber()) / 100;
+            await creditWallet(member.tutorId, memberAmount);
+            
+            // Notify each consortium member
+            notifications.push({
+              userId: member.tutorId,
+              title: 'Paiement reçu',
+              message: `Vous avez reçu ${(memberAmount * 655.957).toFixed(0)} FCFA pour votre session de ${session.subject}.`,
+              type: 'PAYMENT_RECEIVED',
+              data: {
+                transactionId: transaction.id,
+                sessionId: session.id,
+                amount: memberAmount,
+              },
+            });
+          }
+        } else if (session.tutorId) {
+          // Credit single tutor wallet
+          await creditWallet(session.tutorId, netAmount);
+
+          // Notify tutor
+          notifications.push({
+            userId: session.tutorId,
+            title: 'Paiement reçu',
+            message: `Vous avez reçu ${(netAmount * 655.957).toFixed(0)} FCFA pour votre session de ${session.subject}.`,
+            type: 'PAYMENT_RECEIVED',
+            data: {
+              transactionId: transaction.id,
+              sessionId: session.id,
+              amount: netAmount,
+            },
+          });
+        }
+      } else {
+        // Student was absent - refund with policy (85% refund, 15% fee)
+        const amount = transaction.amount.toNumber();
+        const refundAmount = amount * 0.85;
+
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'REFUNDED',
+          },
+        });
+
+        // Refund to student's wallet using payment service
+        await creditWallet(attendance.studentId, refundAmount);
+
+        // Notify student
+        notifications.push({
+          userId: attendance.studentId,
+          title: 'Remboursement effectué',
+          message: `Vous avez été remboursé de ${(refundAmount * 655.957).toFixed(0)} FCFA car vous étiez absent à la session.`,
+          type: 'PAYMENT_REFUNDED',
+          data: {
+            transactionId: transaction.id,
+            sessionId: session.id,
+            amount: refundAmount,
+            reason: 'ABSENT',
+          },
+        });
+      }
+    }
+
+    // Send all notifications
+    if (notifications.length > 0) {
+      await createBulkNotifications(notifications);
+    }
+  } catch (error) {
+    console.error('Failed to process session payments:', error);
+    throw error;
+  }
+}
+
+/**
+ * Send notification to tutor when session starts
+ */
+export async function notifyTutorSessionStarted(sessionId: string): Promise<void> {
+  try {
+    const session = await prisma.tutoringSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        tutor: true,
+      },
+    });
+
+    if (!session || !session.tutorId) {
+      return;
+    }
+
+    await createNotification({
+      userId: session.tutorId,
+      title: 'Session commencée',
+      message: `Votre session de ${session.subject} a commencé. Générez le code de présence pour vos étudiants.`,
+      type: 'SESSION_STARTED',
+      data: {
+        sessionId: session.id,
+        action: 'MANAGE_ATTENDANCE',
+      },
+    });
+  } catch (error) {
+    console.error('Failed to notify tutor:', error);
+  }
+}
+
+/**
+ * Send notification to students to check in
+ * Called 5 minutes after session starts
+ */
+export async function notifyStudentsCheckIn(sessionId: string): Promise<void> {
+  try {
+    const session = await prisma.tutoringSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        class: {
+          include: {
+            members: {
+              include: {
+                student: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session || !session.class) {
+      return;
+    }
+
+    // Get students who haven't checked in yet
+    const attendance = await prisma.attendance.findMany({
+      where: {
+        sessionId: session.id,
+        status: { not: 'PRESENT' },
+      },
+    });
+
+    const notifications = attendance.map(att => ({
+      userId: att.studentId,
+      title: 'Confirmez votre présence',
+      message: `Votre session de ${session.subject} a commencé ! Confirmez votre présence maintenant.`,
+      type: 'CHECK_IN_REMINDER',
+      data: {
+        sessionId: session.id,
+        action: 'CHECK_IN',
+      },
+    }));
+
+    if (notifications.length > 0) {
+      await createBulkNotifications(notifications);
+    }
+  } catch (error) {
+    console.error('Failed to notify students:', error);
+  }
 }

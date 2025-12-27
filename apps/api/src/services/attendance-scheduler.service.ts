@@ -1,105 +1,158 @@
 import { PrismaClient } from '@prisma/client';
-import { markAbsentStudents } from './attendance.service';
+import { 
+  notifyTutorSessionStarted, 
+  notifyStudentsCheckIn,
+  markAbsentStudents,
+  processSessionPayments
+} from './attendance.service';
+import { createNotification } from './notification.service';
 import { logger } from '@repo/utils';
 
 const prisma = new PrismaClient();
 
 /**
- * Process sessions that have ended and mark absent students
- * This should be run periodically (e.g., every 5 minutes)
+ * Check for sessions that just started and send notifications to tutors
+ * Run this every minute
  */
-export async function processEndedSessions(): Promise<void> {
+export async function checkSessionsStarted(): Promise<void> {
   try {
     const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
 
-    // Find confirmed sessions that have ended but haven't been processed
-    const endedSessions = await prisma.tutoringSession.findMany({
+    // Find sessions that started in the last minute
+    const sessions = await prisma.tutoringSession.findMany({
       where: {
         status: 'CONFIRMED',
-        scheduledEnd: {
-          lt: now,
-        },
-      },
-      include: {
-        attendances: true,
-        class: {
-          include: {
-            members: {
-              where: { isActive: true },
-              select: { studentId: true },
-            },
-          },
+        scheduledStart: {
+          gte: oneMinuteAgo,
+          lte: now,
         },
       },
     });
 
-    logger.info(`Found ${endedSessions.length} ended sessions to process`);
-
-    for (const session of endedSessions) {
-      try {
-        // Check if all class members have attendance records
-        const classMembers = session.class.members.map(m => m.studentId);
-        const studentsWithAttendance = session.attendances.map(a => a.studentId);
-        const missingAttendance = classMembers.filter(
-          studentId => !studentsWithAttendance.includes(studentId)
-        );
-
-        if (missingAttendance.length > 0) {
-          logger.info(
-            `Marking ${missingAttendance.length} students as absent for session ${session.id}`
-          );
-          await markAbsentStudents(session.id);
-        }
-
-        // Update session status to COMPLETED if not already
-        if (session.status === 'CONFIRMED') {
-          await prisma.tutoringSession.update({
-            where: { id: session.id },
-            data: { status: 'COMPLETED' },
-          });
-          logger.info(`Updated session ${session.id} status to COMPLETED`);
-        }
-      } catch (error) {
-        logger.error(`Error processing session ${session.id}:`, error);
-        // Continue processing other sessions
-      }
+    for (const session of sessions) {
+      await notifyTutorSessionStarted(session.id);
+      logger.info(`Sent session started notification for session ${session.id}`);
     }
-
-    logger.info('Finished processing ended sessions');
   } catch (error) {
-    logger.error('Error in processEndedSessions:', error);
-    throw error;
+    logger.error('Error checking sessions started:', error);
   }
 }
 
 /**
- * Start the attendance scheduler
- * Runs every 5 minutes to process ended sessions
+ * Check for sessions that started 5 minutes ago and send check-in reminders to students
+ * Run this every minute
  */
-export function startAttendanceScheduler(): NodeJS.Timeout {
-  const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+export async function checkStudentCheckInReminders(): Promise<void> {
+  try {
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const sixMinutesAgo = new Date(now.getTime() - 6 * 60 * 1000);
 
-  logger.info('Starting attendance scheduler');
-
-  // Run immediately on startup
-  processEndedSessions().catch(error => {
-    logger.error('Error in initial attendance processing:', error);
-  });
-
-  // Then run every 5 minutes
-  const intervalId = setInterval(() => {
-    processEndedSessions().catch(error => {
-      logger.error('Error in scheduled attendance processing:', error);
+    // Find sessions that started 5 minutes ago
+    const sessions = await prisma.tutoringSession.findMany({
+      where: {
+        status: 'CONFIRMED',
+        scheduledStart: {
+          gte: sixMinutesAgo,
+          lte: fiveMinutesAgo,
+        },
+      },
     });
-  }, INTERVAL_MS);
 
-  return intervalId;
+    for (const session of sessions) {
+      await notifyStudentsCheckIn(session.id);
+      logger.info(`Sent check-in reminders for session ${session.id}`);
+    }
+  } catch (error) {
+    logger.error('Error checking student check-in reminders:', error);
+  }
 }
 
 /**
- * Stop the attendance scheduler
+ * Check for sessions that ended more than 20 minutes ago and auto-complete them
+ * This ensures payments are released even if tutor forgets to check out
+ * Run this every 5 minutes
  */
-export function stopAttendanceScheduler(intervalId: NodeJS.Timeout): void {
-  logger.info('Stopping attendance scheduler');
-  clearInterval(intervalId);
+export async function autoCompleteOverdueSessions(): Promise<void> {
+  try {
+    const now = new Date();
+    const twentyMinutesAgo = new Date(now.getTime() - 20 * 60 * 1000);
+
+    // Find confirmed sessions that ended more than 20 minutes ago
+    const sessions = await prisma.tutoringSession.findMany({
+      where: {
+        status: 'CONFIRMED',
+        scheduledEnd: {
+          lte: twentyMinutesAgo,
+        },
+      },
+      include: {
+        tutor: true,
+      },
+    });
+
+    for (const session of sessions) {
+      try {
+        // Mark absent students who didn't check in
+        await markAbsentStudents(session.id);
+
+        // Mark session as completed
+        await prisma.tutoringSession.update({
+          where: { id: session.id },
+          data: {
+            actualStart: session.actualStart || session.scheduledStart,
+            actualEnd: session.scheduledEnd,
+            status: 'COMPLETED',
+          },
+        });
+
+        // Process payments based on attendance
+        await processSessionPayments(session.id);
+        
+        // Notify tutor about auto-completion
+        if (session.tutorId) {
+          await createNotification({
+            userId: session.tutorId,
+            title: 'Session clôturée automatiquement',
+            message: `Votre session de ${session.subject} a été clôturée automatiquement 20 minutes après sa fin. Les paiements ont été traités.`,
+            type: 'SESSION_AUTO_COMPLETED',
+            data: {
+              sessionId: session.id,
+              action: 'VIEW_SESSION',
+            },
+          });
+        }
+        
+        logger.info(`Auto-completed overdue session ${session.id}`);
+      } catch (error) {
+        logger.error(`Error auto-completing session ${session.id}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error('Error checking overdue sessions:', error);
+  }
+}
+
+/**
+ * Initialize all schedulers
+ * Call this when the server starts
+ */
+export function initializeAttendanceSchedulers(): void {
+  // Check for sessions that just started every minute
+  setInterval(checkSessionsStarted, 60 * 1000);
+  logger.info('Attendance scheduler: Session started notifications enabled');
+
+  // Check for check-in reminders every minute
+  setInterval(checkStudentCheckInReminders, 60 * 1000);
+  logger.info('Attendance scheduler: Check-in reminder notifications enabled');
+
+  // Check for overdue sessions every 5 minutes
+  setInterval(autoCompleteOverdueSessions, 5 * 60 * 1000);
+  logger.info('Attendance scheduler: Auto-complete overdue sessions enabled (20 min grace period)');
+
+  // Run immediately on startup
+  checkSessionsStarted();
+  checkStudentCheckInReminders();
+  autoCompleteOverdueSessions();
 }

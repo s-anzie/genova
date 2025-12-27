@@ -126,7 +126,8 @@ export async function createPaymentIntent(data: PaymentIntentData) {
 }
 
 /**
- * Confirm a payment and distribute funds
+ * Confirm a payment and hold funds in pending state
+ * Funds will be released when session completes and attendance is confirmed
  */
 export async function confirmPayment(data: PaymentConfirmationData) {
   const { paymentIntentId, sessionId } = data;
@@ -168,23 +169,15 @@ export async function confirmPayment(data: PaymentConfirmationData) {
       return transaction;
     }
 
-    // Update transaction status
+    // Update transaction status to PENDING (not COMPLETED yet)
+    // Funds will be released when session completes and attendance is confirmed
     const updatedTransaction = await prisma.transaction.update({
       where: { id: transaction.id },
-      data: { status: TransactionStatus.COMPLETED },
+      data: { status: TransactionStatus.PENDING },
     });
 
-    // Distribute funds
-    if (transaction.session?.consortiumId) {
-      // Distribute to consortium members
-      await distributeConsortiumRevenue(
-        transaction.session.consortium!,
-        transaction.netAmount.toNumber()
-      );
-    } else if (transaction.session?.tutorId) {
-      // Credit tutor wallet
-      await creditWallet(transaction.session.tutorId, transaction.netAmount.toNumber());
-    }
+    // DO NOT distribute funds yet - they remain pending until session completion
+    // Funds will be released when tutor checks out and attendance is confirmed
 
     // Update session status to confirmed
     await prisma.tutoringSession.update({
@@ -192,7 +185,7 @@ export async function confirmPayment(data: PaymentConfirmationData) {
       data: { status: 'CONFIRMED' },
     });
 
-    logger.info('Payment confirmed and funds distributed', {
+    logger.info('Payment confirmed - funds held in pending state', {
       transactionId: transaction.id,
       amount: transaction.amount.toNumber(),
     });
@@ -225,6 +218,7 @@ export async function confirmPayment(data: PaymentConfirmationData) {
 
 /**
  * Process payment using wallet balance (bypass Stripe)
+ * Funds are debited from payer and held in PENDING state until session completion
  * This is a transactional operation - either everything succeeds or everything fails
  */
 export async function processWalletPayment(data: PaymentIntentData) {
@@ -286,7 +280,8 @@ export async function processWalletPayment(data: PaymentIntentData) {
         },
       });
 
-      // Create completed transaction record
+      // Create PENDING transaction record (funds held until session completion)
+      // Funds will be released to tutor when session completes and attendance is confirmed
       const transaction = await tx.transaction.create({
         data: {
           sessionId,
@@ -296,36 +291,13 @@ export async function processWalletPayment(data: PaymentIntentData) {
           platformFee,
           netAmount,
           paymentMethod: 'wallet',
-          status: TransactionStatus.COMPLETED,
+          status: TransactionStatus.PENDING,
           transactionType: TransactionType.SESSION_PAYMENT,
         },
       });
 
-      // Distribute funds
-      if (session.consortiumId && session.consortium) {
-        // Distribute to consortium members
-        for (const member of session.consortium.members) {
-          const memberAmount = (netAmount * member.revenueShare.toNumber()) / 100;
-          await tx.user.update({
-            where: { id: member.tutorId },
-            data: {
-              walletBalance: {
-                increment: memberAmount,
-              },
-            },
-          });
-        }
-      } else if (session.tutorId) {
-        // Credit tutor wallet
-        await tx.user.update({
-          where: { id: session.tutorId },
-          data: {
-            walletBalance: {
-              increment: netAmount,
-            },
-          },
-        });
-      }
+      // DO NOT credit tutor wallet yet - funds remain pending until session completion
+      // Funds will be released when tutor checks out and attendance is confirmed
 
       // Update session status to confirmed
       await tx.tutoringSession.update({
@@ -336,7 +308,7 @@ export async function processWalletPayment(data: PaymentIntentData) {
       return { transaction, updatedPayer };
     });
 
-    logger.info('Wallet payment processed successfully', {
+    logger.info('Wallet payment processed - funds held in pending state', {
       transactionId: result.transaction.id,
       sessionId,
       amount,
@@ -422,6 +394,10 @@ export async function debitWallet(userId: string, amount: number) {
 
 /**
  * Get wallet balance for a user
+ * Returns total balance, available balance, and pending balance
+ * - Total balance: current wallet balance
+ * - Pending balance: money waiting to be received from completed sessions
+ * - Available balance: total - pending (money that can be withdrawn)
  */
 export async function getWalletBalance(userId: string): Promise<WalletBalance> {
   const user = await prisma.user.findUnique({
@@ -432,7 +408,7 @@ export async function getWalletBalance(userId: string): Promise<WalletBalance> {
     throw new ValidationError('User not found');
   }
 
-  // Get pending transactions
+  // Get pending transactions where user is the payee (receiving money)
   const pendingTransactions = await prisma.transaction.findMany({
     where: {
       payeeId: userId,
@@ -446,7 +422,10 @@ export async function getWalletBalance(userId: string): Promise<WalletBalance> {
   );
 
   const totalBalance = user.walletBalance.toNumber();
-  const availableBalance = totalBalance - pendingBalance;
+  
+  // Available balance is the current wallet balance
+  // Pending balance is separate - it's money that will be added after sessions complete
+  const availableBalance = totalBalance;
 
   return {
     totalBalance,

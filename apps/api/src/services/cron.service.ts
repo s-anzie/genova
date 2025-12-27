@@ -1,12 +1,14 @@
 import { logger } from '@repo/utils';
 import { processExpiredSubscriptions } from './subscription.service';
 import { scheduleDailySessionGeneration, stopDailySessionGeneration } from './background-jobs.service';
+import { initializeAttendanceSchedulers } from './attendance-scheduler.service';
 
 /**
  * Initialize all cron jobs
  * 
  * This initializes:
  * - Daily session generation job (runs at 2 AM UTC)
+ * - Attendance notifications (session started, check-in reminders)
  * - Expired subscription processing (placeholder for future implementation)
  */
 export function initializeCronJobs() {
@@ -14,6 +16,9 @@ export function initializeCronJobs() {
   
   // Initialize daily session generation job
   scheduleDailySessionGeneration();
+  
+  // Initialize attendance notification schedulers
+  initializeAttendanceSchedulers();
   
   logger.info('All cron jobs initialized');
   logger.info('To process expired subscriptions, call POST /api/subscriptions/process-expired');
