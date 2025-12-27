@@ -58,12 +58,14 @@ import reviewRoutes from './routes/review.routes';
 import schedulingRoutes from './routes/scheduling.routes';
 import notificationRoutes from './routes/notification.routes';
 import suggestionRoutes from './routes/suggestion.routes';
+import v2Routes from './routes/v2';
 
 app.get('/api', (_req, res) => {
   res.json({ message: 'Genova API', version: '1.0.0' });
 });
 
 // Mount routes
+app.use('/api/v2', v2Routes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/classes', classRoutes);
