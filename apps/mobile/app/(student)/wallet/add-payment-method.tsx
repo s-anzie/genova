@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,26 +7,42 @@ import {
   TextInput,
   Alert,
   StyleSheet,
-  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Smartphone } from 'lucide-react-native';
+import { Smartphone } from 'lucide-react-native';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
-
-type MobileMoneyProvider = 'orange' | 'mtn' | 'moov';
+import { PageHeader } from '@/components/PageHeader';
+import { ApiClient } from '@/utils/api';
+import { MobileMoneyOperator } from '@/types/api';
 
 export default function AddPaymentMethodScreen() {
   const router = useRouter();
-  const [selectedProvider, setSelectedProvider] = useState<MobileMoneyProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [operators, setOperators] = useState<MobileMoneyOperator[]>([]);
+  const [loadingOperators, setLoadingOperators] = useState(true);
 
-  const providers = [
-    { id: 'orange' as MobileMoneyProvider, name: 'Orange Money', color: '#FF6600', bgColor: 'rgba(255, 102, 0, 0.1)' },
-    { id: 'mtn' as MobileMoneyProvider, name: 'MTN Mobile Money', color: '#FFCC00', bgColor: 'rgba(255, 204, 0, 0.1)' },
-    { id: 'moov' as MobileMoneyProvider, name: 'Moov Money', color: '#009FE3', bgColor: 'rgba(0, 159, 227, 0.1)' },
-  ];
+  useEffect(() => {
+    loadOperators();
+  }, []);
+
+  const loadOperators = async () => {
+    try {
+      setLoadingOperators(true);
+      const response = await ApiClient.get<{ success: boolean; data: MobileMoneyOperator[] }>(
+        '/operators?country=CM'
+      );
+      setOperators(response.data);
+    } catch (error) {
+      console.error('Failed to load operators:', error);
+      Alert.alert('Erreur', 'Impossible de charger les opérateurs');
+    } finally {
+      setLoadingOperators(false);
+    }
+  };
 
   const formatPhoneNumber = (text: string) => {
     // Remove all non-numeric characters
@@ -73,9 +89,13 @@ export default function AddPaymentMethodScreen() {
 
     setLoading(true);
     try {
-      // TODO: Implement API call to save payment method
-      // For now, just simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const cleanPhone = phoneNumber.replace(/\s/g, '');
+      
+      await ApiClient.post('/payment-methods', {
+        operatorId: selectedProvider,
+        phoneNumber: cleanPhone,
+        accountName: accountName.trim(),
+      });
       
       Alert.alert(
         'Succès',
@@ -87,30 +107,39 @@ export default function AddPaymentMethodScreen() {
           },
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add payment method:', error);
-      Alert.alert('Erreur', 'Impossible d\'ajouter le compte');
+      Alert.alert('Erreur', error.message || 'Impossible d\'ajouter le compte');
     } finally {
       setLoading(false);
     }
   };
 
+  if (loadingOperators) {
+    return (
+      <View style={styles.container}>
+        <PageHeader 
+          title="Ajouter un compte" 
+          showBackButton 
+          variant="primary"
+          centerTitle
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Chargement des opérateurs...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ajouter un compte</Text>
-        <View style={styles.backButton} />
-      </View>
+      <PageHeader 
+        title="Ajouter un compte" 
+        showBackButton 
+        variant="primary"
+        centerTitle
+      />
 
       <ScrollView
         style={styles.content}
@@ -121,21 +150,21 @@ export default function AddPaymentMethodScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sélectionnez votre opérateur</Text>
           <View style={styles.providersGrid}>
-            {providers.map((provider) => (
+            {operators.map((operator) => (
               <TouchableOpacity
-                key={provider.id}
+                key={operator.id}
                 style={[
                   styles.providerCard,
-                  selectedProvider === provider.id && styles.providerCardActive,
-                  { borderColor: selectedProvider === provider.id ? provider.color : Colors.borderLight }
+                  selectedProvider === operator.id && styles.providerCardActive,
+                  { borderColor: selectedProvider === operator.id ? operator.color : Colors.borderLight }
                 ]}
-                onPress={() => setSelectedProvider(provider.id)}
+                onPress={() => setSelectedProvider(operator.id)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.providerIcon, { backgroundColor: provider.bgColor }]}>
-                  <Smartphone size={24} color={provider.color} strokeWidth={2} />
+                <View style={[styles.providerIcon, { backgroundColor: `${operator.color}15` }]}>
+                  <Smartphone size={18} color={operator.color} strokeWidth={2} />
                 </View>
-                <Text style={styles.providerName}>{provider.name}</Text>
+                <Text style={styles.providerName} numberOfLines={2}>{operator.displayName}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -189,7 +218,7 @@ export default function AddPaymentMethodScreen() {
           </Text>
         </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Spacing.xxxl }} />
       </ScrollView>
     </View>
   );
@@ -200,28 +229,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bgSecondary,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 50,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.primary,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.medium,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: -0.3,
+  loadingText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   content: {
     flex: 1,
@@ -239,33 +256,41 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   providersGrid: {
-    gap: Spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginHorizontal: -4,
   },
   providerCard: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xlarge,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
     borderWidth: 2,
+    width: '31.5%',
+    marginBottom: Spacing.xs,
+    minHeight: 85,
     ...Shadows.small,
   },
   providerCardActive: {
     borderWidth: 2,
   },
   providerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.medium,
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.small,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   providerName: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: '600',
     color: Colors.textPrimary,
-    flex: 1,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   inputContainer: {
     flexDirection: 'row',

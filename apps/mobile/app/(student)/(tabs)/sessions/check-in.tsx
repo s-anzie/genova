@@ -26,6 +26,7 @@ export default function CheckInScreen() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   const handleQRScan = async () => {
@@ -46,26 +47,35 @@ export default function CheckInScreen() {
       }
     }
 
+    setScanned(false);
     setScanning(true);
   };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
+    if (scanned || !scanning) {
+      return; // Prevent multiple scans
+    }
+
+    setScanned(true);
+
     if (!user) {
       Alert.alert('Erreur', 'Utilisateur non connecté');
       setScanning(false);
+      setScanned(false);
       return;
     }
 
     try {
       setLoading(true);
-      setScanning(false);
 
-      await ApiClient.post('/sessions/checkin', {
+      await ApiClient.post('/attendance/checkin', {
         sessionId,
         studentId: user.id,
-        method: 'QR',
+        method: 'qr',
         code: data,
       });
+
+      setScanning(false);
 
       Alert.alert('Succès', 'Check-in enregistré avec succès', [
         {
@@ -76,6 +86,7 @@ export default function CheckInScreen() {
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Impossible d\'enregistrer le check-in');
       setScanning(false);
+      setScanned(false);
     } finally {
       setLoading(false);
     }
@@ -94,10 +105,10 @@ export default function CheckInScreen() {
 
     try {
       setLoading(true);
-      await ApiClient.post('/sessions/checkin', {
+      await ApiClient.post('/attendance/checkin', {
         sessionId,
         studentId: user.id,
-        method: 'PIN',
+        method: 'pin',
         code: pin,
       });
 
@@ -129,7 +140,7 @@ export default function CheckInScreen() {
         <CameraView
           style={styles.camera}
           facing="back"
-          onBarcodeScanned={handleBarCodeScanned}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{
             barcodeTypes: ['qr'],
           }}

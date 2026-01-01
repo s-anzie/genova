@@ -208,6 +208,21 @@ export default function SessionDetailScreen() {
     return session.status === 'CONFIRMED' && now >= start && now <= end;
   };
 
+  const canManageAttendance = () => {
+    if (!session) return false;
+    const now = new Date();
+    const start = new Date(session.scheduledStart);
+    const end = new Date(session.scheduledEnd);
+    // Can manage attendance from 15 min before start until 30 minutes after end
+    const fifteenMinutesBeforeStart = new Date(start.getTime() - 15 * 60 * 1000);
+    const thirtyMinutesAfterEnd = new Date(end.getTime() + 30 * 60 * 1000);
+    return session.status === 'CONFIRMED' && now >= fifteenMinutesBeforeStart && now <= thirtyMinutesAfterEnd;
+  };
+
+  const handleManageAttendance = () => {
+    router.push(`/(tutor)/(tabs)/sessions/attendance?sessionId=${id}`);
+  };
+
   const canSubmitReport = () => {
     if (!session || !user) return false;
     return (
@@ -251,6 +266,7 @@ export default function SessionDetailScreen() {
           title="Détails de la session" 
           showBackButton
           variant="primary"
+          centerTitle
         />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Session introuvable</Text>
@@ -262,7 +278,7 @@ export default function SessionDetailScreen() {
   return (
     <View style={styles.container}>
       <PageHeader 
-        title="Détails de la session" 
+        title="Ma session" 
         subtitle={session.subject}
         showBackButton
         variant="primary"
@@ -464,6 +480,13 @@ export default function SessionDetailScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
+          {canManageAttendance() && (
+            <TouchableOpacity style={styles.primaryButton} onPress={handleManageAttendance}>
+              <CheckCircle size={20} color={Colors.white} />
+              <Text style={styles.primaryButtonText}>Gérer les présences</Text>
+            </TouchableOpacity>
+          )}
+
           {canCheckIn() && (
             <TouchableOpacity style={styles.primaryButton} onPress={handleCheckIn}>
               <QrCode size={20} color={Colors.white} />

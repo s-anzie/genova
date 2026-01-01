@@ -23,6 +23,7 @@ import {
   AlertCircle,
   ChevronRight,
   UserPlus,
+  CheckCircle,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
@@ -93,7 +94,7 @@ export default function SessionDetailScreen() {
   };
 
   const handleCheckIn = () => {
-    router.push(`/sessions/check-in?sessionId=${id}`);
+    router.push(`/(student)/(tabs)/sessions/check-in?sessionId=${id}`);
   };
 
   const handleSubmitReport = () => {
@@ -194,11 +195,20 @@ export default function SessionDetailScreen() {
   };
 
   const canCheckIn = () => {
-    if (!session) return false;
+    if (!session || !user) return false;
+    
+    // Check if current user has already checked in
+    const userAttendance = attendance.find(att => att.studentId === user.id);
+    if (userAttendance && userAttendance.status === 'PRESENT') {
+      return false; // Already checked in
+    }
+    
     const now = new Date();
     const start = new Date(session.scheduledStart);
     const end = new Date(session.scheduledEnd);
-    return session.status === 'CONFIRMED' && now >= start && now <= end;
+    // Can check in from session start until 15 minutes after end
+    const fifteenMinutesAfterEnd = new Date(end.getTime() + 15 * 60 * 1000);
+    return session.status === 'CONFIRMED' && now >= start && now <= fifteenMinutesAfterEnd;
   };
 
   const canSubmitReport = () => {
@@ -225,7 +235,7 @@ export default function SessionDetailScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <PageHeader title="Détails de la session" showBackButton variant="primary" />
+        <PageHeader title="Ma session" showBackButton variant="primary" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -371,28 +381,18 @@ export default function SessionDetailScreen() {
           </View>
         )}
 
-        {/* Attendance */}
-        {attendance.length > 0 && (
+        {/* Attendance Status for Current User */}
+        {user && attendance.find(att => att.studentId === user.id && att.status === 'PRESENT') && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Présences</Text>
-            {attendance.map((att) => (
-              <View key={att.id} style={styles.attendanceRow}>
-                <Text style={styles.attendanceStudent}>
-                  {att.student?.firstName} {att.student?.lastName}
+            <View style={styles.attendanceConfirmedCard}>
+              <CheckCircle size={24} color={Colors.success} strokeWidth={2.5} />
+              <View style={styles.attendanceConfirmedInfo}>
+                <Text style={styles.attendanceConfirmedTitle}>Présence confirmée</Text>
+                <Text style={styles.attendanceConfirmedText}>
+                  Vous avez confirmé votre présence à cette session
                 </Text>
-                <View style={[
-                  styles.attendanceBadge,
-                  { backgroundColor: att.status === 'PRESENT' ? Colors.success + '15' : Colors.error + '15' }
-                ]}>
-                  <Text style={[
-                    styles.attendanceStatus,
-                    { color: att.status === 'PRESENT' ? Colors.success : Colors.error }
-                  ]}>
-                    {att.status === 'PRESENT' ? 'Présent' : 'Absent'}
-                  </Text>
-                </View>
               </View>
-            ))}
+            </View>
           </View>
         )}
 
@@ -455,9 +455,9 @@ export default function SessionDetailScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           {canCheckIn() && (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleCheckIn}>
-              <QrCode size={20} color={Colors.white} strokeWidth={2} />
-              <Text style={styles.primaryButtonText}>Check-in</Text>
+            <TouchableOpacity style={styles.checkInButton} onPress={handleCheckIn}>
+              <CheckCircle size={22} color={Colors.white} strokeWidth={2.5} />
+              <Text style={styles.checkInButtonText}>Confirmer ma présence</Text>
             </TouchableOpacity>
           )}
 
@@ -840,6 +840,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  attendanceConfirmedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.md,
+    backgroundColor: Colors.success + '10',
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.success + '30',
+  },
+  attendanceConfirmedInfo: {
+    flex: 1,
+  },
+  attendanceConfirmedTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.success,
+    marginBottom: 2,
+  },
+  attendanceConfirmedText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
   reportItem: {
     gap: 6,
   },
@@ -878,6 +902,21 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: Spacing.sm,
     marginTop: Spacing.sm,
+  },
+  checkInButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.success,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.large,
+    ...Shadows.medium,
+  },
+  checkInButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.white,
   },
   primaryButton: {
     flexDirection: 'row',

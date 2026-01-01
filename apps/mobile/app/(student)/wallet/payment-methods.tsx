@@ -6,17 +6,17 @@ import {
   ScrollView,
   Alert,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, CreditCard, Plus } from 'lucide-react-native';
+import { CreditCard, Plus } from 'lucide-react-native';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { AddPaymentMethodModal } from '@/components/wallet/AddPaymentMethodModal';
 import { PaymentMethodCard } from '@/components/wallet/PaymentMethodCard';
 import { ApiClient } from '@/utils/api';
 import { PaymentMethod, MobileMoneyOperator } from '@/types/api';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function PaymentMethodsScreen() {
   const router = useRouter();
@@ -142,20 +142,12 @@ export default function PaymentMethodsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mes comptes</Text>
-        <View style={styles.backButton} />
-      </View>
+      <PageHeader 
+        title="Mes comptes" 
+        showBackButton 
+        variant="primary"
+        centerTitle
+      />
 
       <ScrollView
         style={styles.content}
@@ -228,29 +220,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textSecondary,
     fontWeight: '500',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 50,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.primary,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.medium,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: -0.3,
   },
   content: {
     flex: 1,

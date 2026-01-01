@@ -25,6 +25,10 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
   const endTime = new Date(session.scheduledEnd);
   const isOngoing = now >= startTime && now <= endTime;
   
+  // Check if check-in is needed (session started and not yet checked in)
+  const fifteenMinutesAfterEnd = new Date(endTime.getTime() + 15 * 60 * 1000);
+  const needsCheckIn = session.status === 'CONFIRMED' && now >= startTime && now <= fifteenMinutesAfterEnd;
+  
   // Check if session is urgent (< 24h and no tutor)
   // Validates: Requirement 4.5
   const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
@@ -110,10 +114,18 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
       style={[
         styles.sessionCard,
         isUrgent && styles.urgentCard, // Highlight urgent sessions
+        needsCheckIn && styles.checkInNeededCard, // Highlight sessions needing check-in
       ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {/* Check-in Needed Badge - Top Right */}
+      {needsCheckIn && (
+        <View style={styles.checkInBadge}>
+          <Text style={styles.checkInText}>✓ Confirmer présence</Text>
+        </View>
+      )}
+
       {/* Urgent Badge - Top Left */}
       {isUrgent && (
         <View style={styles.urgentBadge}>
@@ -353,6 +365,28 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.error,
     backgroundColor: Colors.error + '05',
+  },
+  checkInNeededCard: {
+    borderWidth: 2,
+    borderColor: Colors.success,
+    backgroundColor: Colors.success + '05',
+  },
+  checkInBadge: {
+    position: 'absolute',
+    top: -8,
+    right: Spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
+    backgroundColor: Colors.success,
+    zIndex: 10,
+    ...Shadows.small,
+  },
+  checkInText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.5,
   },
   urgentBadge: {
     position: 'absolute',

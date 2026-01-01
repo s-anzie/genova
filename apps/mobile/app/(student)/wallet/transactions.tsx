@@ -8,14 +8,14 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
-  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Calendar } from 'lucide-react-native';
+import { ArrowUpRight, ArrowDownLeft, Calendar } from 'lucide-react-native';
 import { ApiClient } from '@/utils/api';
 import { TransactionResponse } from '@/types/api';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { formatEurAsFcfa } from '@/utils/currency';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function TransactionsScreen() {
   const router = useRouter();
@@ -131,20 +131,12 @@ export default function TransactionsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historique</Text>
-        <View style={styles.backButton} />
-      </View>
+      <PageHeader 
+        title="Historique" 
+        showBackButton 
+        variant="primary"
+        centerTitle
+      />
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -275,29 +267,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textSecondary,
     fontWeight: '500',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 60,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.primary,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: -0.3,
   },
   filterContainer: {
     flexDirection: 'row',

@@ -505,3 +505,74 @@ export interface AvailableSessionSuggestion {
     };
   };
 }
+
+// Marketplace Types
+export interface ShopProductResponse {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string | null;
+  productType: 'BOOK' | 'EXAM' | 'FLASHCARDS' | 'VIDEO' | 'OTHER';
+  subject: string;
+  educationLevel: string;
+  price: number;
+  fileUrl: string | null;
+  previewUrl: string | null;
+  downloadsCount: number;
+  rating: number;
+  isActive: boolean;
+  createdAt: Date;
+  seller?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface CreateProductData {
+  title: string;
+  description?: string;
+  productType: 'BOOK' | 'EXAM' | 'FLASHCARDS' | 'VIDEO' | 'OTHER';
+  subject: string;
+  educationLevel: string;
+  price: number;
+  fileUrl?: string;
+  previewUrl?: string;
+}
+
+export interface UpdateProductData {
+  title?: string;
+  description?: string;
+  price?: number;
+  isActive?: boolean;
+}
+
+export interface ShopPurchaseResponse {
+  id: string;
+  productId: string;
+  buyerId: string;
+  amountPaid: number;
+  transactionId: string;
+  purchasedAt: Date;
+  product?: ShopProductResponse;
+}
+
+export interface ProductFilters {
+  subject?: string;
+  educationLevel?: string;
+  productType?: 'BOOK' | 'EXAM' | 'FLASHCARDS' | 'VIDEO' | 'OTHER';
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+  search?: string;
+}
+
+export interface SellerDashboard {
+  totalProducts: number;
+  activeProducts: number;
+  totalSales: number;
+  totalRevenue: number;
+  recentSales: ShopPurchaseResponse[];
+  topProducts: ShopProductResponse[];
+}

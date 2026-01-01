@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Home, Search, Calendar, TrendingUp, User } from 'lucide-react-native';
+import { Home, BookOpen, ShoppingBag, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 
 export default function StudentTabLayout() {
@@ -21,40 +21,29 @@ export default function StudentTabLayout() {
           title: 'Accueil',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Home size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <Home size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="search"
+        name="learn"
         options={{
-          title: 'Recherche',
+          title: 'Apprendre',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Search size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <BookOpen size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="sessions"
+        name="marketplace"
         options={{
-          title: 'Sessions',
+          title: 'Marketplace',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Calendar size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progrès',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <TrendingUp size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <ShoppingBag size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
@@ -62,12 +51,37 @@ export default function StudentTabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
+          title: 'Moi',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <User size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
+        }}
+      />
+      {/* Hidden tabs - accessible via navigation but not in tab bar */}
+      <Tabs.Screen
+        name="search"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="sessions"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="badges"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

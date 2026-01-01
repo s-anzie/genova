@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Home, Calendar, Users, DollarSign, User, Wallet } from 'lucide-react-native';
+import { Home, Calendar, ShoppingBag, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 
 export default function TutorTabLayout() {
@@ -21,7 +21,7 @@ export default function TutorTabLayout() {
           title: 'Accueil',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Home size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <Home size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
@@ -32,29 +32,18 @@ export default function TutorTabLayout() {
           title: 'Sessions',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Calendar size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="students"
+        name="marketplace"
         options={{
-          title: 'Étudiants',
+          title: 'Marketplace',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Users size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Portefeuil',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Wallet size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <ShoppingBag size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
         }}
@@ -62,12 +51,31 @@ export default function TutorTabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
+          title: 'Moi',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <User size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             </View>
           ),
+        }}
+      />
+      {/* Hidden tabs - accessible via navigation but not in tab bar */}
+      <Tabs.Screen
+        name="students"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="badges"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

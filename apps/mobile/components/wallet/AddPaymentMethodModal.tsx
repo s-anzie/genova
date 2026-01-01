@@ -135,10 +135,10 @@ export function AddPaymentMethodModal({ visible, onClose, onAdd, operators }: Ad
                     onPress={() => setSelectedOperator(operator)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.providerIcon, { backgroundColor: `${operator.color}20` }]}>
-                      <Smartphone size={24} color={operator.color} strokeWidth={2} />
+                    <View style={[styles.providerIcon, { backgroundColor: `${operator.color}15` }]}>
+                      <Smartphone size={16} color={operator.color} strokeWidth={2} />
                     </View>
-                    <Text style={styles.providerName}>{operator.displayName}</Text>
+                    <Text style={styles.providerName} numberOfLines={2} ellipsizeMode="tail">{operator.displayName}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -223,8 +223,8 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: BorderRadius.xxxlarge,
-    borderTopRightRadius: BorderRadius.xxxlarge,
+    borderTopLeftRadius: BorderRadius.xxlarge,
+    borderTopRightRadius: BorderRadius.xxlarge,
     maxHeight: '90%',
   },
   header: {
@@ -264,33 +264,40 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   providersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
   providerCard: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: BorderRadius.xlarge,
-    padding: Spacing.md,
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
     borderWidth: 2,
+    width: '31%',
+    minHeight: 75,
+    ...Shadows.small,
   },
   providerCardActive: {
-    backgroundColor: Colors.white,
     borderWidth: 2,
   },
   providerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.medium,
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.small,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   providerName: {
-    fontSize: 15,
+    fontSize: 10,
     fontWeight: '600',
     color: Colors.textPrimary,
-    flex: 1,
+    textAlign: 'center',
+    lineHeight: 13,
   },
   inputContainer: {
     flexDirection: 'row',

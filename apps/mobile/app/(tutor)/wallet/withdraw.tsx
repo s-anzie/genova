@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, DollarSign, AlertCircle } from 'lucide-react-native';
+import { DollarSign, AlertCircle } from 'lucide-react-native';
 import { useWallet } from '@/hooks/useWallet';
 import { formatEurAsFcfa, fcfaToEur, eurToFcfa } from '@/utils/currency';
+import { PageHeader } from '@/components/PageHeader';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 
 export default function WithdrawScreen() {
   const router = useRouter();
@@ -60,61 +63,56 @@ export default function WithdrawScreen() {
   };
 
   return (
-    <View className="flex-1 bg-bg-secondary">
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-[60px] pb-5 bg-primary border-b-0">
-        <TouchableOpacity
-          className="w-10 h-10 rounded-full bg-white/15 justify-center items-center"
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#FFFFFF" strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text className="text-lg font-bold text-white">Retirer des fonds</Text>
-        <View className="w-10" />
-      </View>
+    <View style={styles.container}>
+      <PageHeader 
+        title="Retirer des fonds" 
+        showBackButton 
+        variant="primary"
+        centerTitle
+      />
 
-      <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Available Balance */}
-        <View className="bg-primary rounded-2xl p-6 items-center mb-6">
-          <Text className="text-sm text-white/80 font-medium mb-2">Solde disponible</Text>
-          <Text className="text-4xl font-extrabold text-white">{formatEurAsFcfa(availableBalance)}</Text>
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>Solde disponible</Text>
+          <Text style={styles.balanceAmount}>{formatEurAsFcfa(availableBalance)}</Text>
         </View>
 
         {/* Amount Input */}
-        <View className="mb-6">
-          <Text className="text-base font-semibold text-text-primary mb-3">Montant à retirer</Text>
-          <View className="flex-row items-center bg-white rounded-xl px-4 py-4 border border-border">
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Montant à retirer</Text>
+          <View style={styles.inputContainer}>
             <DollarSign size={20} color="#666666" />
             <TextInput
-              className="flex-1 text-2xl font-bold text-text-primary ml-2"
+              style={styles.input}
               value={amount}
               onChangeText={setAmount}
               placeholder="0"
               keyboardType="decimal-pad"
               placeholderTextColor="#666666"
             />
-            <Text className="text-xl font-semibold text-text-secondary">FCFA</Text>
+            <Text style={styles.currency}>FCFA</Text>
           </View>
         </View>
 
         {/* Quick Amount Buttons */}
-        <View className="mb-6">
-          <Text className="text-base font-semibold text-text-primary mb-3">Montants rapides</Text>
-          <View className="flex-row gap-3">
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Montants rapides</Text>
+          <View style={styles.quickAmounts}>
             {[1000, 2500, 5000, 10000].map((valueInFcfa) => (
               <TouchableOpacity
                 key={valueInFcfa}
-                className={`flex-1 py-3 rounded-xl border ${
-                  amount === valueInFcfa.toString()
-                    ? 'bg-primary border-primary'
-                    : 'bg-white border-border'
-                } items-center`}
+                style={[
+                  styles.quickButton,
+                  amount === valueInFcfa.toString() && styles.quickButtonActive
+                ]}
                 onPress={() => setQuickAmount(valueInFcfa)}
               >
                 <Text
-                  className={`text-sm font-semibold ${
-                    amount === valueInFcfa.toString() ? 'text-white' : 'text-text-primary'
-                  }`}
+                  style={[
+                    styles.quickButtonText,
+                    amount === valueInFcfa.toString() && styles.quickButtonTextActive
+                  ]}
                 >
                   {valueInFcfa}
                 </Text>
@@ -124,13 +122,13 @@ export default function WithdrawScreen() {
         </View>
 
         {/* Info Card */}
-        <View className="flex-row bg-white rounded-xl p-4 gap-3 mb-6">
+        <View style={styles.infoCard}>
           <AlertCircle size={20} color="#0d7377" />
-          <View className="flex-1">
-            <Text className="text-sm font-semibold text-text-primary mb-2">
+          <View style={styles.infoContent}>
+            <Text style={styles.infoTitle}>
               Informations importantes
             </Text>
-            <Text className="text-[13px] text-text-secondary leading-5">
+            <Text style={styles.infoText}>
               • Montant minimum : {eurToFcfa(1.52).toLocaleString('fr-FR')} FCFA{'\n'}
               • Délai de traitement : 24-48 heures{'\n'}
               • Retrait via Orange Money ou MTN MoMo
@@ -140,17 +138,145 @@ export default function WithdrawScreen() {
 
         {/* Withdraw Button */}
         <TouchableOpacity
-          className={`bg-primary rounded-xl py-4 items-center ${loading ? 'opacity-60' : ''}`}
+          style={[styles.withdrawButton, loading && styles.withdrawButtonDisabled]}
           onPress={handleWithdraw}
           disabled={loading}
         >
-          <Text className="text-base font-bold text-white">
+          <Text style={styles.withdrawButtonText}>
             {loading ? 'Traitement...' : 'Retirer'}
           </Text>
         </TouchableOpacity>
 
-        <View className="h-10" />
+        <View style={{ height: Spacing.xl }} />
       </ScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bgSecondary,
+  },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: Spacing.lg,
+  },
+  balanceCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.xlarge,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    ...Shadows.medium,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  balanceAmount: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  section: {
+    marginBottom: Spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xlarge,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    ...Shadows.small,
+  },
+  input: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginLeft: 8,
+  },
+  currency: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  quickAmounts: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  quickButton: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.xlarge,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    ...Shadows.small,
+  },
+  quickButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  quickButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  quickButtonTextActive: {
+    color: Colors.white,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xlarge,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+    ...Shadows.small,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  withdrawButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.xlarge,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    ...Shadows.medium,
+  },
+  withdrawButtonDisabled: {
+    opacity: 0.6,
+  },
+  withdrawButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+});

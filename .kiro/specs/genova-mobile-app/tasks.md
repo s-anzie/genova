@@ -573,7 +573,7 @@ This implementation plan breaks down the Genova mobile tutoring platform into di
   - Build statistics summary screen
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 31. Build mobile app gamification screens
+- [x] 31. Build mobile app gamification screens
   - Create badge collection display
   - Build badge detail views
   - Implement loyalty points display
@@ -581,7 +581,7 @@ This implementation plan breaks down the Genova mobile tutoring platform into di
   - Build leaderboard screen (optional)
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [ ] 32. Build mobile app marketplace screens
+- [x] 32. Build mobile app marketplace screens
   - Create product catalog with filters
   - Build product detail view with preview
   - Implement purchase flow

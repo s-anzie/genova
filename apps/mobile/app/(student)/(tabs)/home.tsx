@@ -21,6 +21,9 @@ import {
   Wallet,
   User,
   Star,
+  ShoppingBag,
+  Users,
+  Target,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
@@ -272,48 +275,91 @@ export default function StudentHomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Quick Actions */}
+        {/* Services Grid */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Actions rapides</Text>
-          <View style={styles.quickActions}>
+          <Text style={styles.sectionTitle}>Services</Text>
+          <View style={styles.servicesGrid}>
             <TouchableOpacity
-              style={styles.actionCard}
+              style={styles.serviceCard}
               onPress={() => router.push('/(student)/(tabs)/search')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: Colors.primary + '15' }]}>
-                <Search size={24} color={Colors.primary} strokeWidth={2} />
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.primary + '15' }]}>
+                <Search size={28} color={Colors.primary} strokeWidth={2} />
               </View>
-              <Text style={styles.actionText}>Trouver un tuteur</Text>
+              <Text style={styles.serviceText}>Trouver{'\n'}Tuteur</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={styles.serviceCard}
+              onPress={() => router.push('/(student)/(tabs)/marketplace')}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.accent1 + '15' }]}>
+                <ShoppingBag size={28} color={Colors.accent1} strokeWidth={2} />
+              </View>
+              <Text style={styles.serviceText}>Market{'\n'}place</Text>
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>NEW</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.serviceCard}
+              onPress={() => router.push('/(student)/classes')}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.secondary + '15' }]}>
+                <Users size={28} color={Colors.secondary} strokeWidth={2} />
+              </View>
+              <Text style={styles.serviceText}>Mes{'\n'}Classes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.serviceCard}
               onPress={() => router.push('/(student)/(tabs)/sessions')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Calendar size={24} color={Colors.accent2} strokeWidth={2} />
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.primary + '15' }]}>
+                <Calendar size={28} color={Colors.primary} strokeWidth={2} />
               </View>
-              <Text style={styles.actionText}>Mes sessions</Text>
+              <Text style={styles.serviceText}>Mes{'\n'}Sessions</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={styles.serviceCard}
               onPress={() => router.push('/(student)/(tabs)/progress')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: Colors.success + '15' }]}>
-                <TrendingUp size={24} color={Colors.success} strokeWidth={2} />
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
+                <TrendingUp size={28} color={Colors.success} strokeWidth={2} />
               </View>
-              <Text style={styles.actionText}>Mes progrès</Text>
+              <Text style={styles.serviceText}>Mes{'\n'}Progrès</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={styles.serviceCard}
+              onPress={() => router.push('/(student)/(tabs)/badges')}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
+                <Award size={28} color={Colors.accent2} strokeWidth={2} />
+              </View>
+              <Text style={styles.serviceText}>Mes{'\n'}Badges</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.serviceCard}
+              onPress={() => router.push('/(student)/wallet')}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
+                <Wallet size={28} color={Colors.success} strokeWidth={2} />
+              </View>
+              <Text style={styles.serviceText}>Porte{'\n'}feuille</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.serviceCard}
               onPress={() => router.push('/(student)/(tabs)/progress/goals')}
             >
-              <View style={[styles.actionIcon, { backgroundColor: Colors.error + '15' }]}>
-                <Award size={24} color={Colors.error} strokeWidth={2} />
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.error + '15' }]}>
+                <Target size={28} color={Colors.error} strokeWidth={2} />
               </View>
-              <Text style={styles.actionText}>Mes objectifs</Text>
+              <Text style={styles.serviceText}>Mes{'\n'}Objectifs</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -548,6 +594,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.sm,
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  serviceCard: {
+    width: '23%',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xlarge,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.xs,
+    ...Shadows.small,
+    position: 'relative',
+  },
+  serviceIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  serviceText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  newBadge: {
+    position: 'absolute',
+    top: -4,
+    right: 4,
+    backgroundColor: Colors.error,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  newBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.5,
   },
   actionCard: {
     width: '48%',
