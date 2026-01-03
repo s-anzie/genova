@@ -25,7 +25,8 @@ model User {
   address               String?
   city                  String?
   postalCode            String?
-  country               String?
+  country               String?          // Nom du pays (legacy)
+  countryCode           String?          // Code ISO 3166-1 alpha-2 (ex: SN, CM, CI)
   preferredLanguage     String           @default("en")
   role                  Role             @default(STUDENT)
   subscriptionType      SubscriptionType @default(FREE)
@@ -56,6 +57,7 @@ model User {
   paymentMethods        PaymentMethod[]
   badges                UserBadge[]
   academicResults       AcademicResult[]
+  learningGoals         LearningGoal[]       @relation("StudentGoals")
   shopProducts          ShopProduct[]
   shopPurchases         ShopPurchase[]
   notifications         Notification[]
@@ -102,16 +104,17 @@ model PasswordReset {
 // ============================================================================
 
 model StudentProfile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  educationLevel    String
-  educationDetails  Json?    // Detailed education information (system, class, series)
-  schoolName        String?
-  parentEmail       String?
-  parentPhone       String?
-  learningGoals     String?
-  preferredSubjects String[]
-  budgetPerHour     Decimal? @db.Decimal(10, 2)
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  educationLevel        String
+  educationDetails      Json?    // Detailed education information (system, class, series)
+  schoolName            String?
+  parentEmail           String?
+  parentPhone           String?
+  learningGoals         String?
+  preferredSubjects     String[]
+  budgetPerHour         Decimal? @db.Decimal(10, 2)
+  onboardingCompleted   Boolean  @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -119,24 +122,25 @@ model StudentProfile {
 }
 
 model TutorProfile {
-  id                     String   @id @default(uuid())
-  userId                 String   @unique
+  id                     String       @id @default(uuid())
+  userId                 String       @unique
   bio                    String?
-  experienceYears        Int      @default(0)
-  hourlyRate             Decimal  @db.Decimal(10, 2)
+  experienceYears        Int          @default(0)
+  hourlyRate             Decimal      @db.Decimal(10, 2)
   subjects               String[]
   educationLevels        String[]
   languages              String[]
   teachingMode           TeachingMode
   serviceRadius          Int?
-  diplomas               Json     @default("[]")
-  availability           Json     @default("{}")
-  teachingSkillsDetails  Json?    // Detailed teaching skills structure
-  totalHoursTaught       Decimal  @default(0) @db.Decimal(10, 2)
-  averageRating          Decimal  @default(0) @db.Decimal(3, 2)
-  totalReviews           Int      @default(0)
-  isVerified             Boolean  @default(false)
+  diplomas               Json         @default("[]")
+  availability           Json         @default("{}")
+  teachingSkillsDetails  Json?        // Detailed teaching skills structure
+  totalHoursTaught       Decimal      @default(0) @db.Decimal(10, 2)
+  averageRating          Decimal      @default(0) @db.Decimal(3, 2)
+  totalReviews           Int          @default(0)
+  isVerified             Boolean      @default(false)
   verificationDocuments  String[]
+  onboardingCompleted    Boolean      @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -556,6 +560,32 @@ model AcademicResult {
   @@map("academic_results")
 }
 
+model LearningGoal {
+  id              String   @id @default(uuid())
+  studentId       String
+  classId         String?  // Optional: link to specific class
+  subject         String   // Subject name
+  educationLevel  Json?    // Education level details (level, system, class, series)
+  title           String
+  description     String?
+  targetScore     Decimal  @db.Decimal(5, 2)
+  currentScore    Decimal  @default(0) @db.Decimal(5, 2)
+  deadline        DateTime
+  isCompleted     Boolean  @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student User @relation("StudentGoals", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([classId])
+  @@index([subject])
+  @@index([deadline])
+  @@index([isCompleted])
+  @@map("learning_goals")
+}
+
 // ============================================================================
 // MARKETPLACE
 // ============================================================================
@@ -722,4 +752,101 @@ enum RequestStatus {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+// ============================================================================
+// REGIONAL CONFIGURATION
+// ============================================================================
+
+model Country {
+  id            String   @id @default(uuid())
+  code          String   @unique // ISO 3166-1 alpha-2 (e.g., SN, CM, CI)
+  name          String
+  phoneCode     String   // e.g., +221
+  phoneRegex    String   // Regex pattern for phone validation
+  phoneFormat   String   // Display format (e.g., +221 XX XXX XX XX)
+  phoneExample  String   // Example phone number
+  currencyCode  String   // ISO 4217 (e.g., XOF, XAF)
+  currencyName  String   // e.g., Franc CFA
+  currencySymbol String  // e.g., FCFA
+  timezone      String   // IANA timezone (e.g., Africa/Dakar)
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  cities        City[]
+  operators     PhoneOperator[]
+  languages     CountryLanguage[]
+  educationSystems CountryEducationSystem[]
+
+  @@map("countries")
+}
+
+model City {
+  id         String   @id @default(uuid())
+  countryId  String
+  name       String
+  region     String?  // State/Province/Region
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("cities")
+}
+
+model PhoneOperator {
+  id         String   @id @default(uuid())
+  countryId  String
+  name       String   // e.g., Orange, MTN
+  prefixes   String[] // e.g., ["77", "78"]
+  regex      String   // Specific regex for this operator
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@index([countryId])
+  @@map("phone_operators")
+}
+
+model CountryLanguage {
+  id         String   @id @default(uuid())
+  countryId  String
+  name       String   // e.g., Français, Wolof
+  code       String?  // ISO 639-1 (e.g., fr, wo)
+  isOfficial Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("country_languages")
+}
+
+model CountryEducationSystem {
+  id         String   @id @default(uuid())
+  countryId  String
+  name       String   // e.g., FRENCH, SENEGALESE, ANGLOPHONE
+  label      String   // Display name
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("country_education_systems")
 }

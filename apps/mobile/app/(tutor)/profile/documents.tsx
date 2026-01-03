@@ -44,7 +44,8 @@ export default function DocumentsScreen() {
   const loadDocuments = async () => {
     try {
       setIsLoading(true);
-      const profile = await ApiClient.get<TutorProfileResponse>(`/tutors/profile/${user?.id}`);
+      const response = await ApiClient.get<{ success: boolean; data: TutorProfileResponse }>(`/profiles/tutor/${user?.id}`);
+      const profile = response.data;
       setUploadedDocuments(profile.verificationDocuments || []);
       setVerificationStatus(profile.isVerified ? 'verified' : 'pending');
     } catch (error: any) {
@@ -160,7 +161,7 @@ export default function DocumentsScreen() {
       // For now, we'll simulate the upload and use the URIs
       const documentUrls = documents.map((doc) => doc.uri);
 
-      await ApiClient.post(`/tutors/${user?.id}/documents`, {
+      await ApiClient.post(`/profiles/tutor/documents`, {
         documentUrls,
       });
 

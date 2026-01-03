@@ -3,11 +3,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { Platform } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/contexts/auth-context';
+import { AppProviders } from '@/contexts/app-providers';
 import { STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
+import { Colors } from '@/constants/colors';
 import "../global.css"
 
 export const unstable_settings = {
@@ -77,13 +81,20 @@ function RootLayoutNav() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
+  useEffect(() => {
+    // Configure navigation bar color on Android
+    if (Platform.OS === 'android') {
+      SystemUI.setBackgroundColorAsync(Colors.cream);
+    }
+  }, []);
+
   return (
     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
+        <AppProviders>
           <RootLayoutNav />
           <StatusBar style="light" backgroundColor="#0d7377" />
-        </AuthProvider>
+        </AppProviders>
       </ThemeProvider>
     </StripeProvider>
   );

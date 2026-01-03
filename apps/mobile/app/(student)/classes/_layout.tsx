@@ -6,7 +6,6 @@ export default function ClassesLayout() {
       screenOptions={{headerShown: false }}
       initialRouteName="index"
     >
-      <Stack.Screen name="index"/>
       <Stack.Screen name="create"/>
       <Stack.Screen name="[id]"/>
       <Stack.Screen name="invite"/>

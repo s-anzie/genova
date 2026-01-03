@@ -36,9 +36,10 @@ router.get('/tutors/suggestions/:sessionId', authenticate, async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to get tutor suggestions:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get tutor suggestions',
+    // Return empty array instead of error to prevent dashboard cascade failures
+    res.json({
+      success: true,
+      data: [],
     });
   }
 });
@@ -82,9 +83,10 @@ router.get('/sessions/available-suggestions', authenticate, async (req, res) => 
     });
   } catch (error) {
     logger.error('Failed to get session suggestions:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get session suggestions',
+    // Return empty array instead of error to prevent dashboard cascade failures
+    res.json({
+      success: true,
+      data: [],
     });
   }
 });

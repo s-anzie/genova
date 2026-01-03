@@ -26,7 +26,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/contexts/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
-import { ApiClient } from '@/utils/api';
+import { ApiClient, ApiClientClass } from '@/utils/api';
 import { SessionResponse, AvailableSessionSuggestion } from '@/types/api';
 import { eurToFcfa } from '@/utils/currency';
 
@@ -71,13 +71,19 @@ export default function TutorHomeScreen() {
       isLoadingRef.current = true;
       lastLoadTimeRef.current = now;
       setLoading(true);
-      const [sessionsRes, availableRes] = await Promise.all([
-        ApiClient.get<{ success: boolean; data: SessionResponse[]}>('/sessions'),
-        ApiClient.get<{ success: boolean; data: AvailableSessionSuggestion[] }>('/sessions/available-suggestions?limit=3').catch(() => ({ data: [] })),
-      ]);
       
-      const allSessions = sessionsRes.data;
+      // Load sessions first (critical)
+      const sessionsRes = await ApiClient.get<{ success: boolean; data: SessionResponse[]}>('/sessions');
+      const allSessions = sessionsRes.data || [];
 
+      // Load available sessions (non-critical, can fail)
+      let availableRes = { data: [] as AvailableSessionSuggestion[] };
+      try {
+        availableRes = await ApiClient.get<{ success: boolean; data: AvailableSessionSuggestion[] }>('/sessions/available-suggestions?limit=3');
+      } catch (error) {
+        console.warn('Failed to load available sessions:', error);
+      }
+      
       const sessionNow = new Date();
       const weekFromNow = new Date(sessionNow.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -127,7 +133,12 @@ export default function TutorHomeScreen() {
         totalEarnings: Math.round(totalEarnings),
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore logout errors - they're expected during logout flow
+      if (ApiClientClass.isLogoutError(error)) {
+        console.log('⚠️ Dashboard load skipped: logout in progress');
+        return;
+      }
       console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
@@ -214,30 +225,36 @@ export default function TutorHomeScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={[styles.statIconContainer, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Calendar size={18} color={Colors.accent2} strokeWidth={2.5} />
+                <Calendar size={16} color={Colors.accent2} strokeWidth={2.5} />
               </View>
-              <Text style={styles.statValue}>{stats.pendingCount}</Text>
-              <Text style={styles.statLabel}>En attente</Text>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statValue}>{stats.pendingCount}</Text>
+                <Text style={styles.statLabel}>En attente</Text>
+              </View>
             </View>
 
             <View style={styles.statDivider} />
 
             <View style={styles.statItem}>
               <View style={[styles.statIconContainer, { backgroundColor: Colors.success + '15' }]}>
-                <CheckCircle size={18} color={Colors.success} strokeWidth={2.5} />
+                <CheckCircle size={16} color={Colors.success} strokeWidth={2.5} />
               </View>
-              <Text style={styles.statValue}>{stats.upcomingCount}</Text>
-              <Text style={styles.statLabel}>À venir</Text>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statValue}>{stats.upcomingCount}</Text>
+                <Text style={styles.statLabel}>Bientôt</Text>
+              </View>
             </View>
 
             <View style={styles.statDivider} />
 
             <View style={styles.statItem}>
               <View style={[styles.statIconContainer, { backgroundColor: Colors.primary + '15' }]}>
-                <Clock size={18} color={Colors.primary} strokeWidth={2.5} />
+                <Clock size={16} color={Colors.primary} strokeWidth={2.5} />
               </View>
-              <Text style={styles.statValue}>{stats.hoursThisWeek}h</Text>
-              <Text style={styles.statLabel}>Cette semaine</Text>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statValue}>{stats.hoursThisWeek}h</Text>
+                <Text style={styles.statLabel}>Semaine</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -268,9 +285,9 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/(tabs)/sessions')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.primary + '15' }]}>
-                <Calendar size={28} color={Colors.primary} strokeWidth={2} />
+                <Calendar size={24} color={Colors.primary} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Sessions</Text>
+              <Text style={styles.serviceText}>Sessions</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -278,9 +295,9 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/(tabs)/marketplace')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent1 + '15' }]}>
-                <ShoppingBag size={28} color={Colors.accent1} strokeWidth={2} />
+                <ShoppingBag size={24} color={Colors.accent1} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Market{'\n'}place</Text>
+              <Text style={styles.serviceText}>Boutique</Text>
               <View style={styles.newBadge}>
                 <Text style={styles.newBadgeText}>NEW</Text>
               </View>
@@ -291,9 +308,9 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/(tabs)/students')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Users size={28} color={Colors.accent2} strokeWidth={2} />
+                <Users size={24} color={Colors.accent2} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Étudiants</Text>
+              <Text style={styles.serviceText}>Étudiants</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -301,9 +318,9 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/availability')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
-                <Clock size={28} color={Colors.success} strokeWidth={2} />
+                <Clock size={24} color={Colors.success} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Disponi{'\n'}bilités</Text>
+              <Text style={styles.serviceText}>Horaires</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -311,29 +328,31 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/requests')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.error + '15' }]}>
-                <Bell size={28} color={Colors.error} strokeWidth={2} />
+                <Bell size={24} color={Colors.error} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Deman{'\n'}des</Text>
+              <Text style={styles.serviceText}>Demandes</Text>
             </TouchableOpacity>
 
+            {/* TODO: Implement consortium feature
             <TouchableOpacity
               style={styles.serviceCard}
               onPress={() => router.push('/(tutor)/consortium')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.secondary + '15' }]}>
-                <Users size={28} color={Colors.secondary} strokeWidth={2} />
+                <Users size={24} color={Colors.secondary} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Consor{'\n'}tiums</Text>
+              <Text style={styles.serviceText}>Groupes</Text>
             </TouchableOpacity>
+            */}
 
             <TouchableOpacity
               style={styles.serviceCard}
               onPress={() => router.push('/(tutor)/(tabs)/wallet')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
-                <DollarSign size={28} color={Colors.success} strokeWidth={2} />
+                <DollarSign size={24} color={Colors.success} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Porte{'\n'}feuille</Text>
+              <Text style={styles.serviceText}>Wallet</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -341,9 +360,9 @@ export default function TutorHomeScreen() {
               onPress={() => router.push('/(tutor)/(tabs)/badges')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Award size={28} color={Colors.accent2} strokeWidth={2} />
+                <Award size={24} color={Colors.accent2} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Badges</Text>
+              <Text style={styles.serviceText}>Badges</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -480,7 +499,12 @@ export default function TutorHomeScreen() {
                 onPress={() => router.push('/(tutor)/notifications')}
               >
                 <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  <Text style={[
+                    styles.notificationTitle,
+                    !notification.isRead && styles.notificationTitleUnread
+                  ]}>
+                    {notification.title}
+                  </Text>
                   <Text style={styles.notificationMessage} numberOfLines={2}>
                     {notification.message}
                   </Text>
@@ -548,7 +572,7 @@ const styles = StyleSheet.create({
   statsCard: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius.large,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     ...Shadows.small,
   },
   statsRow: {
@@ -558,12 +582,17 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  statTextContainer: {
+    gap: 2,
   },
   statDivider: {
     width: 1,
-    height: 50,
+    height: 36,
     backgroundColor: Colors.border,
   },
   statCard: {
@@ -583,16 +612,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.textPrimary,
     letterSpacing: -0.5,
+    lineHeight: 20,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textSecondary,
     fontWeight: '600',
-    textAlign: 'center',
+    lineHeight: 12,
   },
   earningsCard: {
     backgroundColor: Colors.primary,
@@ -662,17 +692,19 @@ const styles = StyleSheet.create({
   serviceCard: {
     width: '23%',
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xlarge,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 6,
     ...Shadows.small,
     position: 'relative',
   },
   serviceIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -782,10 +814,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    marginBottom: Spacing.sm,
     ...Shadows.small,
   },
   notificationUnread: {
-    backgroundColor: Colors.primary + '08',
+    backgroundColor: Colors.bgCream,
+    ...Shadows.medium,
   },
   notificationContent: {
     flex: 1,
@@ -795,6 +829,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  notificationTitleUnread: {
+    fontWeight: '700',
+    color: Colors.primary,
   },
   notificationMessage: {
     fontSize: 13,
@@ -807,10 +845,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
   suggestionSubtitle: {
     fontSize: 13,

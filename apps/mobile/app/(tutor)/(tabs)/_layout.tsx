@@ -3,13 +3,20 @@ import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Home, Calendar, ShoppingBag, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TutorTabLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          ...styles.tabBar,
+          height: 65 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 8),
+        },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textTertiary,
         tabBarShowLabel: true,
@@ -59,34 +66,13 @@ export default function TutorTabLayout() {
           ),
         }}
       />
-      {/* Hidden tabs - accessible via navigation but not in tab bar */}
-      <Tabs.Screen
-        name="students"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="badges"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 65,
     backgroundColor: Colors.white,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.06)',

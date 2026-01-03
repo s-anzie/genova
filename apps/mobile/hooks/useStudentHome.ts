@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/utils/api-client';
+import { useAuth } from '@/contexts/auth-context';
 import {
     UserResponse,
     SessionResponse,
@@ -19,6 +20,7 @@ interface StudentHomeData {
 }
 
 export function useStudentHome() {
+    const { user: authUser } = useAuth();
     const [data, setData] = useState<StudentHomeData>({
         user: null,
         nextSession: null,
@@ -31,6 +33,11 @@ export function useStudentHome() {
     });
 
     const fetchData = useCallback(async (isRefresh = false) => {
+        if (!authUser?.id) {
+            console.log('No authenticated user, skipping data fetch');
+            return;
+        }
+
         try {
             if (!isRefresh) {
                 setData(prev => ({ ...prev, isLoading: true, error: null }));
@@ -39,7 +46,7 @@ export function useStudentHome() {
             }
 
             // 1. Fetch User Profile
-            const userRes = await apiClient.get<{ data: UserResponse }>('/profiles/user/me').catch(() => apiClient.get<{ data: UserResponse }>('/users/me'));
+            const userRes = await apiClient.get<{ data: UserResponse }>(`/profiles/user/${authUser.id}`);
 
             // 2. Fetch Confirmed Sessions (Upcoming)
             const now = new Date();
@@ -98,7 +105,7 @@ export function useStudentHome() {
                 error: error.message || 'Failed to load data',
             }));
         }
-    }, []);
+    }, [authUser?.id]);
 
     useEffect(() => {
         fetchData();

@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { API_ENDPOINTS } from '@/config/api';
+import { fcfaToEur } from '@/utils/currency';
 
 const EDUCATION_LEVELS = [
   { value: 'elementary', label: 'Elementary School' },
@@ -100,7 +101,29 @@ export default function ProfileSetupScreen() {
   const handleComplete = async () => {
     setIsLoading(true);
     try {
-      const profileData = isStudent ? studentData : tutorData;
+      let profileData;
+      
+      if (isStudent) {
+        profileData = studentData;
+      } else {
+        // Validate and convert hourly rate from FCFA to EUR for tutor
+        const hourlyRateFcfa = parseFloat(tutorData.hourlyRate);
+        
+        if (!tutorData.hourlyRate || isNaN(hourlyRateFcfa) || hourlyRateFcfa < 3280 || hourlyRateFcfa > 328000) {
+          Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 3 280 FCFA et 328 000 FCFA');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Convert FCFA to EUR for backend
+        const hourlyRateEur = fcfaToEur(hourlyRateFcfa);
+        
+        profileData = {
+          ...tutorData,
+          hourlyRate: hourlyRateEur.toString(),
+        };
+      }
+      
       const endpoint = isStudent ? API_ENDPOINTS.students.profile : API_ENDPOINTS.tutors.profile;
       
       const response = await fetch(endpoint, {
@@ -228,14 +251,15 @@ export default function ProfileSetupScreen() {
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Hourly Rate (FCFA)</Text>
+        <Text style={styles.label}>Tarif horaire (FCFA)</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g., 16400"
+          placeholder="ex: 16400"
           value={tutorData.hourlyRate}
           onChangeText={(text) => setTutorData({ ...tutorData, hourlyRate: text })}
           keyboardType="numeric"
         />
+        <Text style={styles.hint}>Doit être entre 3 280 FCFA et 328 000 FCFA</Text>
       </View>
 
       <View style={styles.inputContainer}>
@@ -426,6 +450,11 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
   optionButton: {
     padding: 16,

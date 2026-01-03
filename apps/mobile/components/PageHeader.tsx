@@ -176,16 +176,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.textPrimary,
-    letterSpacing: -1,
+    letterSpacing: -0.8,
     marginBottom: 4,
   },
   titleCentered: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0,
     textAlign: 'center',
   },
   subtitle: {

@@ -182,10 +182,20 @@ export default function NotificationsScreen() {
 
               <View style={styles.notificationContent}>
                 <View style={styles.notificationHeader}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  <Text 
+                    style={[
+                      styles.notificationTitle,
+                      !notification.isRead && styles.notificationTitleUnread
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {notification.title}
+                  </Text>
                   {!notification.isRead && <View style={styles.unreadDot} />}
                 </View>
-                <Text style={styles.notificationMessage}>{notification.message}</Text>
+                <Text style={styles.notificationMessage} numberOfLines={2}>
+                  {notification.message}
+                </Text>
                 <Text style={styles.notificationTime}>{formatTime(notification.createdAt)}</Text>
               </View>
 
@@ -198,7 +208,7 @@ export default function NotificationsScreen() {
                       markAsRead(notification.id);
                     }}
                   >
-                    <Check size={18} color={Colors.success} strokeWidth={2} />
+                    <Check size={16} color={Colors.success} strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -208,7 +218,7 @@ export default function NotificationsScreen() {
                     handleDelete(notification.id, notification.title);
                   }}
                 >
-                  <Trash2 size={18} color={Colors.error} strokeWidth={2} />
+                  <Trash2 size={16} color={Colors.error} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -263,44 +273,48 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
+    padding: Spacing.md,
   },
   notificationCard: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.large,
-    padding: Spacing.lg,
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+    padding: Spacing.md,
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
     ...Shadows.small,
   },
   notificationUnread: {
-    backgroundColor: Colors.primary + '08',
-    borderLeftWidth: 4,
+    backgroundColor: Colors.white,
+    borderLeftWidth: 3,
     borderLeftColor: Colors.primary,
   },
   notificationIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationContent: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   notificationTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.textPrimary,
     flex: 1,
+  },
+  notificationTitleUnread: {
+    fontWeight: '700',
+    color: Colors.primary,
   },
   unreadDot: {
     width: 8,
@@ -309,24 +323,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   notificationMessage: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   notificationTime: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginTop: 2,
   },
   notificationActions: {
     flexDirection: 'column',
-    gap: Spacing.xs,
+    gap: 4,
     justifyContent: 'center',
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.bgCream,
     justifyContent: 'center',
     alignItems: 'center',

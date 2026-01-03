@@ -191,6 +191,17 @@ export interface CreateSessionData {
   price: number;
 }
 
+export interface UpdateSessionData {
+  scheduledStart?: Date;
+  scheduledEnd?: Date;
+  location?: string;
+  onlineMeetingLink?: string;
+  subject?: string;
+  description?: string;
+  price?: number;
+  status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+}
+
 export interface SessionResponse {
   id: string;
   classId: string;
@@ -436,21 +447,59 @@ export interface ProgressVisualizationData {
 export interface LearningGoal {
   id: string;
   studentId: string;
+  classId?: string | null;
   subject: string;
+  educationLevel?: any; // Education level details
+  title: string;
+  description: string | null;
   targetScore: number;
   currentScore: number;
   deadline: Date;
-  description: string;
   isCompleted: boolean;
+  completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface CreateLearningGoalData {
+  classId?: string;
   subject: string;
+  educationLevel?: any; // Education level details
+  title: string;
+  description?: string;
   targetScore: number;
   deadline: Date;
-  description: string;
+}
+
+export interface UpdateLearningGoalData {
+  title?: string;
+  description?: string;
+  targetScore?: number;
+  currentScore?: number;
+  deadline?: Date;
+  isCompleted?: boolean;
+}
+
+export interface GoalProgress {
+  goalId: string;
+  goal: LearningGoal;
+  progressPercentage: number;
+  daysRemaining: number;
+  isOverdue: boolean;
+  recentResults: Array<{
+    examName: string;
+    score: number;
+    maxScore: number;
+    examDate: Date;
+  }>;
+}
+
+export interface GoalStatistics {
+  totalGoals: number;
+  completedGoals: number;
+  activeGoals: number;
+  overdueGoals: number;
+  completionRate: number;
 }
 
 // Notification Types
@@ -463,6 +512,14 @@ export interface NotificationResponse {
   data: any;
   isRead: boolean;
   createdAt: Date;
+}
+
+export interface NotificationPreferences {
+  sessionNotifications: boolean;
+  badgeNotifications: boolean;
+  paymentNotifications: boolean;
+  reviewNotifications: boolean;
+  marketingNotifications: boolean;
 }
 
 export interface UnreadNotificationCount {
@@ -575,4 +632,47 @@ export interface SellerDashboard {
   totalRevenue: number;
   recentSales: ShopPurchaseResponse[];
   topProducts: ShopProductResponse[];
+}
+
+// Subscription Types
+export interface SubscriptionTier {
+  type: 'FREE' | 'BASIC' | 'PREMIUM' | 'PRO';
+  price: number;
+  description: string;
+  features: {
+    maxActiveClasses: number;
+    examBankAccess: boolean;
+    prioritySupport: boolean;
+    platformCommission: number;
+  };
+}
+
+export interface SubscriptionStatus {
+  type: 'FREE' | 'BASIC' | 'PREMIUM' | 'PRO';
+  price: number;
+  features: {
+    maxActiveClasses: number;
+    examBankAccess: boolean;
+    prioritySupport: boolean;
+    platformCommission: number;
+  };
+  expiresAt: string | null;
+  isExpired: boolean;
+  isActive: boolean;
+}
+
+export interface CreateSubscriptionData {
+  subscriptionType: 'FREE' | 'BASIC' | 'PREMIUM' | 'PRO';
+  paymentMethodId?: string;
+}
+
+export interface SubscriptionResponse {
+  user: UserResponse;
+  subscription: {
+    type: string;
+    price: number;
+    expiresAt: string | null;
+    stripeSubscriptionId?: string;
+    clientSecret?: string;
+  };
 }

@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { 
+import {
   User,
   GraduationCap,
   Users,
@@ -24,6 +24,7 @@ import {
   ChevronRight,
   LogOut,
   Check,
+  Crown,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/auth-context';
 import { apiClient } from '@/utils/api-client';
@@ -260,6 +261,27 @@ export default function StudentProfileScreen() {
           
           <TouchableOpacity 
             style={styles.menuItem}
+            onPress={() => router.push('/(student)/subscription')}
+          >
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#F3E8FF' }]}>
+                <Crown size={20} color="#9C27B0" strokeWidth={2} />
+              </View>
+              <View style={styles.menuText}>
+                <Text style={styles.menuTitle}>Mon abonnement</Text>
+                <Text style={styles.menuSubtitle}>
+                  {userData?.subscriptionType === 'FREE' ? 'Plan gratuit' : 
+                   userData?.subscriptionType === 'BASIC' ? 'Plan Basic' :
+                   userData?.subscriptionType === 'PREMIUM' ? 'Plan Premium' :
+                   userData?.subscriptionType === 'PRO' ? 'Plan Pro' : 'Gratuit'}
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color="#999" strokeWidth={2} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.menuItem}
             onPress={() => router.push('/wallet')}
           >
             <View style={styles.menuLeft}>
@@ -352,13 +374,13 @@ export default function StudentProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.bgCream,
   },
 
   scrollView: {

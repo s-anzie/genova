@@ -8,12 +8,16 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
+  Image,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Upload, Image as ImageIcon, X } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { apiClient } from '@/utils/api-client';
 import { Colors, Shadows, BorderRadius } from '@/constants/colors';
 import { ShopProductResponse, UpdateProductData } from '@/types/api';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function EditProductScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
@@ -24,6 +28,8 @@ export default function EditProductScreen() {
     price: 0,
     isActive: true,
   });
+  const [coverImage, setCoverImage] = useState<{ uri: string; name: string } | null>(null);
+  const [resourceFile, setResourceFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -45,6 +51,21 @@ export default function EditProductScreen() {
         price: response.data.price,
         isActive: response.data.isActive,
       });
+      
+      // Load existing files if available
+      if (response.data.previewUrl) {
+        setCoverImage({
+          uri: response.data.previewUrl,
+          name: 'cover.jpg',
+        });
+      }
+      if (response.data.fileUrl) {
+        setResourceFile({
+          uri: response.data.fileUrl,
+          name: 'resource',
+          type: 'application/pdf',
+        });
+      }
     } catch (error) {
       console.error('Failed to load product:', error);
       Alert.alert('Erreur', 'Impossible de charger le produit');
@@ -77,7 +98,15 @@ export default function EditProductScreen() {
 
     try {
       setSaving(true);
-      await apiClient.put(`/marketplace/products/${productId}`, formData);
+      
+      // TODO: Upload new files if changed
+      const updateData = {
+        ...formData,
+        ...(coverImage && { previewUrl: coverImage.uri }),
+        ...(resourceFile && { fileUrl: resourceFile.uri }),
+      };
+      
+      await apiClient.put(`/marketplace/products/${productId}`, updateData);
       Alert.alert('Succès', 'Produit mis à jour avec succès', [
         {
           text: 'OK',
@@ -99,6 +128,51 @@ export default function EditProductScreen() {
     }
   };
 
+  const pickCoverImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Veuillez autoriser l\'accès à la galerie');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [3, 4],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setCoverImage({
+        uri: asset.uri,
+        name: asset.fileName || `cover_${Date.now()}.jpg`,
+      });
+    }
+  };
+
+  const pickResourceFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'video/*', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const doc = result.assets[0];
+        setResourceFile({
+          uri: doc.uri,
+          name: doc.name,
+          type: doc.mimeType || 'application/pdf',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error picking document:', error);
+      Alert.alert('Erreur', 'Impossible de sélectionner le fichier');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -114,14 +188,11 @@ export default function EditProductScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modifier le produit</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <PageHeader 
+        title="Modifier le produit"
+        showBackButton
+        variant="primary"
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Product Info (Read-only) */}
@@ -228,6 +299,60 @@ export default function EditProductScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Cover Image (Optional) */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Image de couverture (optionnel)</Text>
+          {coverImage ? (
+            <View style={styles.uploadedFile}>
+              <Image source={{ uri: coverImage.uri }} style={styles.coverPreview} />
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {coverImage.name}
+                </Text>
+                <TouchableOpacity onPress={pickCoverImage}>
+                  <Text style={styles.changeText}>Changer</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCoverImage(null)}
+                style={styles.removeButton}
+              >
+                <X size={18} color={Colors.error} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.uploadButton} onPress={pickCoverImage}>
+              <ImageIcon size={24} color={Colors.primary} strokeWidth={2} />
+              <Text style={styles.uploadButtonText}>Choisir une image</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Resource File */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Fichier de ressource</Text>
+          {resourceFile ? (
+            <View style={styles.uploadedFile}>
+              <View style={styles.fileIconContainer}>
+                <Upload size={24} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {resourceFile.name}
+                </Text>
+                <TouchableOpacity onPress={pickResourceFile}>
+                  <Text style={styles.changeText}>Changer</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.uploadButton} onPress={pickResourceFile}>
+              <Upload size={24} color={Colors.primary} strokeWidth={2} />
+              <Text style={styles.uploadButtonText}>Choisir un fichier</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
@@ -242,10 +367,7 @@ export default function EditProductScreen() {
           {saving ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
-            <>
-              <Ionicons name="checkmark" size={20} color={Colors.white} />
-              <Text style={styles.submitButtonText}>Enregistrer</Text>
-            </>
+            <Text style={styles.submitButtonText}>Enregistrer</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -256,40 +378,19 @@ export default function EditProductScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.bgCream,
     gap: 12,
   },
   loadingText: {
     fontSize: 15,
     color: Colors.textSecondary,
     fontWeight: '500',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: Colors.white,
-    ...Shadows.small,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   content: {
     flex: 1,
@@ -413,6 +514,69 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     alignSelf: 'flex-end',
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: BorderRadius.large,
+    paddingVertical: 20,
+    gap: 12,
+  },
+  uploadButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  uploadedFile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.large,
+    padding: 12,
+    gap: 12,
+  },
+  coverPreview: {
+    width: 60,
+    height: 80,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: Colors.bgSecondary,
+  },
+  fileIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  changeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBar: {
     backgroundColor: Colors.white,

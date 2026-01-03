@@ -287,7 +287,7 @@ This implementation plan breaks down the Genova mobile tutoring platform into di
   - **Property 44: Badge earning rewards**
   - **Validates: Requirements 11.4**
 
-- [ ] 14. Implement marketplace for educational resources
+- [x] 14. Implement marketplace for educational resources
   - Create ShopProduct and ShopPurchase models
   - Build product listing creation endpoint
   - Implement product browsing and filtering
@@ -597,7 +597,7 @@ This implementation plan breaks down the Genova mobile tutoring platform into di
   - Build exam history screen
   - _Requirements: 13.1, 13.2, 13.3, 13.5_
 
-- [ ] 34. Build mobile app subscription screens
+- [x] 34. Build mobile app subscription screens
   - Create subscription plans comparison
   - Build subscription purchase flow
   - Implement subscription management screen
@@ -637,7 +637,7 @@ This implementation plan breaks down the Genova mobile tutoring platform into di
   - Create modal screens for forms
   - _Requirements: All (UI navigation)_
 
-- [ ] 39. Implement mobile app state management
+- [x] 39. Implement mobile app state management
   - Set up React Context for global state
   - Create authentication context
   - Build user profile context

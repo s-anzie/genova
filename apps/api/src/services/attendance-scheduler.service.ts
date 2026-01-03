@@ -138,7 +138,35 @@ export async function autoCompleteOverdueSessions(): Promise<void> {
  * Initialize all schedulers
  * Call this when the server starts
  */
-export function initializeAttendanceSchedulers(): void {
+export async function initializeAttendanceSchedulers(): Promise<void> {
+  // Ensure Prisma is connected before starting schedulers with retry logic
+  const maxRetries = 3;
+  let retryCount = 0;
+  let connected = false;
+
+  while (retryCount < maxRetries && !connected) {
+    try {
+      await prisma.$connect();
+      logger.info('Prisma client connected successfully');
+      connected = true;
+    } catch (error) {
+      retryCount++;
+      logger.error(`Failed to connect Prisma client (attempt ${retryCount}/${maxRetries}):`, error);
+      
+      if (retryCount < maxRetries) {
+        const delay = retryCount * 2000; // Exponential backoff: 2s, 4s, 6s
+        logger.info(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  if (!connected) {
+    logger.error('Failed to connect to database after multiple attempts. Attendance schedulers will not be initialized.');
+    logger.info('The server will continue running, but attendance notifications will not work until database connection is restored.');
+    return;
+  }
+
   // Check for sessions that just started every minute
   setInterval(checkSessionsStarted, 60 * 1000);
   logger.info('Attendance scheduler: Session started notifications enabled');
@@ -151,8 +179,22 @@ export function initializeAttendanceSchedulers(): void {
   setInterval(autoCompleteOverdueSessions, 5 * 60 * 1000);
   logger.info('Attendance scheduler: Auto-complete overdue sessions enabled (20 min grace period)');
 
-  // Run immediately on startup
-  checkSessionsStarted();
-  checkStudentCheckInReminders();
-  autoCompleteOverdueSessions();
+  // Run immediately on startup with a small delay to ensure database is ready
+  setTimeout(() => {
+    checkSessionsStarted();
+    checkStudentCheckInReminders();
+    autoCompleteOverdueSessions();
+  }, 2000); // 2 second delay
+}
+
+/**
+ * Cleanup function to disconnect Prisma client
+ */
+export async function cleanupAttendanceSchedulers(): Promise<void> {
+  try {
+    await prisma.$disconnect();
+    logger.info('Prisma client disconnected successfully');
+  } catch (error) {
+    logger.error('Error disconnecting Prisma client:', error);
+  }
 }

@@ -17,7 +17,7 @@ const LOCAL_IP_Phone = '10.179.135.124'
 const API_PORT = '5001';
 
 // URL de base de l'API
-export const API_BASE_URL = `http://${LOCAL_IP_Phone}:${API_PORT}/api`;
+export const API_BASE_URL = `http://${LOCAL_IP}:${API_PORT}/api`;
 
 // URLs spécifiques
 export const API_ENDPOINTS = {

@@ -35,6 +35,7 @@ import { ApiClient } from '@/utils/api';
 import { Colors } from '@/constants/colors';
 import * as ImagePicker from 'expo-image-picker';
 import type { UserResponse, TutorProfileResponse } from '@/types/api';
+import { fcfaToEur, eurToFcfa } from '@/utils/currency';
 
 // Education levels with their available systems and teaching types
 const EDUCATION_LEVELS = [
@@ -249,7 +250,7 @@ export default function TutorEditProfileScreen() {
         setTutorData({
           bio: profile.bio || '',
           experienceYears: profile.experienceYears && profile.experienceYears > 0 ? profile.experienceYears.toString() : '',
-          hourlyRate: profile.hourlyRate && parseFloat(profile.hourlyRate.toString()) > 0 ? profile.hourlyRate.toString() : '',
+          hourlyRate: profile.hourlyRate && parseFloat(profile.hourlyRate.toString()) > 0 ? eurToFcfa(parseFloat(profile.hourlyRate.toString())).toString() : '',
           subjectTeachings: subjectTeachings.length > 0 ? subjectTeachings : [],
           teachingMode: profile.teachingMode || 'BOTH',
           serviceRadius: profile.serviceRadius ? profile.serviceRadius.toString() : '',
@@ -412,13 +413,16 @@ export default function TutorEditProfileScreen() {
       }
 
       // Update tutor profile
-      const hourlyRate = parseFloat(tutorData.hourlyRate);
+      const hourlyRateFcfa = parseFloat(tutorData.hourlyRate);
       
-      if (!tutorData.hourlyRate || isNaN(hourlyRate) || hourlyRate < 5 || hourlyRate > 500) {
-        Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 3 280 FCFA et 328 000 FCFA (5€ - 500€)');
+      if (!tutorData.hourlyRate || isNaN(hourlyRateFcfa) || hourlyRateFcfa < 3280 || hourlyRateFcfa > 328000) {
+        Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 3 280 FCFA et 328 000 FCFA');
         setIsSaving(false);
         return;
       }
+      
+      // Convert FCFA to EUR for backend
+      const hourlyRate = fcfaToEur(hourlyRateFcfa);
 
       // Validate teaching skills
       if (tutorData.subjectTeachings.length === 0) {

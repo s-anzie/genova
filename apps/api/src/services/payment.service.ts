@@ -1,6 +1,8 @@
 import Stripe from 'stripe';
 import { PrismaClient, TransactionStatus, TransactionType } from '@prisma/client';
 import { envConfig, logger, ValidationError, PaymentError } from '@repo/utils';
+import { mapToStripeCurrency, toStripeAmount } from '../utils/currency';
+import { getCountryByCode } from './regions.service';
 
 const prisma = new PrismaClient();
 const stripe = new Stripe(envConfig.get('STRIPE_SECRET_KEY', ''), {
@@ -56,7 +58,7 @@ export async function createPaymentIntent(data: PaymentIntentData) {
     throw new ValidationError('Session not found');
   }
 
-  // Verify payer exists
+  // Verify payer exists and get their country
   const payer = await prisma.user.findUnique({
     where: { id: payerId },
   });
@@ -65,15 +67,33 @@ export async function createPaymentIntent(data: PaymentIntentData) {
     throw new ValidationError('Payer not found');
   }
 
+  // Get user's currency from their country
+  let currency = 'eur'; // Default fallback
+  let stripeAmount = Math.round(amount * 100);
+
+  if (payer.countryCode) {
+    try {
+      const country = await getCountryByCode(payer.countryCode);
+      currency = mapToStripeCurrency(country.currencyCode);
+      stripeAmount = toStripeAmount(amount, country.currencyCode);
+    } catch (error) {
+      logger.warn('Failed to get country currency, using default EUR', { 
+        countryCode: payer.countryCode,
+        error 
+      });
+    }
+  }
+
   try {
-    // Create Stripe payment intent
+    // Create Stripe payment intent with user's currency
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency: 'eur',
+      amount: stripeAmount,
+      currency,
       metadata: {
         sessionId,
         payerId,
         type: 'session_payment',
+        localCurrency: payer.countryCode || 'unknown',
       },
       description: description || `Payment for tutoring session ${sessionId}`,
     });

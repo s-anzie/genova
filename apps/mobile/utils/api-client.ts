@@ -18,6 +18,22 @@ class ApiClient {
   private isClearing = false; // Add flag to prevent multiple clear operations
   private isLoggingOut = false; // Add flag to block all API calls during logout
 
+  /**
+   * Reset the logout flag - useful after successful login
+   */
+  resetLogoutFlag(): void {
+    this.isLoggingOut = false;
+    this.isClearing = false;
+    console.log('✅ Logout flags reset');
+  }
+
+  /**
+   * Check if an error is a logout error (should be silently ignored)
+   */
+  static isLogoutError(error: any): boolean {
+    return error?.message === 'Déconnexion en cours...';
+  }
+
   async getAccessToken(): Promise<string | null> {
     try {
       return await SecureStore.getItemAsync(TOKEN_KEY);
@@ -59,9 +75,10 @@ class ApiClient {
       // Still try to redirect even if clearing fails
       router.replace('/(auth)/login');
     } finally {
-      // Reset the flag after a delay to allow the redirect to complete
+      // Reset the flags after a delay to allow the redirect to complete
       setTimeout(() => {
         this.isClearing = false;
+        this.isLoggingOut = false;
       }, 1000);
     }
   }
@@ -118,9 +135,10 @@ class ApiClient {
     endpoint: string,
     options: ApiRequestOptions = {}
   ): Promise<T> {
-    // Block all API calls if we're logging out
+    // Block all API calls if we're logging out (but don't log as error)
     if (this.isLoggingOut) {
-      throw new Error('Déconnexion en cours...');
+      // Return a rejected promise without logging - this is expected during logout
+      return Promise.reject(new Error('Déconnexion en cours...'));
     }
 
     const {
@@ -246,3 +264,5 @@ class ApiClient {
 export const apiClient = new ApiClient();
 // Export as both lowercase and uppercase for backward compatibility
 export { apiClient as ApiClient };
+// Export the class itself for static methods
+export { ApiClient as ApiClientClass };

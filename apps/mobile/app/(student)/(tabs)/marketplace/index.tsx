@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Download } from 'lucide-react-native';
 import { apiClient } from '@/utils/api-client';
-import { Colors, Shadows, BorderRadius, Spacing } from '@/constants/colors';
+import { Colors, Shadows, BorderRadius } from '@/constants/colors';
 import { ShopProductResponse, ProductFilters } from '@/types/api';
 import { PageHeader } from '@/components/PageHeader';
 
@@ -34,6 +34,7 @@ export default function MarketplaceTabScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
   const [filters, setFilters] = useState<ProductFilters>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadProducts();
@@ -42,6 +43,7 @@ export default function MarketplaceTabScreen() {
   const loadProducts = async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       
       if (filters.subject) params.append('subject', filters.subject);
@@ -52,12 +54,14 @@ export default function MarketplaceTabScreen() {
       if (filters.minRating) params.append('minRating', filters.minRating.toString());
       if (searchQuery) params.append('search', searchQuery);
 
-      const response = await apiClient.get<{ data: ShopProductResponse[] }>(
+      const response = await apiClient.get<{ success: boolean; data: ShopProductResponse[] }>(
         `/marketplace/products?${params.toString()}`
       );
-      setProducts(response.data);
+      setProducts(response.data || []);
     } catch (error) {
       console.error('Failed to load products:', error);
+      setError('Impossible de charger les ressources');
+      setProducts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -220,7 +224,15 @@ export default function MarketplaceTabScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
           showsVerticalScrollIndicator={false}
         >
-          {products.length === 0 ? (
+          {error ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle-outline" size={64} color={Colors.error} />
+              <Text style={styles.emptyStateTitle}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadProducts}>
+                <Text style={styles.retryButtonText}>Réessayer</Text>
+              </TouchableOpacity>
+            </View>
+          ) : products.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="basket-outline" size={64} color={Colors.textTertiary} />
               <Text style={styles.emptyStateTitle}>Aucune ressource trouvée</Text>
@@ -244,13 +256,13 @@ export default function MarketplaceTabScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.bgCream,
     gap: 12,
   },
   loadingText: {
@@ -291,12 +303,15 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.medium,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     marginHorizontal: 20,
-    marginBottom: 16,
-    height: 48,
+    marginTop: 16,
+    marginBottom: 12,
+    height: 40,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   searchIcon: {
     marginRight: 8,
@@ -308,26 +323,34 @@ const styles = StyleSheet.create({
   },
   typeFilters: {
     paddingHorizontal: 20,
+    marginBottom: 4,
   },
   typeFiltersContent: {
-    gap: 8,
+    gap: 6,
+    paddingRight: 40,
   },
   typeFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.large,
-    backgroundColor: Colors.bgSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.small,
+    backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   typeFilterButtonActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
   typeFilterText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.textSecondary,
+  },
+  scrollView: {
+    flex: 1,
   },
   typeFilterTextActive: {
     color: Colors.white,
@@ -336,7 +359,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 4,
   },
   productsGrid: {
     gap: 16,
@@ -439,5 +463,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.medium,
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.white,
   },
 });

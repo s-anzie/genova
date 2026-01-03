@@ -27,9 +27,10 @@ import {
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
+import { StatsCard } from '@/components/StatsCard';
 import { useAuth } from '@/contexts/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
-import { ApiClient } from '@/utils/api';
+import { ApiClient, ApiClientClass } from '@/utils/api';
 import { SessionResponse, TutorSuggestion } from '@/types/api';
 import { eurToFcfa } from '@/utils/currency';
 
@@ -74,15 +75,21 @@ export default function StudentHomeScreen() {
       isLoadingRef.current = true;
       lastLoadTimeRef.current = now;
       setLoading(true);
-      const [sessionsRes, walletRes] = await Promise.all([
-        ApiClient.get<{ success: boolean; data: SessionResponse[] }>('/sessions'),
-        ApiClient.get<{ success: boolean; data: { totalBalance: number; availableBalance: number; pendingBalance: number } }>('/payments/wallet').catch(() => ({ 
-          success: true,
-          data: { totalBalance: 0, availableBalance: 0, pendingBalance: 0 } 
-        })),
-      ]);
       
-      const allSessions = sessionsRes.data;
+      // Load sessions first (critical)
+      const sessionsRes = await ApiClient.get<{ success: boolean; data: SessionResponse[] }>('/sessions');
+      const allSessions = sessionsRes.data || [];
+
+      // Load wallet balance (non-critical, can fail)
+      let walletRes = { 
+        success: true,
+        data: { totalBalance: 0, availableBalance: 0, pendingBalance: 0 } 
+      };
+      try {
+        walletRes = await ApiClient.get<{ success: boolean; data: { totalBalance: number; availableBalance: number; pendingBalance: number } }>('/payments/wallet');
+      } catch (error) {
+        console.warn('Failed to load wallet balance:', error);
+      }
 
       const sessionNow = new Date();
       const weekFromNow = new Date(sessionNow.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -143,7 +150,12 @@ export default function StudentHomeScreen() {
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
         walletBalance: Math.round(walletRes.data.totalBalance || 0),
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore logout errors - they're expected during logout flow
+      if (ApiClientClass.isLogoutError(error)) {
+        console.log('⚠️ Dashboard load skipped: logout in progress');
+        return;
+      }
       console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
@@ -225,38 +237,68 @@ export default function StudentHomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Card - Unified */}
-        <View style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <View style={[styles.statIconContainer, { backgroundColor: Colors.primary + '15' }]}>
-                <Calendar size={18} color={Colors.primary} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.statValue}>{stats.upcomingCount}</Text>
-              <Text style={styles.statLabel}>À venir</Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <View style={[styles.statIconContainer, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Clock size={18} color={Colors.accent2} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.statValue}>{stats.hoursThisWeek}h</Text>
-              <Text style={styles.statLabel}>Cette semaine</Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <View style={[styles.statIconContainer, { backgroundColor: Colors.success + '15' }]}>
-                <BookOpen size={18} color={Colors.success} strokeWidth={2.5} />
-              </View>
-              <Text style={styles.statValue}>{stats.totalSessions}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
+        {/* Search Bar */}
+        <TouchableOpacity
+          style={styles.searchBar}
+          onPress={() => router.push('/(student)/search')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.searchIconContainer}>
+            <Search size={20} color={Colors.white} strokeWidth={2.5} />
           </View>
-        </View>
+          <View style={styles.searchTextContainer}>
+            <Text style={styles.searchPlaceholder}>Rechercher un tuteur</Text>
+            <Text style={styles.searchSubtext}>Matières, niveaux, disponibilités...</Text>
+          </View>
+          <ChevronRight size={18} color={Colors.textTertiary} strokeWidth={2} />
+        </TouchableOpacity>
+
+        {/* Announcement Banner */}
+        <TouchableOpacity
+          style={styles.announcementBanner}
+          activeOpacity={0.8}
+          onPress={() => {
+            // Action à définir (navigation, modal, etc.)
+          }}
+        >
+          <View style={styles.bannerContent}>
+            <View style={styles.bannerIconContainer}>
+              <Star size={24} color={Colors.warning} fill={Colors.warning} strokeWidth={2} />
+            </View>
+            <View style={styles.bannerTextContainer}>
+              <Text style={styles.bannerTitle}>Offre spéciale !</Text>
+              <Text style={styles.bannerDescription}>
+                Profitez de -20% sur votre première session
+              </Text>
+            </View>
+            <ChevronRight size={20} color={Colors.white} strokeWidth={2.5} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Stats Card */}
+        <StatsCard
+          mode="expanded"
+          stats={[
+            {
+              icon: Calendar,
+              iconColor: Colors.primary,
+              value: stats.upcomingCount,
+              label: 'Bientôt',
+            },
+            {
+              icon: Clock,
+              iconColor: Colors.accent2,
+              value: `${stats.hoursThisWeek}h`,
+              label: 'Semaine',
+            },
+            {
+              icon: BookOpen,
+              iconColor: Colors.success,
+              value: stats.totalSessions,
+              label: 'Total',
+            },
+          ]}
+        />
 
         {/* Wallet Balance Card - Only show if balance > 0 */}
         {stats.walletBalance > 0 && (
@@ -281,22 +323,12 @@ export default function StudentHomeScreen() {
           <View style={styles.servicesGrid}>
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/(tabs)/search')}
-            >
-              <View style={[styles.serviceIcon, { backgroundColor: Colors.primary + '15' }]}>
-                <Search size={28} color={Colors.primary} strokeWidth={2} />
-              </View>
-              <Text style={styles.serviceText}>Trouver{'\n'}Tuteur</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.serviceCard}
               onPress={() => router.push('/(student)/(tabs)/marketplace')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent1 + '15' }]}>
-                <ShoppingBag size={28} color={Colors.accent1} strokeWidth={2} />
+                <ShoppingBag size={24} color={Colors.accent1} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Market{'\n'}place</Text>
+              <Text style={styles.serviceText}>Boutique</Text>
               <View style={styles.newBadge}>
                 <Text style={styles.newBadgeText}>NEW</Text>
               </View>
@@ -304,42 +336,42 @@ export default function StudentHomeScreen() {
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/classes')}
+              onPress={() => router.push('/(student)/(tabs)/learn/classes')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.secondary + '15' }]}>
-                <Users size={28} color={Colors.secondary} strokeWidth={2} />
+                <Users size={24} color={Colors.secondary} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Classes</Text>
+              <Text style={styles.serviceText}>Classes</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/(tabs)/sessions')}
+              onPress={() => router.push('/(student)/(tabs)/learn/sessions')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.primary + '15' }]}>
-                <Calendar size={28} color={Colors.primary} strokeWidth={2} />
+                <Calendar size={24} color={Colors.primary} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Sessions</Text>
+              <Text style={styles.serviceText}>Sessions</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/(tabs)/progress')}
+              onPress={() => router.push('/(student)/(tabs)/learn/progress')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
-                <TrendingUp size={28} color={Colors.success} strokeWidth={2} />
+                <TrendingUp size={24} color={Colors.success} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Progrès</Text>
+              <Text style={styles.serviceText}>Progrès</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/(tabs)/badges')}
+              onPress={() => router.push('/(student)/badges')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
-                <Award size={28} color={Colors.accent2} strokeWidth={2} />
+                <Award size={24} color={Colors.accent2} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Badges</Text>
+              <Text style={styles.serviceText}>Badges</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -347,19 +379,19 @@ export default function StudentHomeScreen() {
               onPress={() => router.push('/(student)/wallet')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
-                <Wallet size={28} color={Colors.success} strokeWidth={2} />
+                <Wallet size={24} color={Colors.success} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Porte{'\n'}feuille</Text>
+              <Text style={styles.serviceText}>Wallet</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(student)/(tabs)/progress/goals')}
+              onPress={() => router.push('/(student)/(tabs)/learn/goals')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.error + '15' }]}>
-                <Target size={28} color={Colors.error} strokeWidth={2} />
+                <Target size={24} color={Colors.error} strokeWidth={2} />
               </View>
-              <Text style={styles.serviceText}>Mes{'\n'}Objectifs</Text>
+              <Text style={styles.serviceText}>Objectifs</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -369,7 +401,7 @@ export default function StudentHomeScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Tuteurs suggérés</Text>
-              <TouchableOpacity onPress={() => router.push('/(student)/(tabs)/search')}>
+              <TouchableOpacity onPress={() => router.push('/(student)/search')}>
                 <Text style={styles.seeAllText}>Voir plus</Text>
               </TouchableOpacity>
             </View>
@@ -414,7 +446,7 @@ export default function StudentHomeScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Prochaines sessions</Text>
-              <TouchableOpacity onPress={() => router.push('/(student)/(tabs)/sessions')}>
+              <TouchableOpacity onPress={() => router.push('/(student)/(tabs)/learn/sessions')}>
                 <Text style={styles.seeAllText}>Tout voir</Text>
               </TouchableOpacity>
             </View>
@@ -423,7 +455,7 @@ export default function StudentHomeScreen() {
               <TouchableOpacity
                 key={session.id}
                 style={styles.sessionCard}
-                onPress={() => router.push(`/(student)/(tabs)/sessions/${session.id}`)}
+                onPress={() => router.push(`/(student)/sessions/${session.id}`)}
               >
                 <View style={styles.sessionHeader}>
                   <Text style={styles.sessionSubject}>{session.subject}</Text>
@@ -457,7 +489,12 @@ export default function StudentHomeScreen() {
                 onPress={() => router.push('/(student)/notifications')}
               >
                 <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  <Text style={[
+                    styles.notificationTitle,
+                    !notification.isRead && styles.notificationTitleUnread
+                  ]}>
+                    {notification.title}
+                  </Text>
                   <Text style={styles.notificationMessage} numberOfLines={2}>
                     {notification.message}
                   </Text>
@@ -518,58 +555,76 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.lg,
   },
-  statsContainer: {
+  searchBar: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.large,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
-  },
-  statsCard: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.large,
-    padding: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.primary + '20',
     ...Shadows.small,
   },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  statDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: Colors.border,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.large,
-    padding: Spacing.md,
-    alignItems: 'center',
-    gap: Spacing.xs,
-    ...Shadows.small,
-  },
-  statIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  searchIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
+  searchTextContainer: {
+    flex: 1,
+    gap: 1,
   },
-  statLabel: {
+  searchPlaceholder: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  searchSubtext: {
     fontSize: 11,
+    fontWeight: '500',
     color: Colors.textSecondary,
-    fontWeight: '600',
-    textAlign: 'center',
+  },
+  announcementBanner: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.large,
+    overflow: 'hidden',
+    ...Shadows.medium,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  bannerIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  bannerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: -0.3,
+  },
+  bannerDescription: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 16,
   },
   section: {
     gap: Spacing.md,
@@ -603,17 +658,19 @@ const styles = StyleSheet.create({
   serviceCard: {
     width: '23%',
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xlarge,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 6,
     ...Shadows.small,
     position: 'relative',
   },
   serviceIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -694,10 +751,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+    marginBottom: Spacing.sm,
     ...Shadows.small,
   },
   notificationUnread: {
-    backgroundColor: Colors.primary + '08',
+    backgroundColor: Colors.bgCream,
+    ...Shadows.medium,
   },
   notificationContent: {
     flex: 1,
@@ -707,6 +766,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  notificationTitleUnread: {
+    fontWeight: '700',
+    color: Colors.primary,
   },
   notificationMessage: {
     fontSize: 13,
@@ -719,10 +782,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
   walletCard: {
     backgroundColor: Colors.primary,

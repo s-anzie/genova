@@ -7,7 +7,7 @@
  * @deprecated Import from '@/utils/api-client' directly for new code
  */
 
-import { apiClient } from './api-client';
+import { apiClient, ApiClientClass } from './api-client';
 
 // Export the instance as ApiClient (class-like usage) for backward compatibility
 export const ApiClient = {
@@ -20,6 +20,9 @@ export const ApiClient = {
   getAccessToken: apiClient.getAccessToken.bind(apiClient),
   refreshAccessToken: apiClient.refreshAccessToken.bind(apiClient),
 };
+
+// Export the class for static methods
+export { ApiClientClass };
 
 // Also export the instance directly
 export { apiClient };

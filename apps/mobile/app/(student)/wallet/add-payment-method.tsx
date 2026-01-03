@@ -15,15 +15,20 @@ import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
 import { ApiClient } from '@/utils/api';
 import { MobileMoneyOperator } from '@/types/api';
+import { useAuth } from '@/contexts/auth-context';
+import { validatePhoneNumber } from '@/hooks/useRegions';
 
 export default function AddPaymentMethodScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [loading, setLoading] = useState(false);
   const [operators, setOperators] = useState<MobileMoneyOperator[]>([]);
   const [loadingOperators, setLoadingOperators] = useState(true);
+  const [phonePrefix, setPhonePrefix] = useState('+237');
+  const [phoneFormat, setPhoneFormat] = useState('XX XX XX XX XX');
 
   useEffect(() => {
     loadOperators();
@@ -32,10 +37,22 @@ export default function AddPaymentMethodScreen() {
   const loadOperators = async () => {
     try {
       setLoadingOperators(true);
+      
+      // Get user's country code, default to CM if not set
+      const userCountry = user?.countryCode || user?.country || 'CM';
+      
+      // Load operators for user's country
       const response = await ApiClient.get<{ success: boolean; data: MobileMoneyOperator[] }>(
-        '/operators?country=CM'
+        `/operators?country=${userCountry}`
       );
+      
       setOperators(response.data);
+      
+      // Set phone prefix from first operator or fetch from country details
+      if (response.data.length > 0) {
+        setPhonePrefix(response.data[0].phonePrefix);
+        setPhoneFormat(response.data[0].phoneFormat);
+      }
     } catch (error) {
       console.error('Failed to load operators:', error);
       Alert.alert('Erreur', 'Impossible de charger les opérateurs');
@@ -48,20 +65,46 @@ export default function AddPaymentMethodScreen() {
     // Remove all non-numeric characters
     const cleaned = text.replace(/\D/g, '');
     
-    // Limit to 10 digits
-    const limited = cleaned.slice(0, 10);
+    // Get the selected operator's format or use default
+    const selectedOp = operators.find(op => op.id === selectedProvider);
+    const format = selectedOp?.phoneFormat || phoneFormat;
+    const maxLength = selectedOp?.phoneLength || 10;
     
-    // Format as XX XX XX XX XX
-    if (limited.length <= 2) return limited;
-    if (limited.length <= 4) return `${limited.slice(0, 2)} ${limited.slice(2)}`;
-    if (limited.length <= 6) return `${limited.slice(0, 2)} ${limited.slice(2, 4)} ${limited.slice(4)}`;
-    if (limited.length <= 8) return `${limited.slice(0, 2)} ${limited.slice(2, 4)} ${limited.slice(4, 6)} ${limited.slice(6)}`;
-    return `${limited.slice(0, 2)} ${limited.slice(2, 4)} ${limited.slice(4, 6)} ${limited.slice(6, 8)} ${limited.slice(8)}`;
+    // Limit to max length
+    const limited = cleaned.slice(0, maxLength);
+    
+    // Apply format
+    let formatted = '';
+    let numIndex = 0;
+    
+    for (let i = 0; i < format.length && numIndex < limited.length; i++) {
+      if (format[i] === 'X') {
+        formatted += limited[numIndex];
+        numIndex++;
+      } else {
+        formatted += format[i];
+      }
+    }
+    
+    return formatted;
   };
 
-  const handlePhoneChange = (text: string) => {
+  const handlePhoneChange = async (text: string) => {
     const formatted = formatPhoneNumber(text);
     setPhoneNumber(formatted);
+    
+    // Validate with API if user has country code
+    if (user?.countryCode && formatted.replace(/\s/g, '').length >= 9) {
+      try {
+        const result = await validatePhoneNumber(
+          `${phonePrefix}${formatted.replace(/\s/g, '')}`,
+          user.countryCode
+        );
+        // Could show validation feedback here
+      } catch (error) {
+        // Silent validation - don't interrupt user
+      }
+    }
   };
 
   const validateForm = () => {
@@ -70,9 +113,12 @@ export default function AddPaymentMethodScreen() {
       return false;
     }
 
+    const selectedOp = operators.find(op => op.id === selectedProvider);
+    const expectedLength = selectedOp?.phoneLength || 10;
     const cleanPhone = phoneNumber.replace(/\s/g, '');
-    if (cleanPhone.length !== 10) {
-      Alert.alert('Erreur', 'Le numéro de téléphone doit contenir 10 chiffres');
+    
+    if (cleanPhone.length !== expectedLength) {
+      Alert.alert('Erreur', `Le numéro de téléphone doit contenir ${expectedLength} chiffres`);
       return false;
     }
 
@@ -174,15 +220,15 @@ export default function AddPaymentMethodScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Numéro de téléphone</Text>
           <View style={styles.inputContainer}>
-            <Text style={styles.inputPrefix}>+237</Text>
+            <Text style={styles.inputPrefix}>{phonePrefix}</Text>
             <TextInput
               style={styles.input}
-              placeholder="XX XX XX XX XX"
+              placeholder={phoneFormat}
               placeholderTextColor={Colors.textTertiary}
               value={phoneNumber}
               onChangeText={handlePhoneChange}
               keyboardType="phone-pad"
-              maxLength={14} // 10 digits + 4 spaces
+              maxLength={phoneFormat.length}
             />
           </View>
           <Text style={styles.inputHint}>
@@ -227,7 +273,7 @@ export default function AddPaymentMethodScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgSecondary,
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     flex: 1,

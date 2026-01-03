@@ -4,6 +4,7 @@ import {
   NotFoundError, 
   AuthorizationError 
 } from '@repo/utils';
+import { updateGoalProgressFromResults } from './goal.service';
 
 const prisma = new PrismaClient();
 
@@ -131,6 +132,14 @@ export async function createAcademicResult(
 
   // Check if student should receive Progressiste badge (Requirement 10.4)
   await checkProgressisteBadge(studentId);
+
+  // Update learning goals progress for this subject
+  try {
+    await updateGoalProgressFromResults(studentId, data.subject);
+  } catch (error) {
+    console.error('Failed to update goal progress:', error);
+    // Don't fail the result creation if goal update fails
+  }
 
   return result as AcademicResultWithDetails;
 }

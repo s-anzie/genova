@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import * as paymentService from '../services/payment.service';
-import { ValidationError } from '@repo/utils';
+import { ValidationError, logger } from '@repo/utils';
 
 const router = Router();
 
@@ -130,7 +130,16 @@ router.get(
         data: balance,
       });
     } catch (error) {
-      next(error);
+      // Return default balance instead of error to prevent dashboard cascade failures
+      logger.error('Failed to get wallet balance:', error);
+      res.json({
+        success: true,
+        data: {
+          totalBalance: 0,
+          availableBalance: 0,
+          pendingBalance: 0,
+        },
+      });
     }
   }
 );

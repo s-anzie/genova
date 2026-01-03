@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { API_ENDPOINTS } from '@/config/api';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   firstName: string;
@@ -64,6 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (token && userData) {
         setUser(JSON.parse(userData));
+        
+        // Reset logout flag in ApiClient to allow API calls
+        const { apiClient } = await import('@/utils/api-client');
+        apiClient.resetLogoutFlag();
+        
         // Schedule token refresh (15 minutes - 1 minute buffer = 14 minutes)
         scheduleTokenRefresh(14 * 60 * 1000);
       }
@@ -131,6 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
       
       setUser(data.user);
+      
+      // Reset logout flag in ApiClient to allow API calls
+      const { apiClient } = await import('@/utils/api-client');
+      apiClient.resetLogoutFlag();
       
       // Schedule token refresh
       scheduleTokenRefresh(14 * 60 * 1000);
@@ -279,6 +288,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (token && userData) {
           setUser(JSON.parse(userData));
+          
+          // Reset logout flag in ApiClient to allow API calls
+          const { apiClient } = await import('@/utils/api-client');
+          apiClient.resetLogoutFlag();
+          
           scheduleTokenRefresh(14 * 60 * 1000);
         } else {
           throw new Error('No stored credentials found. Please login with email and password.');

@@ -7,7 +7,6 @@ export default function TutorMarketplaceLayout() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="index" />
       <Stack.Screen name="create-product" />
       <Stack.Screen name="edit-product" />
     </Stack>

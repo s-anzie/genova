@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { ValidationError, NotFoundError } from '@repo/utils';
+import { getCountryByCode } from './regions.service';
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,11 @@ export interface TutorSearchResult {
   isVerified: boolean;
   matchingScore: number;
   distance?: number;
+  city?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  currencySymbol?: string;
+  timezone?: string;
 }
 
 /**
@@ -259,6 +265,7 @@ export async function searchTutors(
           avatarUrl: true,
           city: true,
           country: true,
+          countryCode: true,
         },
       },
     },
@@ -300,6 +307,16 @@ export async function searchTutors(
     // Calculate matching score
     const matchingScore = calculateMatchingScore(tutor, criteria, distance);
 
+    // Enrich with regional data
+    let countryData = null;
+    if (tutor.user.countryCode) {
+      try {
+        countryData = await getCountryByCode(tutor.user.countryCode);
+      } catch (error) {
+        // Silently fail - country data is optional enrichment
+      }
+    }
+
     results.push({
       id: tutor.id,
       userId: tutor.userId,
@@ -317,6 +334,11 @@ export async function searchTutors(
       isVerified: tutor.isVerified,
       matchingScore,
       distance,
+      city: tutor.user.city,
+      country: countryData?.name || tutor.user.country,
+      countryCode: tutor.user.countryCode,
+      currencySymbol: countryData?.currencySymbol,
+      timezone: countryData?.timezone,
     });
   }
 
@@ -341,6 +363,7 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
           avatarUrl: true,
           city: true,
           country: true,
+          countryCode: true,
           createdAt: true,
         },
       },
@@ -349,6 +372,16 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
 
   if (!tutor) {
     throw new NotFoundError('Tutor not found');
+  }
+
+  // Enrich with regional data
+  let countryData = null;
+  if (tutor.user.countryCode) {
+    try {
+      countryData = await getCountryByCode(tutor.user.countryCode);
+    } catch (error) {
+      // Silently fail - country data is optional enrichment
+    }
   }
 
   return {
@@ -372,7 +405,10 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
     totalReviews: tutor.totalReviews,
     isVerified: tutor.isVerified,
     city: tutor.user.city,
-    country: tutor.user.country,
+    country: countryData?.name || tutor.user.country,
+    countryCode: tutor.user.countryCode,
+    currencySymbol: countryData?.currencySymbol,
+    timezone: countryData?.timezone,
     memberSince: tutor.user.createdAt,
   };
 }
@@ -392,6 +428,7 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
           avatarUrl: true,
           city: true,
           country: true,
+          countryCode: true,
           createdAt: true,
         },
       },
@@ -400,6 +437,16 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
 
   if (!tutor) {
     throw new NotFoundError('Tutor not found');
+  }
+
+  // Enrich with regional data
+  let countryData = null;
+  if (tutor.user.countryCode) {
+    try {
+      countryData = await getCountryByCode(tutor.user.countryCode);
+    } catch (error) {
+      // Silently fail - country data is optional enrichment
+    }
   }
 
   return {
@@ -423,7 +470,10 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
     totalReviews: tutor.totalReviews,
     isVerified: tutor.isVerified,
     city: tutor.user.city,
-    country: tutor.user.country,
+    country: countryData?.name || tutor.user.country,
+    countryCode: tutor.user.countryCode,
+    currencySymbol: countryData?.currencySymbol,
+    timezone: countryData?.timezone,
     memberSince: tutor.user.createdAt,
   };
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/utils/api-client';
+import { useAuth } from '@/contexts/auth-context';
 import {
     UserResponse,
     SessionResponse,
@@ -19,6 +20,7 @@ interface TutorHomeData {
 }
 
 export function useTutorHome() {
+    const { user: authUser } = useAuth();
     const [data, setData] = useState<TutorHomeData>({
         user: null,
         profile: null,
@@ -32,6 +34,11 @@ export function useTutorHome() {
     });
 
     const fetchData = useCallback(async (isRefresh = false) => {
+        if (!authUser?.id) {
+            console.log('No authenticated user, skipping data fetch');
+            return;
+        }
+
         try {
             if (!isRefresh) {
                 setData(prev => ({ ...prev, isLoading: true, error: null }));
@@ -41,8 +48,8 @@ export function useTutorHome() {
 
             // 1. Fetch User & Profile
             const [userRes, profileRes] = await Promise.all([
-                apiClient.get<{ data: UserResponse }>('/profiles/user/me').catch(() => apiClient.get<{ data: UserResponse }>('/users/me')),
-                apiClient.get<{ data: TutorProfileResponse }>(`/profiles/tutor/me`).catch(() => ({ data: null }))
+                apiClient.get<{ data: UserResponse }>(`/profiles/user/${authUser.id}`),
+                apiClient.get<{ data: TutorProfileResponse }>(`/profiles/tutor/${authUser.id}`).catch(() => ({ data: null }))
             ]);
 
             const userId = userRes.data?.id;
@@ -98,7 +105,7 @@ export function useTutorHome() {
                 error: error.message || 'Failed to load data',
             }));
         }
-    }, []);
+    }, [authUser?.id]);
 
     useEffect(() => {
         fetchData();

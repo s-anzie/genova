@@ -131,7 +131,7 @@ export default function TimeSlotDetailScreen() {
     if (!timeSlot) return;
     console.log('🔄 Navigating to search in assignment mode for time-slot:', timeSlot.id);
     router.push({
-      pathname: '/(student)/(tabs)/search',
+      pathname: '/(student)/search',
       params: {
         timeSlotId: timeSlot.id,
         classId: timeSlot.classId,

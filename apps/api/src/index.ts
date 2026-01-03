@@ -38,6 +38,7 @@ app.get('/health', (_req, res) => {
 
 // API routes
 import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
 import profileRoutes from './routes/profile.routes';
 import classRoutes from './routes/class.routes';
 import classScheduleRoutes from './routes/class-schedule.routes';
@@ -52,12 +53,16 @@ import paymentMethodRoutes from './routes/payment-methods.routes';
 import operatorRoutes from './routes/operators.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import progressRoutes from './routes/progress.routes';
+import goalRoutes from './routes/goal.routes';
 import badgeRoutes from './routes/badge.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import reviewRoutes from './routes/review.routes';
 import schedulingRoutes from './routes/scheduling.routes';
 import notificationRoutes from './routes/notification.routes';
 import suggestionRoutes from './routes/suggestion.routes';
+import marketplaceRoutes from './routes/marketplace.routes';
+import maintenanceRoutes from './routes/maintenance.routes';
+import regionsRoutes from './routes/regions.routes';
 
 app.get('/api', (_req, res) => {
   res.json({ message: 'Genova API', version: '1.0.0' });
@@ -65,6 +70,7 @@ app.get('/api', (_req, res) => {
 
 // Mount routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/classes', classScheduleRoutes); // Schedule routes under /api/classes/:classId/schedule/*
@@ -79,12 +85,16 @@ app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/operators', operatorRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/goals', goalRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', suggestionRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/regions', regionsRoutes);
 
 // 404 handler
 app.use((_req, res) => {
@@ -116,24 +126,24 @@ app.use(
 );
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${envConfig.get('NODE_ENV', 'development')}`);
   
   // Initialize cron jobs after server starts
-  initializeCronJobs();
+  await initializeCronJobs();
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
-  stopCronJobs();
+  await stopCronJobs();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   logger.info('SIGINT signal received: closing HTTP server');
-  stopCronJobs();
+  await stopCronJobs();
   process.exit(0);
 });
 
