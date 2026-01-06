@@ -62,6 +62,7 @@ export default function StudentOnboardingScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [formData, setFormData] = useState<OnboardingData>({
     countryCode: '',
     educationSystemId: '',
@@ -189,6 +190,12 @@ export default function StudentOnboardingScreen() {
 
       await apiClient.post('/profiles/student', profileData);
 
+      // Refresh profile context to update onboarding status
+      console.log('🔄 Refreshing profile after onboarding...');
+      
+      // Wait a bit for the backend to process
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       setShowSuccessModal(true);
     } catch (error: any) {
       const message = error?.message || (typeof error === 'string' ? error : 'Impossible de créer votre profil');
@@ -626,8 +633,13 @@ export default function StudentOnboardingScreen() {
         primaryButton={{
           text: 'Commencer',
           onPress: () => {
+            if (isRedirecting) return;
+            setIsRedirecting(true);
             setShowSuccessModal(false);
-            router.replace('/(student)/(tabs)/home');
+            // Force a small delay to ensure state updates
+            setTimeout(() => {
+              router.replace('/(student)/(tabs)/home');
+            }, 100);
           },
         }}
         showCloseButton={false}

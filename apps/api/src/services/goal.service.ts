@@ -10,7 +10,8 @@ const prisma = new PrismaClient();
 // Types
 export interface CreateLearningGoalData {
   classId?: string;
-  levelSubjectId: string; // Required: Reference to LevelSubject
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   title: string;
   description?: string;
   targetScore: number;
@@ -44,8 +45,12 @@ export interface GoalProgress {
  * Validate learning goal data
  */
 function validateLearningGoal(data: CreateLearningGoalData): void {
-  if (!data.levelSubjectId) {
-    throw new ValidationError('levelSubjectId is required');
+  if (!data.levelSubjectId && !data.streamSubjectId) {
+    throw new ValidationError('Either levelSubjectId or streamSubjectId is required');
+  }
+
+  if (data.levelSubjectId && data.streamSubjectId) {
+    throw new ValidationError('Cannot specify both levelSubjectId and streamSubjectId');
   }
 
   if (!data.title || data.title.trim().length === 0) {
@@ -90,13 +95,23 @@ export async function createLearningGoal(
     throw new AuthorizationError('Only students can create learning goals');
   }
 
-  // Verify levelSubject exists
-  const levelSubject = await prisma.levelSubject.findUnique({
-    where: { id: data.levelSubjectId },
-  });
+  // Verify levelSubject or streamSubject exists
+  if (data.levelSubjectId) {
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: data.levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject not found');
+    }
+  }
 
-  if (!levelSubject) {
-    throw new NotFoundError('LevelSubject not found');
+  if (data.streamSubjectId) {
+    const streamSubject = await prisma.streamSubject.findUnique({
+      where: { id: data.streamSubjectId },
+    });
+    if (!streamSubject) {
+      throw new NotFoundError('StreamSubject not found');
+    }
   }
 
   // Create goal
@@ -104,7 +119,8 @@ export async function createLearningGoal(
     data: {
       studentId,
       classId: data.classId,
-      levelSubjectId: data.levelSubjectId,
+      levelSubjectId: data.levelSubjectId || null,
+      streamSubjectId: data.streamSubjectId || null,
       title: data.title.trim(),
       description: data.description?.trim(),
       targetScore: data.targetScore,
@@ -122,6 +138,7 @@ export async function getStudentGoals(
   studentId: string,
   filters?: {
     levelSubjectId?: string;
+    streamSubjectId?: string;
     isCompleted?: boolean;
     includeOverdue?: boolean;
   }
@@ -130,6 +147,10 @@ export async function getStudentGoals(
 
   if (filters?.levelSubjectId) {
     where.levelSubjectId = filters.levelSubjectId;
+  }
+
+  if (filters?.streamSubjectId) {
+    where.streamSubjectId = filters.streamSubjectId;
   }
 
   if (filters?.isCompleted !== undefined) {
@@ -154,6 +175,12 @@ export async function getStudentGoals(
         include: {
           subject: true,
           level: true,
+        },
+      },
+      streamSubject: {
+        include: {
+          subject: true,
+          stream: true,
         },
       },
     },
@@ -251,15 +278,22 @@ export async function getGoalProgress(
 ): Promise<GoalProgress> {
   const goal = await getLearningGoalById(goalId, studentId);
 
-  // Get recent academic results for this levelSubject
-  const results = await prisma.academicResult.findMany({
-    where: {
-      studentId,
-      levelSubjectId: goal.levelSubjectId,
-      examDate: {
-        gte: goal.createdAt,
-      },
+  // Get recent academic results for this subject (levelSubject or streamSubject)
+  const whereClause: any = {
+    studentId,
+    examDate: {
+      gte: goal.createdAt,
     },
+  };
+
+  if (goal.levelSubjectId) {
+    whereClause.levelSubjectId = goal.levelSubjectId;
+  } else if (goal.streamSubjectId) {
+    whereClause.streamSubjectId = goal.streamSubjectId;
+  }
+
+  const results = await prisma.academicResult.findMany({
+    where: whereClause,
     orderBy: {
       examDate: 'desc',
     },
@@ -297,27 +331,41 @@ export async function getGoalProgress(
  */
 export async function updateGoalProgressFromResults(
   studentId: string,
-  levelSubjectId: string
+  levelSubjectId?: string,
+  streamSubjectId?: string
 ): Promise<void> {
-  // Get all active goals for this levelSubject
+  // Get all active goals for this subject
+  const whereClause: any = {
+    studentId,
+    isCompleted: false,
+  };
+
+  if (levelSubjectId) {
+    whereClause.levelSubjectId = levelSubjectId;
+  } else if (streamSubjectId) {
+    whereClause.streamSubjectId = streamSubjectId;
+  } else {
+    return; // Need at least one subject ID
+  }
+
   const goals = await prisma.learningGoal.findMany({
-    where: {
-      studentId,
-      levelSubjectId,
-      isCompleted: false,
-    },
+    where: whereClause,
   });
 
   if (goals.length === 0) {
     return;
   }
 
-  // Get latest academic results for this levelSubject
+  // Get latest academic results for this subject
+  const resultsWhereClause: any = { studentId };
+  if (levelSubjectId) {
+    resultsWhereClause.levelSubjectId = levelSubjectId;
+  } else if (streamSubjectId) {
+    resultsWhereClause.streamSubjectId = streamSubjectId;
+  }
+
   const results = await prisma.academicResult.findMany({
-    where: {
-      studentId,
-      levelSubjectId,
-    },
+    where: resultsWhereClause,
     orderBy: {
       examDate: 'desc',
     },

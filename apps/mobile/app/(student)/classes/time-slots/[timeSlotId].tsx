@@ -25,6 +25,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
 import { useAuth } from '@/contexts/auth-context';
 import { PageHeader } from '@/components/PageHeader';
+import { Ionicons } from '@expo/vector-icons';
 
 interface TutorAssignment {
   id: string;
@@ -47,11 +48,26 @@ interface TutorAssignment {
 interface TimeSlot {
   id: string;
   classId: string;
-  subject: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
   isActive: boolean;
+  levelSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      icon?: string;
+    };
+  };
+  streamSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      icon?: string;
+    };
+  };
   tutorAssignments: TutorAssignment[];
 }
 
@@ -129,13 +145,14 @@ export default function TimeSlotDetailScreen() {
 
   const handleAddAssignment = () => {
     if (!timeSlot) return;
+    const subjectName = timeSlot.levelSubject?.subject.name || timeSlot.streamSubject?.subject.name || 'Matière';
     console.log('🔄 Navigating to search in assignment mode for time-slot:', timeSlot.id);
     router.push({
       pathname: '/(student)/search',
       params: {
         timeSlotId: timeSlot.id,
         classId: timeSlot.classId,
-        subject: timeSlot.subject,
+        subject: subjectName,
       },
     } as any);
   };
@@ -224,7 +241,9 @@ export default function TimeSlotDetailScreen() {
         {/* Time Slot Info Card */}
         <View style={styles.infoCard}>
           <View style={styles.subjectHeader}>
-            <Text style={styles.subjectTitle}>{timeSlot.subject}</Text>
+            <Text style={styles.subjectTitle}>
+              {timeSlot.levelSubject?.subject.name || timeSlot.streamSubject?.subject.name || 'Matière'}
+            </Text>
             <View style={[styles.statusBadge, { backgroundColor: timeSlot.isActive ? '#10B981' : '#EF4444' }]}>
               <Text style={styles.statusBadgeText}>
                 {timeSlot.isActive ? 'Actif' : 'Inactif'}
@@ -385,16 +404,18 @@ export default function TimeSlotDetailScreen() {
         onRequestClose={() => setShowCalendarModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Aperçu du calendrier</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setShowCalendarModal(false)}
-            >
-              <Text style={styles.modalCloseText}>Fermer</Text>
-            </TouchableOpacity>
-          </View>
-
+          <PageHeader
+            title='calendrier'
+            variant='primary'
+            rightElement= {
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowCalendarModal(false)}
+              >
+                <Ionicons name='close' size={24} color={Colors.white} />
+              </TouchableOpacity>
+            }
+          />
           <ScrollView style={styles.modalContent}>
             {sessionPreview.map((session, index) => {
               const sessionDate = new Date(session.sessionDate);
@@ -692,7 +713,7 @@ const styles = StyleSheet.create({
   modalCloseText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.white,
   },
   modalContent: {
     flex: 1,

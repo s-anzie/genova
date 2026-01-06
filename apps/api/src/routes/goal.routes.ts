@@ -28,16 +28,17 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
-    const { classId, levelSubjectId, title, description, targetScore, deadline } = req.body;
+    const { classId, levelSubjectId, streamSubjectId, title, description, targetScore, deadline } = req.body;
 
     // Validate required fields
-    if (!levelSubjectId || !title || targetScore === undefined || !deadline) {
-      throw new ValidationError('levelSubjectId, title, target score, and deadline are required');
+    if ((!levelSubjectId && !streamSubjectId) || !title || targetScore === undefined || !deadline) {
+      throw new ValidationError('Either levelSubjectId or streamSubjectId, title, target score, and deadline are required');
     }
 
     const goalData: CreateLearningGoalData = {
       classId,
       levelSubjectId,
+      streamSubjectId,
       title,
       description,
       targetScore: parseFloat(targetScore),

@@ -10,13 +10,6 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 
 // Types
-export interface EducationLevel {
-  level: string;
-  system?: string;
-  specificLevel?: string;
-  stream?: string;
-}
-
 export interface CreateClassData {
   name: string;
   description?: string;
@@ -25,9 +18,7 @@ export interface CreateClassData {
   educationLevelId?: string;
   educationStreamId?: string;
   levelSubjectIds?: string[]; // Array of LevelSubject IDs
-  // Legacy fields (DEPRECATED - for backward compatibility)
-  educationLevel?: EducationLevel;
-  subjects?: string[];
+  streamSubjectIds?: string[]; // Array of StreamSubject IDs (for levels with streams)
   maxStudents?: number;
   meetingType: 'IN_PERSON' | 'ONLINE';
   meetingLocation?: string;
@@ -75,12 +66,12 @@ export async function createClass(
     throw new ValidationError('Name is required');
   }
 
-  // Check if using new education relations or legacy format
-  const useNewFormat = data.educationSystemId && data.educationLevelId && data.levelSubjectIds;
-  const useLegacyFormat = data.educationLevel && data.subjects;
+  if (!data.educationSystemId || !data.educationLevelId) {
+    throw new ValidationError('Education system and level are required');
+  }
 
-  if (!useNewFormat && !useLegacyFormat) {
-    throw new ValidationError('Either education relations (educationSystemId, educationLevelId, levelSubjectIds) or legacy format (educationLevel, subjects) is required');
+  if (!data.levelSubjectIds?.length && !data.streamSubjectIds?.length) {
+    throw new ValidationError('At least one subject is required');
   }
 
   // Validate meeting type and location
@@ -139,8 +130,8 @@ export async function createClass(
     },
   });
 
-  // Create ClassSubject entries if using new format
-  if (useNewFormat && data.levelSubjectIds && data.levelSubjectIds.length > 0) {
+  // Create level subject entries
+  if (data.levelSubjectIds && data.levelSubjectIds.length > 0) {
     await Promise.all(
       data.levelSubjectIds.map(levelSubjectId =>
         prisma.classSubject.create({
@@ -152,10 +143,23 @@ export async function createClass(
       )
     );
   }
+  
+  // Create stream subject entries
+  if (data.streamSubjectIds && data.streamSubjectIds.length > 0) {
+    await Promise.all(
+      data.streamSubjectIds.map(streamSubjectId =>
+        prisma.classSubject.create({
+          data: {
+            classId: classData.id,
+            streamSubjectId,
+          },
+        })
+      )
+    );
+  }
 
   return classData as ClassWithMembers;
 }
-
 /**
  * Get class by ID
  */
@@ -199,6 +203,12 @@ export async function getClassById(classId: string): Promise<ClassWithMembers> {
             include: {
               subject: true,
               level: true,
+            },
+          },
+          streamSubject: {
+            include: {
+              subject: true,
+              stream: true,
             },
           },
         },
@@ -266,6 +276,11 @@ export async function getUserClasses(userId: string): Promise<ClassWithMembers[]
       classSubjects: {
         include: {
           levelSubject: {
+            include: {
+              subject: true,
+            },
+          },
+          streamSubject: {
             include: {
               subject: true,
             },

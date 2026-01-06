@@ -217,6 +217,11 @@ export async function getSessionSuggestionsForTutor(tutorId: string) {
                     subject: true,
                   },
                 },
+                streamSubject: {
+                  include: {
+                    subject: true,
+                  },
+                },
               },
             },
             _count: {
@@ -258,8 +263,13 @@ export async function getSessionSuggestionsForTutor(tutorId: string) {
       const hourlyRate = tutor.tutorProfile?.hourlyRate ? Number(tutor.tutorProfile.hourlyRate) : 0;
       const potentialEarnings = duration * studentCount * hourlyRate;
 
-      // Extract class subjects
-      const classSubjects = session.class.classSubjects.map(cs => cs.levelSubject.subject.name);
+      // Extract class subjects (handle both levelSubject and streamSubject)
+      const classSubjects = session.class.classSubjects
+        .map(cs => {
+          const subject = cs.levelSubject?.subject || cs.streamSubject?.subject;
+          return subject?.name;
+        })
+        .filter((name): name is string => name !== undefined);
 
       return {
         session: {

@@ -28,7 +28,7 @@ const router = Router();
 router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, res: Response) => {
   try {
     const { classId } = req.params;
-    const { levelSubjectId, dayOfWeek, startTime, endTime } = req.body;
+    const { levelSubjectId, streamSubjectId, dayOfWeek, startTime, endTime } = req.body;
 
     if (!classId) {
       return res.status(400).json({
@@ -37,10 +37,10 @@ router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, 
       });
     }
 
-    if (!levelSubjectId || dayOfWeek === undefined || !startTime || !endTime) {
+    if ((!levelSubjectId && !streamSubjectId) || dayOfWeek === undefined || !startTime || !endTime) {
       return res.status(400).json({
         success: false,
-        error: { message: 'levelSubjectId, dayOfWeek, startTime, and endTime are required' },
+        error: { message: 'Either levelSubjectId or streamSubjectId, dayOfWeek, startTime, and endTime are required' },
       });
     }
 
@@ -53,6 +53,7 @@ router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, 
 
     const data: CreateTimeSlotData = {
       levelSubjectId,
+      streamSubjectId,
       dayOfWeek: parseInt(dayOfWeek),
       startTime,
       endTime,

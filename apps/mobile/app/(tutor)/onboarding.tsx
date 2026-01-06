@@ -334,13 +334,41 @@ export default function TutorOnboardingScreen() {
       <View style={styles.iconContainer}>
         <BookOpen size={48} color={Colors.primary} strokeWidth={2} />
       </View>
-      <Text style={styles.stepTitle}>Matières enseignées</Text>
+      <Text style={styles.stepTitle}>Matières et niveaux</Text>
       <Text style={styles.stepDescription}>
-        Sélectionnez les matières que vous pouvez enseigner
+        Sélectionnez les niveaux et matières que vous pouvez enseigner
       </Text>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Matières ({formData.subjects.length})</Text>
+        <Text style={styles.label}>Niveaux d'enseignement ({formData.educationLevels.length})</Text>
+        <View style={styles.subjectsGrid}>
+          {EDUCATION_LEVELS.map((level) => (
+            <TouchableOpacity
+              key={level}
+              style={[
+                styles.subjectChip,
+                formData.educationLevels.includes(level) && styles.subjectChipActive,
+              ]}
+              onPress={() => toggleItem('educationLevels', level)}
+            >
+              {formData.educationLevels.includes(level) && (
+                <Check size={16} color={Colors.white} strokeWidth={3} />
+              )}
+              <Text
+                style={[
+                  styles.subjectChipText,
+                  formData.educationLevels.includes(level) && styles.subjectChipTextActive,
+                ]}
+              >
+                {level}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>Matières enseignées ({formData.subjects.length})</Text>
         <View style={styles.subjectsGrid}>
           {SUBJECTS.map((subject) => (
             <TouchableOpacity
@@ -367,32 +395,10 @@ export default function TutorOnboardingScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Niveaux ({formData.educationLevels.length})</Text>
-        <View style={styles.optionsGrid}>
-          {EDUCATION_LEVELS.map((level) => (
-            <TouchableOpacity
-              key={level}
-              style={[
-                styles.optionCard,
-                formData.educationLevels.includes(level) && styles.optionCardActive,
-              ]}
-              onPress={() => toggleItem('educationLevels', level)}
-            >
-              {formData.educationLevels.includes(level) && (
-                <Check size={18} color={Colors.white} strokeWidth={3} style={styles.checkIcon} />
-              )}
-              <Text
-                style={[
-                  styles.optionText,
-                  formData.educationLevels.includes(level) && styles.optionTextActive,
-                ]}
-              >
-                {level}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          💡 Sélectionnez tous les niveaux et matières que vous maîtrisez pour maximiser vos opportunités
+        </Text>
       </View>
     </View>
   );

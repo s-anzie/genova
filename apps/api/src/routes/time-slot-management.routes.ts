@@ -33,6 +33,16 @@ router.get('/:classId/time-slots/:timeSlotId', async (req: Request, res: Respons
     const timeSlot = await prisma.classTimeSlot.findUnique({
       where: { id: timeSlotId },
       include: {
+        levelSubject: {
+          include: {
+            subject: true,
+          },
+        },
+        streamSubject: {
+          include: {
+            subject: true,
+          },
+        },
         tutorAssignments: {
           where: { isActive: true },
           include: {

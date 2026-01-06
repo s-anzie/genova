@@ -146,10 +146,11 @@ model TutorProfile {
   verificationDocuments String[]
   onboardingCompleted   Boolean      @default(false)
 
-  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  teachingSubjects  TutorTeachingSubject[] // What the tutor actually teaches (subject + level)
-  teachingLanguages TutorTeachingLanguage[] // New: Teaching languages as relations
-  availabilities    TutorAvailability[] // Use TutorAvailability table for availability
+  user                    User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teachingSubjects        TutorTeachingSubject[] // What the tutor teaches (level subjects)
+  teachingStreamSubjects  TutorTeachingStreamSubject[] // What the tutor teaches (stream subjects)
+  teachingLanguages       TutorTeachingLanguage[] // Teaching languages as relations
+  availabilities          TutorAvailability[] // Use TutorAvailability table for availability
 
   @@map("tutor_profiles")
 }
@@ -213,23 +214,26 @@ model Class {
 }
 
 model ClassTimeSlot {
-  id             String   @id @default(uuid())
-  classId        String
-  levelSubjectId String? // New: Reference to LevelSubject
-  dayOfWeek      Int // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  startTime      String // Format: "HH:MM" (e.g., "14:00")
-  endTime        String // Format: "HH:MM" (e.g., "16:00")
-  createdAt      DateTime @default(now())
-  isActive       Boolean  @default(true)
+  id               String   @id @default(uuid())
+  classId          String
+  levelSubjectId   String? // Reference to LevelSubject (for levels without streams)
+  streamSubjectId  String? // Reference to StreamSubject (for levels with streams)
+  dayOfWeek        Int // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime        String // Format: "HH:MM" (e.g., "14:00")
+  endTime          String // Format: "HH:MM" (e.g., "16:00")
+  createdAt        DateTime @default(now())
+  isActive         Boolean  @default(true)
 
   class            Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
   levelSubject     LevelSubject?           @relation(fields: [levelSubjectId], references: [id])
+  streamSubject    StreamSubject?          @relation(fields: [streamSubjectId], references: [id])
   cancellations    ClassSlotCancellation[]
   tutorAssignments ClassTutorAssignment[]
 
   @@index([classId])
   @@index([dayOfWeek])
   @@index([levelSubjectId])
+  @@index([streamSubjectId])
   @@map("class_time_slots")
 }
 
@@ -564,20 +568,23 @@ model UserBadge {
 // ============================================================================
 
 model AcademicResult {
-  id             String   @id @default(uuid())
-  studentId      String
-  levelSubjectId String? // New: Reference to LevelSubject
-  examName       String
-  score          Decimal  @db.Decimal(5, 2)
-  maxScore       Decimal  @db.Decimal(5, 2)
-  examDate       DateTime
-  createdAt      DateTime @default(now())
+  id               String   @id @default(uuid())
+  studentId        String
+  levelSubjectId   String? // Reference to LevelSubject (for levels without streams)
+  streamSubjectId  String? // Reference to StreamSubject (for levels with streams)
+  examName         String
+  score            Decimal  @db.Decimal(5, 2)
+  maxScore         Decimal  @db.Decimal(5, 2)
+  examDate         DateTime
+  createdAt        DateTime @default(now())
 
-  student      User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  levelSubject LevelSubject? @relation(fields: [levelSubjectId], references: [id])
+  student       User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  levelSubject  LevelSubject?  @relation(fields: [levelSubjectId], references: [id])
+  streamSubject StreamSubject? @relation(fields: [streamSubjectId], references: [id])
 
   @@index([studentId])
   @@index([levelSubjectId])
+  @@index([streamSubjectId])
   @@index([examDate])
   @@map("academic_results")
 }
@@ -588,7 +595,8 @@ model LearningGoal {
   classId   String? // Optional: link to specific class
 
   // New structured fields
-  levelSubjectId String? // Reference to LevelSubject
+  levelSubjectId  String? // Reference to LevelSubject (for levels without streams)
+  streamSubjectId String? // Reference to StreamSubject (for levels with streams)
 
   // Legacy fields (to be removed after migration)
   subject        String? // Subject name - DEPRECATED
@@ -604,13 +612,15 @@ model LearningGoal {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  student      User          @relation("StudentGoals", fields: [studentId], references: [id], onDelete: Cascade)
-  levelSubject LevelSubject? @relation(fields: [levelSubjectId], references: [id])
+  student       User           @relation("StudentGoals", fields: [studentId], references: [id], onDelete: Cascade)
+  levelSubject  LevelSubject?  @relation(fields: [levelSubjectId], references: [id])
+  streamSubject StreamSubject? @relation(fields: [streamSubjectId], references: [id])
 
   @@index([studentId])
   @@index([classId])
   @@index([subject])
   @@index([levelSubjectId])
+  @@index([streamSubjectId])
   @@index([deadline])
   @@index([isCompleted])
   @@map("learning_goals")
@@ -621,26 +631,29 @@ model LearningGoal {
 // ============================================================================
 
 model ShopProduct {
-  id             String      @id @default(uuid())
-  sellerId       String
-  title          String
-  description    String?
-  productType    ProductType
-  levelSubjectId String? // New: Reference to LevelSubject
-  price          Decimal     @db.Decimal(10, 2)
-  fileUrl        String?
-  previewUrl     String?
-  downloadsCount Int         @default(0)
-  rating         Decimal     @default(0) @db.Decimal(3, 2)
-  isActive       Boolean     @default(true)
-  createdAt      DateTime    @default(now())
+  id               String      @id @default(uuid())
+  sellerId         String
+  title            String
+  description      String?
+  productType      ProductType
+  levelSubjectId   String? // Reference to LevelSubject (for levels without streams)
+  streamSubjectId  String? // Reference to StreamSubject (for levels with streams)
+  price            Decimal     @db.Decimal(10, 2)
+  fileUrl          String?
+  previewUrl       String?
+  downloadsCount   Int         @default(0)
+  rating           Decimal     @default(0) @db.Decimal(3, 2)
+  isActive         Boolean     @default(true)
+  createdAt        DateTime    @default(now())
 
-  seller       User           @relation(fields: [sellerId], references: [id])
-  levelSubject LevelSubject?  @relation(fields: [levelSubjectId], references: [id])
-  purchases    ShopPurchase[]
+  seller        User           @relation(fields: [sellerId], references: [id])
+  levelSubject  LevelSubject?  @relation(fields: [levelSubjectId], references: [id])
+  streamSubject StreamSubject? @relation(fields: [streamSubjectId], references: [id])
+  purchases     ShopPurchase[]
 
   @@index([sellerId])
   @@index([levelSubjectId])
+  @@index([streamSubjectId])
   @@map("shop_products")
 }
 
@@ -933,6 +946,12 @@ model StreamSubject {
   stream                         EducationStream                   @relation(fields: [streamId], references: [id], onDelete: Cascade)
   subject                        Subject                           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   studentPreferredStreamSubjects StudentPreferredStreamSubject[] // Students who prefer this stream subject
+  tutorTeachings                 TutorTeachingStreamSubject[] // Tutors who teach this subject in this stream
+  classTimeSlots                 ClassTimeSlot[] // Time slots for this subject
+  learningGoals                  LearningGoal[] // Learning goals for this subject
+  academicResults                AcademicResult[] // Academic results for this subject
+  shopProducts                   ShopProduct[] // Products for this subject
+  classSubjects                  ClassSubject[] // Classes teaching this subject
 
   @@unique([streamId, subjectId])
   @@index([streamId])
@@ -1064,6 +1083,25 @@ model TutorTeachingSubject {
   @@map("tutor_teaching_subjects")
 }
 
+// 8b. Tutor Teaching Stream Subjects - What tutors teach in specific streams
+// Example: "Math in Terminale S", "Physics in Première C"
+model TutorTeachingStreamSubject {
+  id              String   @id @default(uuid())
+  tutorProfileId  String
+  streamSubjectId String
+  yearsExperience Int? // Years teaching this specific subject in this stream
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tutorProfile  TutorProfile  @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  streamSubject StreamSubject @relation(fields: [streamSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([tutorProfileId, streamSubjectId])
+  @@index([tutorProfileId])
+  @@index([streamSubjectId])
+  @@map("tutor_teaching_stream_subjects")
+}
+
 // ============================================================================
 // TUTOR TEACHING LANGUAGES (NEW)
 // ============================================================================
@@ -1128,19 +1166,24 @@ model StudentPreferredStreamSubject {
 // ============================================================================
 
 // 9. Class Subjects - Subjects taught in a class
-// Links a class to specific LevelSubject combinations
+// Links a class to specific LevelSubject or StreamSubject combinations
 // Example: A "Terminale S" class teaches Math, Physics, French at Terminale level
+// Can reference either levelSubjectId OR streamSubjectId (not both)
 model ClassSubject {
-  id             String   @id @default(uuid())
-  classId        String
-  levelSubjectId String
-  createdAt      DateTime @default(now())
+  id              String   @id @default(uuid())
+  classId         String
+  levelSubjectId  String? // Reference to LevelSubject (for levels without streams)
+  streamSubjectId String? // Reference to StreamSubject (for levels with streams)
+  createdAt       DateTime @default(now())
 
-  class        Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  levelSubject LevelSubject @relation(fields: [levelSubjectId], references: [id], onDelete: Cascade)
+  class         Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  levelSubject  LevelSubject?  @relation(fields: [levelSubjectId], references: [id], onDelete: Cascade)
+  streamSubject StreamSubject? @relation(fields: [streamSubjectId], references: [id], onDelete: Cascade)
 
   @@unique([classId, levelSubjectId])
+  @@unique([classId, streamSubjectId])
   @@index([classId])
   @@index([levelSubjectId])
+  @@index([streamSubjectId])
   @@map("class_subjects")
 }

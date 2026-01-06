@@ -24,14 +24,43 @@ export interface UserResponse {
 export interface StudentProfileResponse {
   id: string;
   userId: string;
-  educationLevel: string;
+  educationSystemId: string | null;
+  educationLevelId: string | null;
+  educationStreamId: string | null;
+  educationLevel: string; // Legacy field for backward compatibility
   educationDetails?: string; // JSON string containing detailed education info
   schoolName: string | null;
   parentEmail: string | null;
   parentPhone: string | null;
   learningGoals: string | null;
-  preferredSubjects: string[];
+  preferredSubjects: string[]; // Array of subject names (computed from relations)
   budgetPerHour: number | null;
+  onboardingCompleted: boolean;
+  // Relations
+  preferredLevelSubjects?: Array<{
+    id: string;
+    levelSubject: {
+      id: string;
+      subject: {
+        id: string;
+        name: string;
+        code: string;
+        icon?: string;
+      };
+    };
+  }>;
+  preferredStreamSubjects?: Array<{
+    id: string;
+    streamSubject: {
+      id: string;
+      subject: {
+        id: string;
+        name: string;
+        code: string;
+        icon?: string;
+      };
+    };
+  }>;
   user?: UserResponse;
 }
 
@@ -73,19 +102,12 @@ export interface TimeSlot {
   end: string;
 }
 
-export interface EducationLevel {
-  level: string;
-  system?: string;
-  specificLevel?: string;
-  stream?: string;
-}
-
 export interface ClassResponse {
   id: string;
   name: string;
   description: string | null;
   createdBy: string;
-  // New structured education fields
+  // Education fields
   educationSystemId: string | null;
   educationLevelId: string | null;
   educationStreamId: string | null;
@@ -101,19 +123,33 @@ export interface ClassResponse {
   };
   classSubjects?: Array<{
     id: string;
-    levelSubject: {
+    levelSubject?: {
       id: string;
+      isCore: boolean;
+      coefficient: number | null;
+      hoursPerWeek: number | null;
       subject: {
         id: string;
         name: string;
         code: string;
         icon?: string;
+        color?: string;
+      };
+    };
+    streamSubject?: {
+      id: string;
+      isCore: boolean;
+      coefficient: number | null;
+      hoursPerWeek: number | null;
+      subject: {
+        id: string;
+        name: string;
+        code: string;
+        icon?: string;
+        color?: string;
       };
     };
   }>;
-  // Legacy fields (deprecated, kept for backward compatibility)
-  educationLevel?: EducationLevel;
-  subjects?: string[];
   maxStudents: number | null;
   meetingType: 'IN_PERSON' | 'ONLINE';
   meetingLocation: string | null;
@@ -153,8 +189,12 @@ export interface ClassMemberResponse {
 export interface CreateClassData {
   name: string;
   description?: string;
-  educationLevel: EducationLevel;
-  subjects: string[]; // Changed from single subject to array
+  // Education fields
+  educationSystemId?: string;
+  educationLevelId?: string;
+  educationStreamId?: string;
+  levelSubjectIds?: string[]; // Array of LevelSubject IDs
+  streamSubjectIds?: string[]; // Array of StreamSubject IDs (for levels with streams)
   maxStudents?: number;
   meetingType: 'IN_PERSON' | 'ONLINE';
   meetingLocation?: string;
@@ -464,7 +504,8 @@ export interface AcademicResultResponse {
 }
 
 export interface CreateAcademicResultData {
-  subject: string;
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   examName: string;
   score: number;
   maxScore: number;
@@ -513,8 +554,10 @@ export interface LearningGoal {
 
 export interface CreateLearningGoalData {
   classId?: string;
-  subject: string;
-  educationLevel?: any; // Education level details
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
+  subject?: string; // Legacy field for backward compatibility
+  educationLevel?: any; // Education level details (legacy)
   title: string;
   description?: string;
   targetScore: number;

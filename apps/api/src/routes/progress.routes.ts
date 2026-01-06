@@ -28,15 +28,16 @@ router.post('/results', async (req: Request, res: Response, next: NextFunction) 
       throw new ValidationError('User not authenticated');
     }
 
-    const { levelSubjectId, examName, score, maxScore, examDate } = req.body;
+    const { levelSubjectId, streamSubjectId, examName, score, maxScore, examDate } = req.body;
 
     // Validate required fields
-    if (!levelSubjectId || !examName || score === undefined || maxScore === undefined || !examDate) {
-      throw new ValidationError('levelSubjectId, exam name, score, max score, and exam date are required');
+    if ((!levelSubjectId && !streamSubjectId) || !examName || score === undefined || maxScore === undefined || !examDate) {
+      throw new ValidationError('Either levelSubjectId or streamSubjectId, exam name, score, max score, and exam date are required');
     }
 
     const resultData: CreateAcademicResultData = {
       levelSubjectId,
+      streamSubjectId,
       examName,
       score: parseFloat(score),
       maxScore: parseFloat(maxScore),

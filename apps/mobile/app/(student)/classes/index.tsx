@@ -13,16 +13,36 @@ import { Plus, Users, BookOpen, Calendar } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
 import { PageHeader } from '@/components/PageHeader';
-import { formatEducationLevel } from '@/utils/education-level-parser';
 
 interface ClassItem {
   id: string;
   name: string;
   description: string | null;
-  educationLevel: any;
-  subjects: string[];
+  educationLevelRel?: {
+    name: string;
+    code: string;
+  };
+  educationStreamRel?: {
+    name: string;
+    code: string;
+  };
+  classSubjects?: Array<{
+    id: string;
+    levelSubject?: {
+      subject: {
+        name: string;
+        icon?: string;
+      };
+    };
+    streamSubject?: {
+      subject: {
+        name: string;
+        icon?: string;
+      };
+    };
+  }>;
   _count: {
-    students: number;
+    members: number;
     timeSlots: number;
   };
 }
@@ -58,6 +78,23 @@ export default function ClassesScreen() {
   };
 
   const renderClassCard = (classItem: ClassItem) => {
+    // Extract subjects from classSubjects
+    const subjects: string[] = [];
+    if (classItem.classSubjects) {
+      classItem.classSubjects.forEach(cs => {
+        if (cs.levelSubject?.subject) {
+          subjects.push(cs.levelSubject.subject.name);
+        } else if (cs.streamSubject?.subject) {
+          subjects.push(cs.streamSubject.subject.name);
+        }
+      });
+    }
+    
+    // Format education level
+    const educationLevel = classItem.educationLevelRel?.name || '';
+    const educationStream = classItem.educationStreamRel?.name;
+    const educationText = educationStream ? `${educationLevel} - ${educationStream}` : educationLevel;
+    
     return (
       <TouchableOpacity
         key={classItem.id}
@@ -83,7 +120,7 @@ export default function ClassesScreen() {
           <View style={styles.statItem}>
             <Users size={16} color={Colors.textSecondary} />
             <Text style={styles.statText}>
-              {classItem._count.students} élève{classItem._count.students !== 1 ? 's' : ''}
+              {classItem._count.members} élève{classItem._count.members !== 1 ? 's' : ''}
             </Text>
           </View>
           <View style={styles.statItem}>
@@ -94,24 +131,24 @@ export default function ClassesScreen() {
           </View>
         </View>
 
-        {classItem.subjects.length > 0 && (
+        {subjects.length > 0 && (
           <View style={styles.subjectsContainer}>
-            {classItem.subjects.slice(0, 3).map((subject, index) => (
+            {subjects.slice(0, 3).map((subject, index) => (
               <View key={index} style={styles.subjectTag}>
                 <Text style={styles.subjectText}>{subject}</Text>
               </View>
             ))}
-            {classItem.subjects.length > 3 && (
-              <Text style={styles.moreSubjects}>+{classItem.subjects.length - 3}</Text>
+            {subjects.length > 3 && (
+              <Text style={styles.moreSubjects}>+{subjects.length - 3}</Text>
             )}
           </View>
         )}
 
-        <View style={styles.classFooter}>
-          <Text style={styles.educationLevel}>
-            {formatEducationLevel(classItem.educationLevel)}
-          </Text>
-        </View>
+        {educationText && (
+          <View style={styles.classFooter}>
+            <Text style={styles.educationLevel}>{educationText}</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };

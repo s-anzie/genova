@@ -13,7 +13,8 @@ const prisma = new PrismaClient();
 
 // Types
 export interface CreateTimeSlotData {
-  levelSubjectId: string; // Required: Reference to LevelSubject
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   dayOfWeek: number; // 0-6
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
@@ -21,6 +22,7 @@ export interface CreateTimeSlotData {
 
 export interface UpdateTimeSlotData {
   levelSubjectId?: string;
+  streamSubjectId?: string;
   dayOfWeek?: number;
   startTime?: string;
   endTime?: string;
@@ -33,9 +35,10 @@ export interface CancelTimeSlotData {
 }
 
 export interface TutorAssignmentData {
-  levelSubjectId: string; // Required: Reference to LevelSubject
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   tutorId: string;
-  timeSlotIds?: string[]; // Specific slots, or null for all slots of levelSubject
+  timeSlotIds?: string[]; // Specific slots, or null for all slots of subject
   recurrencePattern: RecurrencePattern;
   recurrenceConfig?: any; // Pattern-specific configuration
   startDate?: Date;
@@ -109,9 +112,13 @@ export async function createTimeSlot(
     throw new AuthorizationError('Only the class creator can create time slots');
   }
 
-  // Check if using new format
-  if (!data.levelSubjectId) {
-    throw new ValidationError('levelSubjectId is required');
+  // Check if using new format - either levelSubjectId or streamSubjectId is required
+  if (!data.levelSubjectId && !data.streamSubjectId) {
+    throw new ValidationError('Either levelSubjectId or streamSubjectId is required');
+  }
+
+  if (data.levelSubjectId && data.streamSubjectId) {
+    throw new ValidationError('Cannot specify both levelSubjectId and streamSubjectId');
   }
 
   // Validate time format
@@ -134,13 +141,22 @@ export async function createTimeSlot(
     throw new ValidationError('Day of week must be between 0 (Sunday) and 6 (Saturday)');
   }
 
-  // Verify levelSubject exists
+  // Verify levelSubject or streamSubject exists
   if (data.levelSubjectId) {
     const levelSubject = await prisma.levelSubject.findUnique({
       where: { id: data.levelSubjectId },
     });
     if (!levelSubject) {
       throw new NotFoundError('LevelSubject not found');
+    }
+  }
+
+  if (data.streamSubjectId) {
+    const streamSubject = await prisma.streamSubject.findUnique({
+      where: { id: data.streamSubjectId },
+    });
+    if (!streamSubject) {
+      throw new NotFoundError('StreamSubject not found');
     }
   }
 
@@ -156,6 +172,11 @@ export async function createTimeSlot(
           subject: true,
         },
       },
+      streamSubject: {
+        include: {
+          subject: true,
+        },
+      },
     },
   });
 
@@ -164,7 +185,7 @@ export async function createTimeSlot(
       data.dayOfWeek, data.startTime, data.endTime,
       slot.dayOfWeek, slot.startTime, slot.endTime
     )) {
-      const subjectName = slot.levelSubject?.subject.name || 'Unknown';
+      const subjectName = slot.levelSubject?.subject.name || slot.streamSubject?.subject.name || 'Unknown';
       throw new ConflictError(
         `Time slot overlaps with existing slot: ${subjectName} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
       );
@@ -175,7 +196,8 @@ export async function createTimeSlot(
   const timeSlot = await prisma.classTimeSlot.create({
     data: {
       classId,
-      levelSubjectId: data.levelSubjectId,
+      levelSubjectId: data.levelSubjectId || null,
+      streamSubjectId: data.streamSubjectId || null,
       dayOfWeek: data.dayOfWeek,
       startTime: data.startTime,
       endTime: data.endTime,
@@ -203,6 +225,18 @@ export async function getClassTimeSlots(classId: string): Promise<TimeSlotWithAs
       isActive: true,
     },
     include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+      streamSubject: {
+        include: {
+          subject: true,
+          stream: true,
+        },
+      },
       tutorAssignments: {
         where: { isActive: true },
         include: {
@@ -283,6 +317,11 @@ export async function updateTimeSlot(
           subject: true,
         },
       },
+      streamSubject: {
+        include: {
+          subject: true,
+        },
+      },
     },
   });
 
@@ -291,7 +330,7 @@ export async function updateTimeSlot(
       dayOfWeek, startTime, endTime,
       slot.dayOfWeek, slot.startTime, slot.endTime
     )) {
-      const subjectName = slot.levelSubject?.subject.name || 'Unknown';
+      const subjectName = slot.levelSubject?.subject.name || slot.streamSubject?.subject.name || 'Unknown';
       throw new ConflictError(
         `Time slot overlaps with existing slot: ${subjectName} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
       );
@@ -324,6 +363,11 @@ export async function deleteTimeSlot(
           subject: true,
         },
       },
+      streamSubject: {
+        include: {
+          subject: true,
+        },
+      },
     },
   });
 
@@ -336,7 +380,7 @@ export async function deleteTimeSlot(
   }
 
   // Cancel all future sessions for this time slot (Requirement 1.3)
-  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+  const subjectName = timeSlot.levelSubject?.subject.name || timeSlot.streamSubject?.subject.name || 'Unknown';
   await cancelFutureSessionsForTimeSlot(
     timeSlotId,
     `Time slot deleted: ${subjectName} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`
@@ -370,6 +414,11 @@ export async function cancelTimeSlotForWeek(
     include: { 
       class: true,
       levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+      streamSubject: {
         include: {
           subject: true,
         },
@@ -492,26 +541,50 @@ export async function assignTutorToSubject(
     throw new AuthorizationError('Only the class creator can assign tutors');
   }
 
-  // Verify levelSubject exists
-  const levelSubject = await prisma.levelSubject.findUnique({
-    where: { id: data.levelSubjectId },
-  });
-
-  if (!levelSubject) {
-    throw new NotFoundError('LevelSubject not found');
+  // Check if using new format - either levelSubjectId or streamSubjectId is required
+  if (!data.levelSubjectId && !data.streamSubjectId) {
+    throw new ValidationError('Either levelSubjectId or streamSubjectId is required');
   }
 
-  // Validate tutor exists and has expertise in this levelSubject
+  if (data.levelSubjectId && data.streamSubjectId) {
+    throw new ValidationError('Cannot specify both levelSubjectId and streamSubjectId');
+  }
+
+  // Verify levelSubject or streamSubject exists
+  if (data.levelSubjectId) {
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: data.levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject not found');
+    }
+  }
+
+  if (data.streamSubjectId) {
+    const streamSubject = await prisma.streamSubject.findUnique({
+      where: { id: data.streamSubjectId },
+    });
+    if (!streamSubject) {
+      throw new NotFoundError('StreamSubject not found');
+    }
+  }
+
+  // Validate tutor exists and has expertise in this subject
   const tutor = await prisma.user.findUnique({
     where: { id: data.tutorId },
     include: { 
       tutorProfile: {
         include: {
-          teachingSubjects: {
+          teachingSubjects: data.levelSubjectId ? {
             where: {
               levelSubjectId: data.levelSubjectId,
             },
-          },
+          } : undefined,
+          teachingStreamSubjects: data.streamSubjectId ? {
+            where: {
+              streamSubjectId: data.streamSubjectId,
+            },
+          } : undefined,
         },
       },
     },
@@ -521,19 +594,32 @@ export async function assignTutorToSubject(
     throw new NotFoundError('Tutor not found');
   }
 
-  if (tutor.tutorProfile && tutor.tutorProfile.teachingSubjects.length === 0) {
-    throw new ValidationError(`Tutor does not have expertise in this subject`);
+  if (tutor.tutorProfile) {
+    const hasExpertise = data.levelSubjectId 
+      ? tutor.tutorProfile.teachingSubjects.length > 0
+      : tutor.tutorProfile.teachingStreamSubjects && tutor.tutorProfile.teachingStreamSubjects.length > 0;
+    
+    if (!hasExpertise) {
+      throw new ValidationError(`Tutor does not have expertise in this subject`);
+    }
   }
 
-  // If specific time slots provided, validate they exist and belong to the levelSubject
+  // If specific time slots provided, validate they exist and belong to the subject
   if (data.timeSlotIds && data.timeSlotIds.length > 0) {
+    const whereClause: any = {
+      id: { in: data.timeSlotIds },
+      classId,
+      isActive: true,
+    };
+    
+    if (data.levelSubjectId) {
+      whereClause.levelSubjectId = data.levelSubjectId;
+    } else if (data.streamSubjectId) {
+      whereClause.streamSubjectId = data.streamSubjectId;
+    }
+
     const slots = await prisma.classTimeSlot.findMany({
-      where: {
-        id: { in: data.timeSlotIds },
-        classId,
-        levelSubjectId: data.levelSubjectId,
-        isActive: true,
-      },
+      where: whereClause,
     });
 
     if (slots.length !== data.timeSlotIds.length) {
@@ -572,7 +658,7 @@ export async function assignTutorToSubject(
     // TODO: Send notification to tutor for acceptance
     return assignment;
   } else {
-    // Assign to all slots of the levelSubject
+    // Assign to all slots of the subject (levelSubject or streamSubject)
     const assignment = await prisma.classTutorAssignment.create({
       data: {
         classId,
@@ -745,7 +831,11 @@ function getDayName(dayOfWeek: number): string {
  */
 async function cancelSessionsForSlotCancellation(
   cancellationId: string,
-  timeSlot: ClassTimeSlot & { class: any; levelSubject?: { subject: { name: string } } | null },
+  timeSlot: ClassTimeSlot & { 
+    class: any; 
+    levelSubject?: { subject: { name: string } } | null;
+    streamSubject?: { subject: { name: string } } | null;
+  },
   weekStart: Date
 ): Promise<void> {
   // Calculate the week end (Sunday)
@@ -753,7 +843,7 @@ async function cancelSessionsForSlotCancellation(
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekEnd.setHours(23, 59, 59, 999);
 
-  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+  const subjectName = timeSlot.levelSubject?.subject.name || timeSlot.streamSubject?.subject.name || 'Unknown';
 
   // Find all sessions for this time slot in this week
   const sessionsToCancel = await prisma.tutoringSession.findMany({
@@ -815,7 +905,11 @@ async function cancelSessionsForSlotCancellation(
  */
 async function createCancellationNotifications(
   cancelledSessions: any[],
-  timeSlot: ClassTimeSlot & { class: any; levelSubject?: { subject: { name: string } } | null },
+  timeSlot: ClassTimeSlot & { 
+    class: any; 
+    levelSubject?: { subject: { name: string } } | null;
+    streamSubject?: { subject: { name: string } } | null;
+  },
   weekStart: Date
 ): Promise<void> {
   // Get all class members
@@ -839,7 +933,7 @@ async function createCancellationNotifications(
 
   const notifications = [];
   const weekStartStr = weekStart.toISOString().split('T')[0];
-  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+  const subjectName = timeSlot.levelSubject?.subject.name || timeSlot.streamSubject?.subject.name || 'Unknown';
 
   // Create notifications for all class members
   for (const member of classMembers) {

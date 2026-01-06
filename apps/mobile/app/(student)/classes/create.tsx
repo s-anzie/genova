@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,211 +6,132 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, Globe } from 'lucide-react-native';
+import { MapPin, Globe, GraduationCap, School, BookOpen } from 'lucide-react-native';
 import { Colors, Spacing } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
 import { CreateClassData } from '@/types/api';
 import { StyledModal } from '@/components/ui/StyledModal';
 import { PageHeader } from '@/components/PageHeader';
-
-const EDUCATION_LEVELS = [
-  { 
-    value: 'primary', 
-    label: 'Primaire',
-    subLevels: {
-      francophone: [
-        { value: 'SIL', label: 'SIL' },
-        { value: 'CP', label: 'Préparatoire (CP)' },
-        { value: 'CE1', label: 'CE1' },
-        { value: 'CE2', label: 'CE2' },
-        { value: 'CM1', label: 'CM1' },
-        { value: 'CM2', label: 'CM2' },
-      ],
-      anglophone: [
-        { value: 'Class1', label: 'Class 1' },
-        { value: 'Class2', label: 'Class 2' },
-        { value: 'Class3', label: 'Class 3' },
-        { value: 'Class4', label: 'Class 4' },
-        { value: 'Class5', label: 'Class 5' },
-        { value: 'Class6', label: 'Class 6' },
-      ],
-    },
-  },
-  { 
-    value: 'middle_school', 
-    label: 'Collège',
-    subLevels: {
-      francophone_general: [
-        { value: '6eme', label: '6ème' },
-        { value: '5eme', label: '5ème' },
-        { value: '4eme', label: '4ème' },
-        { value: '3eme', label: '3ème' },
-      ],
-      francophone_technical: [
-        { value: '1ere_annee', label: '1ère année', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-        { value: '2eme_annee', label: '2ème année', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-        { value: '3eme_annee', label: '3ème année', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-        { value: '4eme_annee', label: '4ème année', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-      ],
-      anglophone: [
-        { value: 'Form1', label: 'Form 1' },
-        { value: 'Form2', label: 'Form 2' },
-        { value: 'Form3', label: 'Form 3' },
-        { value: 'Form4', label: 'Form 4' },
-      ],
-    },
-  },
-  { 
-    value: 'high_school', 
-    label: 'Lycée',
-    subLevels: {
-      francophone_general: [
-        { value: '2nde', label: 'Seconde', streams: ['C', 'A', 'E'] },
-        { value: '1ere', label: 'Première', streams: ['C', 'D', 'E', 'A', 'TI'] },
-        { value: 'Tle', label: 'Terminale', streams: ['C', 'D', 'E', 'A', 'TI'] },
-      ],
-      francophone_technical: [
-        { value: '2nde_tech', label: 'Seconde', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-        { value: '1ere_tech', label: 'Première', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-        { value: 'Tle_tech', label: 'Terminale', streams: ['F4', 'F5', 'F3', 'F7', 'MA'] },
-      ],
-      anglophone: [
-        { value: 'Form5', label: 'Form 5' },
-        { value: 'LowerSixth', label: 'Lower Sixth' },
-        { value: 'UpperSixth', label: 'Upper Sixth' },
-      ],
-    },
-  },
-  { 
-    value: 'university', 
-    label: 'Université',
-    subLevels: {
-      licence: [
-        { value: 'L1', label: 'Licence 1 (L1)' },
-        { value: 'L2', label: 'Licence 2 (L2)' },
-        { value: 'L3', label: 'Licence 3 (L3)' },
-      ],
-      master: [
-        { value: 'M1', label: 'Master 1 (M1)' },
-        { value: 'M2', label: 'Master 2 (M2)' },
-      ],
-    },
-  },
-];
-
-const UNIVERSITY_STREAMS = [
-  'Informatique',
-  'Mathématiques',
-  'Physique',
-  'Chimie',
-  'Biologie',
-  'Médecine',
-  'Droit',
-  'Économie',
-  'Gestion',
-  'Lettres',
-  'Sciences Sociales',
-  'Ingénierie',
-  'Architecture',
-  'Autre',
-];
-
-const SUBJECTS = [
-  'Mathématiques',
-  'Physique',
-  'Chimie',
-  'Biologie',
-  'Français',
-  'Anglais',
-  'Histoire',
-  'Géographie',
-  'Philosophie',
-  'Économie',
-  'Informatique',
-];
+import { useProfile } from '@/contexts/profile-context';
 
 export default function CreateClassScreen() {
   const router = useRouter();
+  const { studentProfile, isLoading: profileLoading } = useProfile();
+  
   const [loading, setLoading] = useState(false);
   const [showLoadingModal, setShowLoadingModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [createdClassId, setCreatedClassId] = useState<string | null>(null);
+  
+  // Parse education details from student profile
+  const [educationInfo, setEducationInfo] = useState<{
+    educationSystemId?: string;
+    educationLevelId?: string;
+    educationStreamId?: string;
+    countryName?: string;
+    systemName?: string;
+    levelName?: string;
+    streamName?: string;
+    schoolName?: string;
+  }>({});
+  
+  // Available subjects from student's preferred subjects
+  const [availableSubjects, setAvailableSubjects] = useState<Array<{
+    id: string;
+    name: string;
+    isLevelSubject: boolean;
+  }>>([]);
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    educationLevel: '',
-    educationSystem: '', // francophone, anglophone, etc.
-    specificLevel: '', // 6eme, CE1, etc.
-    stream: '', // C, D, E, A, TI, F4, etc.
-    subjects: [] as string[], // Multiple subjects
+    selectedSubjectIds: [] as string[], // IDs of LevelSubject or StreamSubject
     maxStudents: '',
     meetingType: 'ONLINE' as 'ONLINE' | 'IN_PERSON',
     meetingLocation: '',
   });
 
-  // Get available education systems based on selected level
-  const getEducationSystems = () => {
-    const level = EDUCATION_LEVELS.find(l => l.value === formData.educationLevel);
-    if (!level || !level.subLevels) return [];
-    return Object.keys(level.subLevels);
-  };
-
-  // Get available specific levels based on selected system
-  const getSpecificLevels = () => {
-    const level = EDUCATION_LEVELS.find(l => l.value === formData.educationLevel);
-    if (!level || !level.subLevels) return [];
-    const system = formData.educationSystem;
-    const subLevels = level.subLevels as Record<string, any>;
-    return subLevels[system] || [];
-  };
-
-  // Get available streams for selected level
-  const getStreams = () => {
-    const specificLevels = getSpecificLevels();
-    const selectedLevel = specificLevels.find((l: any) => l.value === formData.specificLevel);
-    if (selectedLevel && 'streams' in selectedLevel) {
-      return selectedLevel.streams;
+  // Load education info and preferred subjects from profile
+  useEffect(() => {
+    if (studentProfile) {
+      console.log('📋 Student profile loaded:', studentProfile);
+      
+      // Extract education info directly from profile relations
+      const info: any = {
+        educationSystemId: studentProfile.educationSystemId || undefined,
+        educationLevelId: studentProfile.educationLevelId || undefined,
+        educationStreamId: studentProfile.educationStreamId || undefined,
+        schoolName: studentProfile.schoolName || undefined,
+      };
+      
+      // Get country name from educationSystem relation
+      if ((studentProfile as any).educationSystem?.country) {
+        info.countryName = (studentProfile as any).educationSystem.country.name;
+      }
+      
+      // Get system name from educationSystem relation
+      if ((studentProfile as any).educationSystem) {
+        info.systemName = (studentProfile as any).educationSystem.name;
+      }
+      
+      // Get level name from educationLevel relation
+      if ((studentProfile as any).educationLevel) {
+        info.levelName = (studentProfile as any).educationLevel.name;
+      }
+      
+      // Get stream name from educationStream relation
+      if ((studentProfile as any).educationStream) {
+        info.streamName = (studentProfile as any).educationStream.name;
+      }
+      
+      console.log('✅ Extracted education info:', info);
+      setEducationInfo(info);
+      
+      // Load preferred subjects from profile relations
+      loadPreferredSubjectsFromProfile();
     }
-    if (formData.educationLevel === 'university') {
-      return UNIVERSITY_STREAMS;
+  }, [studentProfile]);
+
+  const loadPreferredSubjectsFromProfile = () => {
+    if (!studentProfile) return;
+    
+    const subjects: Array<{ id: string; name: string; isLevelSubject: boolean }> = [];
+    
+    // Add level subjects
+    if (studentProfile.preferredLevelSubjects && Array.isArray(studentProfile.preferredLevelSubjects)) {
+      studentProfile.preferredLevelSubjects.forEach((pls: any) => {
+        if (pls.levelSubject && pls.levelSubject.subject) {
+          subjects.push({
+            id: pls.levelSubject.id,
+            name: pls.levelSubject.subject.name,
+            isLevelSubject: true,
+          });
+        }
+      });
     }
-    return [];
-  };
-
-  // Reset dependent fields when parent selection changes
-  const handleEducationLevelChange = (value: string) => {
-    setFormData({
-      ...formData,
-      educationLevel: value,
-      educationSystem: '',
-      specificLevel: '',
-      stream: '',
-    });
-  };
-
-  const handleEducationSystemChange = (value: string) => {
-    setFormData({
-      ...formData,
-      educationSystem: value,
-      specificLevel: '',
-      stream: '',
-    });
-  };
-
-  const handleSpecificLevelChange = (value: string) => {
-    setFormData({
-      ...formData,
-      specificLevel: value,
-      stream: '',
-    });
+    
+    // Add stream subjects
+    if (studentProfile.preferredStreamSubjects && Array.isArray(studentProfile.preferredStreamSubjects)) {
+      studentProfile.preferredStreamSubjects.forEach((pss: any) => {
+        if (pss.streamSubject && pss.streamSubject.subject) {
+          subjects.push({
+            id: pss.streamSubject.id,
+            name: pss.streamSubject.subject.name,
+            isLevelSubject: false,
+          });
+        }
+      });
+    }
+    
+    console.log('📚 Loaded subjects from profile:', subjects);
+    setAvailableSubjects(subjects);
   };
 
   const handleSubmit = async () => {
@@ -220,21 +141,19 @@ export default function CreateClassScreen() {
       setShowErrorModal(true);
       return;
     }
-    if (!formData.educationLevel) {
-      setErrorMessage('Veuillez sélectionner un niveau d\'éducation');
+    
+    if (!educationInfo.educationLevelId) {
+      setErrorMessage('Votre profil ne contient pas d\'informations sur votre niveau d\'éducation. Veuillez compléter votre profil.');
       setShowErrorModal(true);
       return;
     }
-    if (!formData.specificLevel) {
-      setErrorMessage('Veuillez sélectionner un niveau spécifique');
-      setShowErrorModal(true);
-      return;
-    }
-    if (formData.subjects.length === 0) {
+    
+    if (formData.selectedSubjectIds.length === 0) {
       setErrorMessage('Veuillez sélectionner au moins une matière');
       setShowErrorModal(true);
       return;
     }
+    
     if (formData.meetingType === 'IN_PERSON' && !formData.meetingLocation.trim()) {
       setErrorMessage('Veuillez entrer un lieu de rencontre pour les cours en présentiel');
       setShowErrorModal(true);
@@ -245,16 +164,29 @@ export default function CreateClassScreen() {
     setShowLoadingModal(true);
     
     try {
+      // Separate levelSubjectIds and streamSubjectIds
+      const levelSubjectIds: string[] = [];
+      const streamSubjectIds: string[] = [];
+      
+      formData.selectedSubjectIds.forEach(id => {
+        const subject = availableSubjects.find(s => s.id === id);
+        if (subject) {
+          if (subject.isLevelSubject) {
+            levelSubjectIds.push(id);
+          } else {
+            streamSubjectIds.push(id);
+          }
+        }
+      });
+      
       const classData: CreateClassData = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
-        educationLevel: {
-          level: formData.educationLevel,
-          system: formData.educationSystem || undefined,
-          specificLevel: formData.specificLevel || undefined,
-          stream: formData.stream || undefined,
-        },
-        subjects: formData.subjects,
+        educationSystemId: educationInfo.educationSystemId,
+        educationLevelId: educationInfo.educationLevelId,
+        educationStreamId: educationInfo.educationStreamId,
+        levelSubjectIds: levelSubjectIds.length > 0 ? levelSubjectIds : undefined,
+        streamSubjectIds: streamSubjectIds.length > 0 ? streamSubjectIds : undefined,
         maxStudents: formData.maxStudents ? parseInt(formData.maxStudents) : undefined,
         meetingType: formData.meetingType,
         meetingLocation: formData.meetingLocation.trim() || undefined,
@@ -263,7 +195,6 @@ export default function CreateClassScreen() {
       console.log('🔄 Creating class...', classData);
       const response = await apiClient.post('/classes', classData);
 
-      // API returns { success: true, data: ClassResponse }
       const classId = response.data.id;
       console.log('✅ Class created successfully:', classId);
 
@@ -280,10 +211,55 @@ export default function CreateClassScreen() {
     }
   };
 
+  if (profileLoading) {
+    return (
+      <View style={styles.container}>
+        <PageHeader 
+          title="Créer une classe"
+          variant='primary'
+          showBackButton={true}
+          centerTitle={true}
+          showGradient={false}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Chargement de votre profil...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!studentProfile || !educationInfo.educationLevelId) {
+    return (
+      <View style={styles.container}>
+        <PageHeader 
+          title="Créer une classe"
+          variant='primary'
+          showBackButton={true}
+          centerTitle={true}
+          showGradient={false}
+        />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Profil incomplet</Text>
+          <Text style={styles.errorText}>
+            Veuillez compléter votre profil avec vos informations d'éducation avant de créer une classe.
+          </Text>
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={() => router.push('/(student)/(tabs)/profile')}
+          >
+            <Text style={styles.errorButtonText}>Compléter mon profil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <PageHeader 
         title="Créer une classe"
+        variant='primary'
         showBackButton={true}
         centerTitle={true}
         showGradient={false}
@@ -299,6 +275,79 @@ export default function CreateClassScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.form}>
+            {/* Education Info Display */}
+            <View style={styles.educationCard}>
+              <View style={styles.educationCardHeader}>
+                <View style={styles.educationIconContainer}>
+                  <GraduationCap size={24} color={Colors.primary} strokeWidth={2.5} />
+                </View>
+                <View style={styles.educationHeaderText}>
+                  <Text style={styles.educationCardTitle}>Informations académiques</Text>
+                  <Text style={styles.educationCardSubtitle}>Depuis votre profil</Text>
+                </View>
+              </View>
+              
+              <View style={styles.educationInfoGrid}>
+                {educationInfo.countryName && (
+                  <View style={styles.educationInfoItem}>
+                    <View style={styles.educationInfoIcon}>
+                      <Globe size={18} color={Colors.primary} strokeWidth={2} />
+                    </View>
+                    <View style={styles.educationInfoText}>
+                      <Text style={styles.educationInfoLabel}>Pays</Text>
+                      <Text style={styles.educationInfoValue}>{educationInfo.countryName}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {educationInfo.systemName && (
+                  <View style={styles.educationInfoItem}>
+                    <View style={styles.educationInfoIcon}>
+                      <School size={18} color={Colors.primary} strokeWidth={2} />
+                    </View>
+                    <View style={styles.educationInfoText}>
+                      <Text style={styles.educationInfoLabel}>Système</Text>
+                      <Text style={styles.educationInfoValue}>{educationInfo.systemName}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                <View style={styles.educationInfoItem}>
+                  <View style={styles.educationInfoIcon}>
+                    <GraduationCap size={18} color={Colors.primary} strokeWidth={2} />
+                  </View>
+                  <View style={styles.educationInfoText}>
+                    <Text style={styles.educationInfoLabel}>Niveau</Text>
+                    <Text style={styles.educationInfoValue}>{educationInfo.levelName || 'Non spécifié'}</Text>
+                  </View>
+                </View>
+                
+                {educationInfo.streamName && (
+                  <View style={styles.educationInfoItem}>
+                    <View style={styles.educationInfoIcon}>
+                      <BookOpen size={18} color={Colors.primary} strokeWidth={2} />
+                    </View>
+                    <View style={styles.educationInfoText}>
+                      <Text style={styles.educationInfoLabel}>Filière</Text>
+                      <Text style={styles.educationInfoValue}>{educationInfo.streamName}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {educationInfo.schoolName && (
+                  <View style={styles.educationInfoItemFull}>
+                    <View style={styles.educationInfoIcon}>
+                      <School size={18} color={Colors.primary} strokeWidth={2} />
+                    </View>
+                    <View style={styles.educationInfoText}>
+                      <Text style={styles.educationInfoLabel}>École</Text>
+                      <Text style={styles.educationInfoValue}>{educationInfo.schoolName}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+
             {/* Name */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Nom de la classe *</Text>
@@ -326,159 +375,48 @@ export default function CreateClassScreen() {
               />
             </View>
 
-            {/* Education Level */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Niveau d'éducation *</Text>
-              <View style={styles.optionsGrid}>
-                {EDUCATION_LEVELS.map((level) => (
-                  <TouchableOpacity
-                    key={level.value}
-                    style={[
-                      styles.optionButton,
-                      formData.educationLevel === level.value && styles.optionButtonActive,
-                    ]}
-                    onPress={() => handleEducationLevelChange(level.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionButtonText,
-                        formData.educationLevel === level.value && styles.optionButtonTextActive,
-                      ]}
-                    >
-                      {level.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Education System (if applicable) */}
-            {formData.educationLevel && getEducationSystems().length > 0 && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Système éducatif *</Text>
-                <View style={styles.optionsGrid}>
-                  {getEducationSystems().map((system) => (
-                    <TouchableOpacity
-                      key={system}
-                      style={[
-                        styles.optionButton,
-                        formData.educationSystem === system && styles.optionButtonActive,
-                      ]}
-                      onPress={() => handleEducationSystemChange(system)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionButtonText,
-                          formData.educationSystem === system && styles.optionButtonTextActive,
-                        ]}
-                      >
-                        {system === 'francophone' ? 'Francophone' : 
-                         system === 'anglophone' ? 'Anglophone' :
-                         system === 'francophone_general' ? 'Général (Francophone)' :
-                         system === 'francophone_technical' ? 'Technique (Francophone)' :
-                         system === 'licence' ? 'Licence' :
-                         system === 'master' ? 'Master' : system}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Specific Level */}
-            {formData.educationSystem && getSpecificLevels().length > 0 && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Niveau spécifique *</Text>
-                <View style={styles.optionsGrid}>
-                  {getSpecificLevels().map((level: any) => (
-                    <TouchableOpacity
-                      key={level.value}
-                      style={[
-                        styles.optionButton,
-                        formData.specificLevel === level.value && styles.optionButtonActive,
-                      ]}
-                      onPress={() => handleSpecificLevelChange(level.value)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionButtonText,
-                          formData.specificLevel === level.value && styles.optionButtonTextActive,
-                        ]}
-                      >
-                        {level.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Stream/Filière (if applicable) */}
-            {formData.specificLevel && getStreams().length > 0 && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Filière {formData.educationLevel !== 'university' ? '(optionnel)' : '*'}</Text>
-                <View style={styles.optionsGrid}>
-                  {getStreams().map((stream: string) => (
-                    <TouchableOpacity
-                      key={stream}
-                      style={[
-                        styles.optionButton,
-                        formData.stream === stream && styles.optionButtonActive,
-                      ]}
-                      onPress={() => setFormData({ ...formData, stream })}
-                    >
-                      <Text
-                        style={[
-                          styles.optionButtonText,
-                          formData.stream === stream && styles.optionButtonTextActive,
-                        ]}
-                      >
-                        {stream}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Subject - Multiple Selection */}
+            {/* Subjects - From preferred subjects */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Matières * (sélection multiple)</Text>
-              <View style={styles.optionsGrid}>
-                {SUBJECTS.map((subject) => (
-                  <TouchableOpacity
-                    key={subject}
-                    style={[
-                      styles.optionButton,
-                      formData.subjects.includes(subject) && styles.optionButtonActive,
-                    ]}
-                    onPress={() => {
-                      if (formData.subjects.includes(subject)) {
-                        // Remove subject
-                        setFormData({
-                          ...formData,
-                          subjects: formData.subjects.filter(s => s !== subject),
-                        });
-                      } else {
-                        // Add subject
-                        setFormData({
-                          ...formData,
-                          subjects: [...formData.subjects, subject],
-                        });
-                      }
-                    }}
-                  >
-                    <Text
+              {availableSubjects.length > 0 ? (
+                <View style={styles.optionsGrid}>
+                  {availableSubjects.map((subject) => (
+                    <TouchableOpacity
+                      key={subject.id}
                       style={[
-                        styles.optionButtonText,
-                        formData.subjects.includes(subject) && styles.optionButtonTextActive,
+                        styles.optionButton,
+                        formData.selectedSubjectIds.includes(subject.id) && styles.optionButtonActive,
                       ]}
+                      onPress={() => {
+                        if (formData.selectedSubjectIds.includes(subject.id)) {
+                          setFormData({
+                            ...formData,
+                            selectedSubjectIds: formData.selectedSubjectIds.filter(id => id !== subject.id),
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            selectedSubjectIds: [...formData.selectedSubjectIds, subject.id],
+                          });
+                        }
+                      }}
                     >
-                      {subject}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                      <Text
+                        style={[
+                          styles.optionButtonText,
+                          formData.selectedSubjectIds.includes(subject.id) && styles.optionButtonTextActive,
+                        ]}
+                      >
+                        {subject.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.noSubjectsText}>
+                  Aucune matière disponible pour votre niveau. Veuillez compléter votre profil.
+                </Text>
+              )}
             </View>
 
             {/* Meeting Type */}
@@ -637,8 +575,133 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  errorButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  errorButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.white,
+  },
   form: {
     gap: 20,
+  },
+  educationCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 115, 119, 0.1)',
+  },
+  educationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  educationIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(13, 115, 119, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  educationHeaderText: {
+    flex: 1,
+  },
+  educationCardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 3,
+  },
+  educationCardSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  educationInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  educationInfoItem: {
+    width: '47%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  educationInfoItemFull: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  educationInfoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(13, 115, 119, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  educationInfoText: {
+    flex: 1,
+  },
+  educationInfoLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  educationInfoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    lineHeight: 22,
   },
   formGroup: {
     gap: 8,
@@ -686,6 +749,13 @@ const styles = StyleSheet.create({
   },
   optionButtonTextActive: {
     color: Colors.white,
+  },
+  noSubjectsText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: 16,
   },
   meetingTypeContainer: {
     flexDirection: 'row',

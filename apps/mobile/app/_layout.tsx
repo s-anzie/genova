@@ -26,6 +26,12 @@ function RootLayoutNav() {
   const [profileChecked, setProfileChecked] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
+  // Reset profile check when user changes or authentication state changes
+  useEffect(() => {
+    setProfileChecked(false);
+    setNeedsOnboarding(false);
+  }, [isAuthenticated, user?.id]);
+
   // Check if student needs onboarding
   useEffect(() => {
     const checkStudentProfile = async () => {
@@ -35,39 +41,30 @@ function RootLayoutNav() {
       }
 
       try {
-        console.log('🔍 Checking student profile for user:', user.id);
-        
-        // Get the token to verify it exists
-        const token = await apiClient.getAccessToken();
-        console.log('🔑 Token available:', !!token);
+        console.log('🔍 [_layout] Checking student profile for user:', user.id);
         
         const response = await apiClient.get(`/profiles/student/${user.id}`);
-        console.log('📡 Response received:', {
-          success: response.success,
-          hasData: !!response.data,
-        });
-        
         const profile = response.data;
         
-        console.log('📋 Profile data:', {
+        console.log('📋 [_layout] Profile data:', {
           exists: !!profile,
           onboardingCompleted: profile?.onboardingCompleted,
-          userId: profile?.userId,
+          educationLevelId: profile?.educationLevelId,
+          hasPreferredSubjects: !!(profile?.preferredLevelSubjects?.length || profile?.preferredStreamSubjects?.length),
         });
         
         // Check if profile exists and onboarding is completed
         if (!profile || profile.onboardingCompleted !== true) {
-          console.log('❌ Needs onboarding:', !profile ? 'No profile' : 'onboardingCompleted is not true');
+          console.log('❌ [_layout] Needs onboarding:', !profile ? 'No profile' : `onboardingCompleted=${profile.onboardingCompleted}`);
           setNeedsOnboarding(true);
         } else {
-          console.log('✅ Onboarding completed, profile OK');
+          console.log('✅ [_layout] Onboarding completed, profile OK');
           setNeedsOnboarding(false);
         }
       } catch (error: any) {
-        console.log('⚠️ Error checking profile:', {
+        console.log('⚠️ [_layout] Error checking profile:', {
           message: error?.message || error,
           status: error?.status,
-          response: error?.response,
         });
         // Profile doesn't exist or error occurred
         setNeedsOnboarding(true);

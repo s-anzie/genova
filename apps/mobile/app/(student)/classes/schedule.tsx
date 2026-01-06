@@ -17,10 +17,25 @@ import { PageHeader } from '@/components/PageHeader';
 
 interface TimeSlot {
   id: string;
-  subject: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  levelSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      icon?: string;
+    };
+  };
+  streamSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      icon?: string;
+    };
+  };
   tutorAssignments: {
     id: string;
     tutor: {
@@ -54,14 +69,20 @@ export default function ClassScheduleScreen() {
   const horizontalScrollRef = useRef<ScrollView>(null);
   const verticalScrollRef = useRef<ScrollView>(null);
 
+  // Helper function to get subject name from a time slot
+  const getSubjectName = (slot: TimeSlot): string => {
+    return slot.levelSubject?.subject.name || slot.streamSubject?.subject.name || 'Matière';
+  };
+
   // Calculate statistics
   const getStatistics = () => {
     const subjectCount: { [key: string]: number } = {};
     let totalHours = 0;
 
     timeSlots.forEach(slot => {
+      const subjectName = getSubjectName(slot);
       // Count slots per subject
-      subjectCount[slot.subject] = (subjectCount[slot.subject] || 0) + 1;
+      subjectCount[subjectName] = (subjectCount[subjectName] || 0) + 1;
       
       // Calculate total hours
       const startMinutes = timeToMinutes(slot.startTime);
@@ -187,10 +208,10 @@ export default function ClassScheduleScreen() {
     router.push(`/(student)/classes/add?id=${id}`);
   };
 
-  const handleDeleteTimeSlot = async (slotId: string, subject: string) => {
+  const handleDeleteTimeSlot = async (slotId: string, subjectName: string) => {
     Alert.alert(
       'Supprimer le créneau',
-      `Voulez-vous supprimer le cours de ${subject}?`,
+      `Voulez-vous supprimer le cours de ${subjectName}?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -362,6 +383,7 @@ export default function ClassScheduleScreen() {
           if (position.height === 0) return null;
           
           const assignedTutor = slot.tutorAssignments.find(a => a.status === 'ACCEPTED');
+          const subjectName = getSubjectName(slot);
           
           return (
             <TouchableOpacity
@@ -374,10 +396,10 @@ export default function ClassScheduleScreen() {
                 },
               ]}
               onPress={() => handleTimeSlotPress(slot.id)}
-              onLongPress={() => handleDeleteTimeSlot(slot.id, slot.subject)}
+              onLongPress={() => handleDeleteTimeSlot(slot.id, subjectName)}
               activeOpacity={0.8}
             >
-              <Text style={styles.slotSubject} numberOfLines={1}>{slot.subject}</Text>
+              <Text style={styles.slotSubject} numberOfLines={1}>{subjectName}</Text>
               <Text style={styles.slotTime} numberOfLines={1}>
                 {slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}
               </Text>

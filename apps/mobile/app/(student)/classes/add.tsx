@@ -5,13 +5,15 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
-  TextInput,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Clock } from 'lucide-react-native';
 import { Colors, Spacing } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { PageHeader } from '@/components/PageHeader';
 
 const DAYS = [
   { value: 1, label: 'Lundi' },
@@ -26,12 +28,29 @@ export default function AddTimeSlotScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<Array<{ id: string; name: string; isLevelSubject: boolean }>>([]);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  
+  // Initialize with default times (14:00 and 16:00)
+  const [startTime, setStartTime] = useState(() => {
+    const date = new Date();
+    date.setHours(14, 0, 0, 0);
+    return date;
+  });
+  const [endTime, setEndTime] = useState(() => {
+    const date = new Date();
+    date.setHours(16, 0, 0, 0);
+    return date;
+  });
+  
   const [formData, setFormData] = useState({
-    subject: '',
+    subjectId: '',
+    isLevelSubject: true,
     dayOfWeek: 1,
-    startTime: '',
-    endTime: '',
   });
 
   useEffect(() => {
@@ -41,56 +60,91 @@ export default function AddTimeSlotScreen() {
   const loadClassSubjects = async () => {
     try {
       const response = await apiClient.get(`/classes/${id}`);
-      const classSubjects = response.data.subjects || [];
+      const classData = response.data;
       
-      if (classSubjects.length === 0) {
-        Alert.alert(
-          'Aucune matière',
-          'Cette classe n\'a pas encore de matières définies. Veuillez d\'abord ajouter des matières à la classe.',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
+      // Extract subjects from classSubjects relations
+      const subjectsList: Array<{ id: string; name: string; isLevelSubject: boolean }> = [];
+      
+      if (classData.classSubjects && Array.isArray(classData.classSubjects)) {
+        classData.classSubjects.forEach((cs: any) => {
+          if (cs.levelSubject?.subject) {
+            subjectsList.push({
+              id: cs.levelSubject.id,
+              name: cs.levelSubject.subject.name,
+              isLevelSubject: true,
+            });
+          } else if (cs.streamSubject?.subject) {
+            subjectsList.push({
+              id: cs.streamSubject.id,
+              name: cs.streamSubject.subject.name,
+              isLevelSubject: false,
+            });
+          }
+        });
+      }
+      
+      if (subjectsList.length === 0) {
+        setErrorMessage('Cette classe n\'a pas encore de matières définies. Veuillez d\'abord ajouter des matières à la classe.');
+        setShowErrorModal(true);
         return;
       }
       
-      setSubjects(classSubjects);
+      setSubjects(subjectsList);
       // Set first subject as default
-      setFormData(prev => ({ ...prev, subject: classSubjects[0] }));
+      setFormData(prev => ({ ...prev, subjectId: subjectsList[0].id, isLevelSubject: subjectsList[0].isLevelSubject }));
     } catch (error: any) {
       console.error('Error loading class subjects:', error);
-      Alert.alert('Erreur', 'Impossible de charger les matières de la classe');
+      setErrorMessage('Impossible de charger les matières de la classe');
+      setShowErrorModal(true);
+    }
+  };
+
+  const formatTime = (date: Date): string => {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const handleStartTimeChange = (event: any, selectedDate?: Date) => {
+    setShowStartPicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setStartTime(selectedDate);
+    }
+  };
+
+  const handleEndTimeChange = (event: any, selectedDate?: Date) => {
+    setShowEndPicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setEndTime(selectedDate);
     }
   };
 
   const handleSubmit = async () => {
     // Validation
-    if (!formData.subject) {
-      Alert.alert('Erreur', 'Veuillez sélectionner une matière');
-      return;
-    }
-    if (!formData.startTime || !formData.endTime) {
-      Alert.alert('Erreur', 'Veuillez entrer les heures de début et de fin');
-      return;
-    }
-
-    // Validate time format (HH:MM)
-    const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!timeRegex.test(formData.startTime) || !timeRegex.test(formData.endTime)) {
-      Alert.alert('Erreur', 'Format d\'heure invalide. Utilisez HH:MM (ex: 14:00)');
+    if (!formData.subjectId) {
+      setErrorMessage('Veuillez sélectionner une matière');
+      setShowErrorModal(true);
       return;
     }
 
     setLoading(true);
     try {
-      await apiClient.post(`/classes/${id}/schedule/time-slots`, formData);
-      Alert.alert('Succès', 'Créneau ajouté avec succès', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      const payload = {
+        dayOfWeek: formData.dayOfWeek,
+        startTime: formatTime(startTime),
+        endTime: formatTime(endTime),
+        ...(formData.isLevelSubject 
+          ? { levelSubjectId: formData.subjectId }
+          : { streamSubjectId: formData.subjectId }
+        ),
+      };
+      
+      await apiClient.post(`/classes/${id}/schedule/time-slots`, payload);
+      setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error creating time slot:', error);
-      Alert.alert('Erreur', error.message || 'Impossible de créer le créneau');
+      setErrorMessage(error.message || 'Impossible de créer le créneau');
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -98,13 +152,12 @@ export default function AddTimeSlotScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ajouter un créneau</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <PageHeader
+        variant='primary'
+        title='Ajouter un créneau'
+        centerTitle={true}
+        showBackButton={true}
+      />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.form}>
@@ -114,20 +167,20 @@ export default function AddTimeSlotScreen() {
             <View style={styles.optionsGrid}>
               {subjects.map((subject) => (
                 <TouchableOpacity
-                  key={subject}
+                  key={subject.id}
                   style={[
                     styles.optionButton,
-                    formData.subject === subject && styles.optionButtonActive,
+                    formData.subjectId === subject.id && styles.optionButtonActive,
                   ]}
-                  onPress={() => setFormData({ ...formData, subject })}
+                  onPress={() => setFormData({ ...formData, subjectId: subject.id, isLevelSubject: subject.isLevelSubject })}
                 >
                   <Text
                     style={[
                       styles.optionButtonText,
-                      formData.subject === subject && styles.optionButtonTextActive,
+                      formData.subjectId === subject.id && styles.optionButtonTextActive,
                     ]}
                   >
-                    {subject}
+                    {subject.name}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -162,28 +215,44 @@ export default function AddTimeSlotScreen() {
 
           {/* Start Time */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Heure de début * (HH:MM)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="14:00"
-              placeholderTextColor={Colors.textTertiary}
-              value={formData.startTime}
-              onChangeText={(text) => setFormData({ ...formData, startTime: text })}
-              keyboardType="numbers-and-punctuation"
-            />
+            <Text style={styles.label}>Heure de début *</Text>
+            <TouchableOpacity
+              style={styles.timeButton}
+              onPress={() => setShowStartPicker(true)}
+            >
+              <Clock size={20} color={Colors.textSecondary} strokeWidth={2} />
+              <Text style={styles.timeButtonText}>{formatTime(startTime)}</Text>
+            </TouchableOpacity>
+            {showStartPicker && (
+              <DateTimePicker
+                value={startTime}
+                mode="time"
+                is24Hour={true}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleStartTimeChange}
+              />
+            )}
           </View>
 
           {/* End Time */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Heure de fin * (HH:MM)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="16:00"
-              placeholderTextColor={Colors.textTertiary}
-              value={formData.endTime}
-              onChangeText={(text) => setFormData({ ...formData, endTime: text })}
-              keyboardType="numbers-and-punctuation"
-            />
+            <Text style={styles.label}>Heure de fin *</Text>
+            <TouchableOpacity
+              style={styles.timeButton}
+              onPress={() => setShowEndPicker(true)}
+            >
+              <Clock size={20} color={Colors.textSecondary} strokeWidth={2} />
+              <Text style={styles.timeButtonText}>{formatTime(endTime)}</Text>
+            </TouchableOpacity>
+            {showEndPicker && (
+              <DateTimePicker
+                value={endTime}
+                mode="time"
+                is24Hour={true}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleEndTimeChange}
+              />
+            )}
           </View>
         </View>
       </ScrollView>
@@ -199,6 +268,38 @@ export default function AddTimeSlotScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Success Modal */}
+      <StyledModal
+        visible={showSuccessModal}
+        onClose={() => {
+          setShowSuccessModal(false);
+          router.back();
+        }}
+        type="success"
+        title="Créneau ajouté!"
+        message="Le créneau a été ajouté avec succès à l'emploi du temps."
+        primaryButton={{
+          text: 'OK',
+          onPress: () => {
+            setShowSuccessModal(false);
+            router.back();
+          },
+        }}
+      />
+
+      {/* Error Modal */}
+      <StyledModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        type="error"
+        title="Erreur"
+        message={errorMessage}
+        primaryButton={{
+          text: 'OK',
+          onPress: () => setShowErrorModal(false),
+        }}
+      />
     </View>
   );
 }
@@ -250,6 +351,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 4,
+  },
+  timeButton: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  timeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   input: {
     backgroundColor: Colors.white,

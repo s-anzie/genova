@@ -11,7 +11,8 @@ interface CreateProductData {
   description?: string;
   productType: ProductType;
   // New education relation
-  levelSubjectId?: string;
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   // Legacy fields (DEPRECATED - for backward compatibility)
   subject?: string;
   educationLevel?: string;
@@ -31,7 +32,8 @@ interface UpdateProductData {
 
 interface ProductFilters {
   // New education relation
-  levelSubjectId?: string;
+  levelSubjectId?: string; // Reference to LevelSubject (for levels without streams)
+  streamSubjectId?: string; // Reference to StreamSubject (for levels with streams)
   // Legacy fields (DEPRECATED - for backward compatibility)
   subject?: string;
   educationLevel?: string;
@@ -50,7 +52,7 @@ interface PurchaseProductData {
  * Create a new product listing
  */
 export async function createProduct(data: CreateProductData) {
-  const { sellerId, title, description, productType, levelSubjectId, subject, educationLevel, price, fileUrl, previewUrl } = data;
+  const { sellerId, title, description, productType, levelSubjectId, streamSubjectId, subject, educationLevel, price, fileUrl, previewUrl } = data;
 
   // Validate price
   if (price <= 0) {
@@ -58,8 +60,12 @@ export async function createProduct(data: CreateProductData) {
   }
 
   // Check if using new format or legacy format
-  if (!levelSubjectId && !subject) {
-    throw new ValidationError('Either levelSubjectId or subject is required');
+  if (!levelSubjectId && !streamSubjectId && !subject) {
+    throw new ValidationError('Either levelSubjectId, streamSubjectId, or subject is required');
+  }
+
+  if (levelSubjectId && streamSubjectId) {
+    throw new ValidationError('Cannot specify both levelSubjectId and streamSubjectId');
   }
 
   // Verify seller exists and is a tutor
@@ -76,6 +82,25 @@ export async function createProduct(data: CreateProductData) {
     throw new ValidationError('Only tutors can create product listings');
   }
 
+  // Verify levelSubject or streamSubject exists
+  if (levelSubjectId) {
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject not found');
+    }
+  }
+
+  if (streamSubjectId) {
+    const streamSubject = await prisma.streamSubject.findUnique({
+      where: { id: streamSubjectId },
+    });
+    if (!streamSubject) {
+      throw new NotFoundError('StreamSubject not found');
+    }
+  }
+
   // Create product
   const product = await prisma.shopProduct.create({
     data: {
@@ -83,7 +108,8 @@ export async function createProduct(data: CreateProductData) {
       title,
       description,
       productType,
-      levelSubjectId,
+      levelSubjectId: levelSubjectId || null,
+      streamSubjectId: streamSubjectId || null,
       price,
       fileUrl,
       previewUrl,
@@ -114,6 +140,18 @@ export async function getProductById(productId: string) {
           },
         },
       },
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+      streamSubject: {
+        include: {
+          subject: true,
+          stream: true,
+        },
+      },
     },
   });
 
@@ -128,7 +166,7 @@ export async function getProductById(productId: string) {
  * Browse products with filters
  */
 export async function browseProducts(filters: ProductFilters, page: number = 1, limit: number = 20) {
-  const { levelSubjectId, subject, educationLevel, productType, minPrice, maxPrice, sellerId } = filters;
+  const { levelSubjectId, streamSubjectId, subject, educationLevel, productType, minPrice, maxPrice, sellerId } = filters;
 
   const where: any = {
     isActive: true,
@@ -137,6 +175,10 @@ export async function browseProducts(filters: ProductFilters, page: number = 1, 
   // New education relation filter
   if (levelSubjectId) {
     where.levelSubjectId = levelSubjectId;
+  }
+
+  if (streamSubjectId) {
+    where.streamSubjectId = streamSubjectId;
   }
 
   // Legacy filters (for backward compatibility)
@@ -178,6 +220,18 @@ export async function browseProducts(filters: ProductFilters, page: number = 1, 
             firstName: true,
             lastName: true,
             avatarUrl: true,
+          },
+        },
+        levelSubject: {
+          include: {
+            subject: true,
+            level: true,
+          },
+        },
+        streamSubject: {
+          include: {
+            subject: true,
+            stream: true,
           },
         },
       },

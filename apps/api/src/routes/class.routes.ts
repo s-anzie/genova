@@ -32,18 +32,40 @@ router.post('/', requireClassCreationAccess, async (req: Request, res: Response,
       throw new ValidationError('User not authenticated');
     }
 
-    const { name, description, educationLevel, subjects, maxStudents, meetingType, meetingLocation } = req.body;
+    const { 
+      name, 
+      description, 
+      educationSystemId,
+      educationLevelId, 
+      educationStreamId,
+      levelSubjectIds,
+      streamSubjectIds,
+      maxStudents, 
+      meetingType, 
+      meetingLocation,
+    } = req.body;
 
-    // Validate required fields
-    if (!name || !educationLevel || !subjects || !Array.isArray(subjects) || subjects.length === 0 || !meetingType) {
-      throw new ValidationError('Name, education level, at least one subject, and meeting type are required');
+    if (!name || !meetingType) {
+      throw new ValidationError('Name and meeting type are required');
+    }
+
+    if (!educationSystemId || !educationLevelId) {
+      throw new ValidationError('Education system and level are required');
+    }
+
+    const hasSubjects = (levelSubjectIds && levelSubjectIds.length > 0) || (streamSubjectIds && streamSubjectIds.length > 0);
+    if (!hasSubjects) {
+      throw new ValidationError('At least one subject is required');
     }
 
     const classData: CreateClassData = {
       name,
       description,
-      educationLevel,
-      subjects, // Array of subjects
+      educationSystemId,
+      educationLevelId,
+      educationStreamId,
+      levelSubjectIds,
+      streamSubjectIds,
       maxStudents: maxStudents ? parseInt(maxStudents) : undefined,
       meetingType,
       meetingLocation,

@@ -25,7 +25,13 @@ interface ClassItem {
     name: string;
   } | null;
   classSubjects?: Array<{
-    levelSubject: {
+    levelSubject?: {
+      subject: {
+        name: string;
+        icon?: string;
+      };
+    };
+    streamSubject?: {
       subject: {
         name: string;
         icon?: string;
@@ -117,14 +123,20 @@ export default function ClassesTab() {
 
         {classItem.classSubjects && classItem.classSubjects.length > 0 && (
           <View style={styles.subjectsContainer}>
-            {classItem.classSubjects.slice(0, 3).map((classSubject, index) => (
-              <View key={index} style={styles.subjectTag}>
-                <Text style={styles.subjectText}>
-                  {classSubject.levelSubject.subject.icon && `${classSubject.levelSubject.subject.icon} `}
-                  {classSubject.levelSubject.subject.name}
-                </Text>
-              </View>
-            ))}
+            {classItem.classSubjects.slice(0, 3).map((classSubject, index) => {
+              // Get subject from either levelSubject or streamSubject
+              const subject = classSubject.levelSubject?.subject || classSubject.streamSubject?.subject;
+              if (!subject) return null;
+              
+              return (
+                <View key={index} style={styles.subjectTag}>
+                  <Text style={styles.subjectText}>
+                    {subject.icon && `${subject.icon} `}
+                    {subject.name}
+                  </Text>
+                </View>
+              );
+            })}
             {classItem.classSubjects.length > 3 && (
               <Text style={styles.moreSubjects}>+{classItem.classSubjects.length - 3}</Text>
             )}

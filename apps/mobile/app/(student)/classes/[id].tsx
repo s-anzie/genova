@@ -195,74 +195,88 @@ export default function ClassDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Class Info Card - Full Width */}
+        {/* Main Info Card */}
         <View style={styles.infoCard}>
-          {/* Hero Section - Compact */}
-          <View style={styles.heroSection}>
-            <View style={styles.iconContainer}>
-              <BookOpen size={24} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.heroContent}>
-              <Text style={styles.className}>{classData.name}</Text>
-              {classData.description && (
-                <Text style={styles.classDescription}>{classData.description}</Text>
-              )}
-            </View>
+          {/* Class Name & Description */}
+          <View style={styles.headerSection}>
+            <Text style={styles.className}>{classData.name}</Text>
+            {classData.description && (
+              <Text style={styles.classDescription}>{classData.description}</Text>
+            )}
           </View>
 
-          {/* Education Level */}
-          <View style={styles.educationSection}>
-            <Text style={styles.sectionLabel}>Niveau d'éducation</Text>
-            <View style={styles.educationGrid}>
-              <View style={styles.educationItem}>
-                <Text style={styles.educationLabel}>Niveau</Text>
-                <Text style={styles.educationValue}>{levelName}</Text>
-              </View>
-              {streamName && (
-                <View style={styles.educationItem}>
-                  <Text style={styles.educationLabel}>Filière</Text>
-                  <Text style={styles.educationValue}>{streamName}</Text>
-                </View>
-              )}
+          {/* Education & Meeting Info */}
+          <View style={styles.detailsSection}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Niveau</Text>
+              <Text style={styles.detailValue}>{levelName}</Text>
             </View>
-          </View>
-
-          {/* Subjects - Multiple Display */}
-          {classData.classSubjects && classData.classSubjects.length > 0 && (
-            <View style={styles.subjectsSection}>
-              <Text style={styles.sectionLabel}>Matières</Text>
-              <View style={styles.subjectsContainer}>
-                {classData.classSubjects.map((cs: any) => (
-                  <View key={cs.id} style={styles.subjectChip}>
-                    <Text style={styles.subjectChipText}>{cs.levelSubject?.subject?.name || 'Matière'}</Text>
-                  </View>
-                ))}
+            {streamName && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Filière</Text>
+                <Text style={styles.detailValue}>{streamName}</Text>
               </View>
-            </View>
-          )}
-
-          {/* Other Info */}
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Type</Text>
-              <View style={styles.infoValueRow}>
+            )}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Type</Text>
+              <View style={styles.detailValueRow}>
                 {classData.meetingType === 'ONLINE' ? (
                   <Globe size={16} color={Colors.textSecondary} strokeWidth={2} />
                 ) : (
                   <MapPin size={16} color={Colors.textSecondary} strokeWidth={2} />
                 )}
-                <Text style={styles.infoValue}>
+                <Text style={styles.detailValue}>
                   {classData.meetingType === 'ONLINE' ? 'En ligne' : 'Présentiel'}
                 </Text>
               </View>
             </View>
             {classData.meetingLocation && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Lieu</Text>
-                <Text style={styles.infoValue}>{classData.meetingLocation}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Lieu</Text>
+                <Text style={styles.detailValue}>{classData.meetingLocation}</Text>
               </View>
             )}
           </View>
+
+          {/* Subjects */}
+          {classData.classSubjects && classData.classSubjects.length > 0 && (
+            <View style={styles.subjectsSection}>
+              <Text style={styles.sectionTitle}>
+                Matières ({classData.classSubjects.length})
+              </Text>
+              <View style={styles.subjectsGrid}>
+                {classData.classSubjects.map((cs: any) => {
+                  const subjectData = cs.levelSubject || cs.streamSubject;
+                  const subject = subjectData?.subject;
+                  const isCore = subjectData?.isCore;
+                  const coefficient = subjectData?.coefficient;
+                  const hoursPerWeek = subjectData?.hoursPerWeek;
+                  
+                  return (
+                    <View key={cs.id} style={styles.subjectItem}>
+                      <View style={styles.subjectMain}>
+                        {subject?.icon && (
+                          <Text style={styles.subjectIcon}>{subject.icon}</Text>
+                        )}
+                        <Text style={styles.subjectName}>{subject?.name || 'Matière'}</Text>
+                      </View>
+                      <View style={styles.subjectInfo}>
+                        {coefficient && (
+                          <Text style={styles.subjectInfoText}>Coef. {coefficient}</Text>
+                        )}
+                        {hoursPerWeek && (
+                          <Text style={styles.subjectInfoText}>{hoursPerWeek}h</Text>
+                        )}
+                        {isCore && (
+                          <View style={styles.coreIndicator} />
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Schedule Section */}
@@ -383,126 +397,107 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginHorizontal: 0, // Full width without padding constraint
+    marginHorizontal: Spacing.lg,
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  heroSection: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(13, 115, 119, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  heroContent: {
-    flex: 1,
+  headerSection: {
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
   className: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 4,
   },
   classDescription: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  educationSection: {
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  educationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  educationItem: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    borderRadius: 8,
-    padding: 10,
-  },
-  educationLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  educationValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    color: Colors.textSecondary,
+    lineHeight: 20,
   },
-  subjectsSection: {
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+  detailsSection: {
+    paddingVertical: 16,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
-  subjectsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  subjectChip: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  subjectChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.white,
-  },
-  infoGrid: {
-    gap: 10,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  infoItem: {
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
   },
-  infoLabel: {
+  detailLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: Colors.textSecondary,
   },
-  infoValue: {
+  detailValue: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
-  infoValueRow: {
+  detailValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  subjectsSection: {
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  subjectsGrid: {
+    gap: 8,
+  },
+  subjectItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  subjectMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  subjectIcon: {
+    fontSize: 18,
+  },
+  subjectName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  subjectInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  subjectInfoText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+  },
+  coreIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
   },
   section: {
     marginBottom: 20,
@@ -548,11 +543,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   inviteButton: {
     flexDirection: 'row',
