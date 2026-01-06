@@ -20,8 +20,14 @@ export interface EducationLevel {
 export interface CreateClassData {
   name: string;
   description?: string;
-  educationLevel: EducationLevel;
-  subjects: string[]; // Changed from single subject to array
+  // New education relations
+  educationSystemId?: string;
+  educationLevelId?: string;
+  educationStreamId?: string;
+  levelSubjectIds?: string[]; // Array of LevelSubject IDs
+  // Legacy fields (DEPRECATED - for backward compatibility)
+  educationLevel?: EducationLevel;
+  subjects?: string[];
   maxStudents?: number;
   meetingType: 'IN_PERSON' | 'ONLINE';
   meetingLocation?: string;
@@ -65,8 +71,16 @@ export async function createClass(
   data: CreateClassData
 ): Promise<ClassWithMembers> {
   // Validate required fields
-  if (!data.name || !data.educationLevel || !data.educationLevel.level || !data.subjects || data.subjects.length === 0) {
-    throw new ValidationError('Name, education level (with level field), and at least one subject are required');
+  if (!data.name) {
+    throw new ValidationError('Name is required');
+  }
+
+  // Check if using new education relations or legacy format
+  const useNewFormat = data.educationSystemId && data.educationLevelId && data.levelSubjectIds;
+  const useLegacyFormat = data.educationLevel && data.subjects;
+
+  if (!useNewFormat && !useLegacyFormat) {
+    throw new ValidationError('Either education relations (educationSystemId, educationLevelId, levelSubjectIds) or legacy format (educationLevel, subjects) is required');
   }
 
   // Validate meeting type and location
@@ -80,8 +94,9 @@ export async function createClass(
       name: data.name,
       description: data.description,
       createdBy: userId,
-      educationLevel: data.educationLevel as any, // Prisma Json type
-      subjects: data.subjects, // Array of subjects - correct field name
+      educationSystemId: data.educationSystemId,
+      educationLevelId: data.educationLevelId,
+      educationStreamId: data.educationStreamId,
       maxStudents: data.maxStudents,
       meetingType: data.meetingType,
       meetingLocation: data.meetingLocation,
@@ -124,6 +139,20 @@ export async function createClass(
     },
   });
 
+  // Create ClassSubject entries if using new format
+  if (useNewFormat && data.levelSubjectIds && data.levelSubjectIds.length > 0) {
+    await Promise.all(
+      data.levelSubjectIds.map(levelSubjectId =>
+        prisma.classSubject.create({
+          data: {
+            classId: classData.id,
+            levelSubjectId,
+          },
+        })
+      )
+    );
+  }
+
   return classData as ClassWithMembers;
 }
 
@@ -159,6 +188,21 @@ export async function getClassById(classId: string): Promise<ClassWithMembers> {
           },
         },
       },
+      timeSlots: {
+        orderBy: {
+          dayOfWeek: 'asc',
+        },
+      },
+      classSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+              level: true,
+            },
+          },
+        },
+      },
       _count: {
         select: {
           members: true,
@@ -171,7 +215,7 @@ export async function getClassById(classId: string): Promise<ClassWithMembers> {
     throw new NotFoundError('Class not found');
   }
 
-  return classData as ClassWithMembers;
+  return classData as any;
 }
 
 /**
@@ -219,9 +263,19 @@ export async function getUserClasses(userId: string): Promise<ClassWithMembers[]
           },
         },
       },
+      classSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+            },
+          },
+        },
+      },
       _count: {
         select: {
           members: true,
+          timeSlots: true,
         },
       },
     },
@@ -230,7 +284,7 @@ export async function getUserClasses(userId: string): Promise<ClassWithMembers[]
     },
   });
 
-  return classes as ClassWithMembers[];
+  return classes as any;
 }
 
 /**

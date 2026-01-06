@@ -3,8 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { envConfig, logger, AppError } from '@repo/utils';
+import { envConfig, logger } from '@repo/utils';
 import { initializeCronJobs, stopCronJobs } from './services/cron.service';
+import { errorHandler } from './middleware/error-handler';
 
 const app = express();
 const PORT = envConfig.getNumber('PORT', 5001);
@@ -63,6 +64,8 @@ import suggestionRoutes from './routes/suggestion.routes';
 import marketplaceRoutes from './routes/marketplace.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import regionsRoutes from './routes/regions.routes';
+import educationRoutes from './routes/education.routes';
+import statsRoutes from './routes/stats.routes';
 
 app.get('/api', (_req, res) => {
   res.json({ message: 'Genova API', version: '1.0.0' });
@@ -95,35 +98,21 @@ app.use('/api', suggestionRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/regions', regionsRoutes);
+app.use('/api/education', educationRoutes);
+app.use('/api/stats', statsRoutes);
 
 // 404 handler
 app.use((_req, res) => {
   res.status(404).json({
-    error: {
-      code: 'NOT_FOUND',
-      message: 'Route not found',
-      timestamp: new Date().toISOString(),
-    },
+    success: false,
+    message: 'Route not found',
+    code: 'NOT_FOUND',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Error handler
-app.use(
-  (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (err instanceof AppError) {
-      return res.status(err.statusCode).json(err.toJSON());
-    }
-
-    logger.error('Unhandled error', err);
-    res.status(500).json({
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: envConfig.isProduction() ? 'An unexpected error occurred' : err.message,
-        timestamp: new Date().toISOString(),
-      },
-    });
-  }
-);
+// Global error handler
+app.use(errorHandler);
 
 // Start server
 app.listen(PORT, async () => {

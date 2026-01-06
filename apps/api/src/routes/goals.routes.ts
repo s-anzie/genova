@@ -29,20 +29,20 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('Utilisateur non authentifié');
     }
 
-    const { subject, title, description, targetScore, deadline, priority } = req.body;
+    const { levelSubjectId, classId, title, description, targetScore, deadline } = req.body;
 
     // Validate required fields
-    if (!subject || !title || targetScore === undefined || !deadline) {
-      throw new ValidationError('Sujet, titre, score cible et date limite sont requis');
+    if (!levelSubjectId || !title || targetScore === undefined || !deadline) {
+      throw new ValidationError('levelSubjectId, titre, score cible et date limite sont requis');
     }
 
     const goalData: CreateGoalData = {
-      subject,
+      levelSubjectId,
+      classId,
       title,
       description,
       targetScore: parseFloat(targetScore),
       deadline: new Date(deadline),
-      priority,
     };
 
     const goal = await createGoal(req.user.userId, goalData);
@@ -66,12 +66,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('Utilisateur non authentifié');
     }
 
-    const { subject, status, priority } = req.query;
+    const { levelSubjectId, isCompleted } = req.query;
 
     const goals = await getStudentGoals(req.user.userId, {
-      subject: subject as string,
-      status: status as any,
-      priority: priority as any,
+      levelSubjectId: levelSubjectId as string,
+      isCompleted: isCompleted === 'true' ? true : isCompleted === 'false' ? false : undefined,
     });
 
     res.json({
@@ -136,6 +135,10 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('ID de l\'objectif requis');
+    }
+    
     const goal = await getGoalById(id, req.user.userId);
 
     res.json({
@@ -158,17 +161,20 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('ID de l\'objectif requis');
+    }
+    
     const updateData: UpdateGoalData = {};
 
     // Only include fields that are provided
-    if (req.body.subject !== undefined) updateData.subject = req.body.subject;
+    if (req.body.levelSubjectId !== undefined) updateData.levelSubjectId = req.body.levelSubjectId;
     if (req.body.title !== undefined) updateData.title = req.body.title;
     if (req.body.description !== undefined) updateData.description = req.body.description;
     if (req.body.targetScore !== undefined) updateData.targetScore = parseFloat(req.body.targetScore);
     if (req.body.currentScore !== undefined) updateData.currentScore = parseFloat(req.body.currentScore);
     if (req.body.deadline !== undefined) updateData.deadline = new Date(req.body.deadline);
-    if (req.body.priority !== undefined) updateData.priority = req.body.priority;
-    if (req.body.status !== undefined) updateData.status = req.body.status;
+    if (req.body.isCompleted !== undefined) updateData.isCompleted = req.body.isCompleted;
 
     const goal = await updateGoal(id, req.user.userId, updateData);
 
@@ -192,6 +198,10 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
     }
 
     const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('ID de l\'objectif requis');
+    }
+    
     await deleteGoal(id, req.user.userId);
 
     res.json({
@@ -214,6 +224,10 @@ router.post('/:id/complete', async (req: Request, res: Response, next: NextFunct
     }
 
     const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('ID de l\'objectif requis');
+    }
+    
     const goal = await completeGoal(id, req.user.userId);
 
     res.json({

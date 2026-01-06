@@ -28,17 +28,16 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
-    const { classId, subject, educationLevel, title, description, targetScore, deadline } = req.body;
+    const { classId, levelSubjectId, title, description, targetScore, deadline } = req.body;
 
     // Validate required fields
-    if (!subject || !title || targetScore === undefined || !deadline) {
-      throw new ValidationError('Subject, title, target score, and deadline are required');
+    if (!levelSubjectId || !title || targetScore === undefined || !deadline) {
+      throw new ValidationError('levelSubjectId, title, target score, and deadline are required');
     }
 
     const goalData: CreateLearningGoalData = {
       classId,
-      subject,
-      educationLevel,
+      levelSubjectId,
       title,
       description,
       targetScore: parseFloat(targetScore),
@@ -66,10 +65,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
-    const { subject, isCompleted, includeOverdue } = req.query;
+    const { levelSubjectId, isCompleted, includeOverdue } = req.query;
 
     const filters: any = {};
-    if (subject) filters.subject = subject as string;
+    if (levelSubjectId) filters.levelSubjectId = levelSubjectId as string;
     if (isCompleted !== undefined) filters.isCompleted = isCompleted === 'true';
     if (includeOverdue !== undefined) filters.includeOverdue = includeOverdue === 'true';
 
@@ -115,7 +114,12 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
-    const goal = await getLearningGoalById(req.params.id, req.user.userId);
+    const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('Goal ID is required');
+    }
+
+    const goal = await getLearningGoalById(id, req.user.userId);
 
     res.status(200).json({
       success: true,
@@ -136,7 +140,12 @@ router.get('/:id/progress', async (req: Request, res: Response, next: NextFuncti
       throw new ValidationError('User not authenticated');
     }
 
-    const progress = await getGoalProgress(req.params.id, req.user.userId);
+    const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('Goal ID is required');
+    }
+
+    const progress = await getGoalProgress(id, req.user.userId);
 
     res.status(200).json({
       success: true,
@@ -157,6 +166,11 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('User not authenticated');
     }
 
+    const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('Goal ID is required');
+    }
+
     const { title, description, targetScore, currentScore, deadline, isCompleted } = req.body;
 
     const updateData: UpdateLearningGoalData = {};
@@ -167,7 +181,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     if (deadline !== undefined) updateData.deadline = new Date(deadline);
     if (isCompleted !== undefined) updateData.isCompleted = isCompleted;
 
-    const goal = await updateLearningGoal(req.params.id, req.user.userId, updateData);
+    const goal = await updateLearningGoal(id, req.user.userId, updateData);
 
     res.status(200).json({
       success: true,
@@ -188,7 +202,12 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
       throw new ValidationError('User not authenticated');
     }
 
-    await deleteLearningGoal(req.params.id, req.user.userId);
+    const { id } = req.params;
+    if (!id) {
+      throw new ValidationError('Goal ID is required');
+    }
+
+    await deleteLearningGoal(id, req.user.userId);
 
     res.status(200).json({
       success: true,

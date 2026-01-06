@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 
 // Types
 export interface CreateAcademicResultData {
-  subject: string;
+  levelSubjectId: string; // Required: Reference to LevelSubject
   examName: string;
   score: number;
   maxScore: number;
@@ -27,7 +27,9 @@ export interface AcademicResultWithDetails extends AcademicResult {
 }
 
 export interface ProgressData {
-  subject: string;
+  levelSubjectId: string;
+  subjectName: string;
+  levelName: string;
   results: AcademicResult[];
   averageScore: number;
   improvement: number | null;
@@ -47,8 +49,8 @@ export interface ProgressDashboard {
  * Validates: Requirements 10.1
  */
 function validateAcademicResult(data: CreateAcademicResultData): void {
-  if (!data.subject || data.subject.trim().length === 0) {
-    throw new ValidationError('Subject is required');
+  if (!data.levelSubjectId) {
+    throw new ValidationError('levelSubjectId is required');
   }
 
   if (!data.examName || data.examName.trim().length === 0) {
@@ -108,11 +110,20 @@ export async function createAcademicResult(
     throw new ValidationError('Only students can add academic results');
   }
 
+  // Verify levelSubject exists
+  const levelSubject = await prisma.levelSubject.findUnique({
+    where: { id: data.levelSubjectId },
+  });
+
+  if (!levelSubject) {
+    throw new NotFoundError('LevelSubject not found');
+  }
+
   // Create academic result (Requirement 10.1)
   const result = await prisma.academicResult.create({
     data: {
       studentId,
-      subject: data.subject,
+      levelSubjectId: data.levelSubjectId,
       examName: data.examName,
       score: data.score,
       maxScore: data.maxScore,
@@ -135,7 +146,7 @@ export async function createAcademicResult(
 
   // Update learning goals progress for this subject
   try {
-    await updateGoalProgressFromResults(studentId, data.subject);
+    await updateGoalProgressFromResults(studentId, data.levelSubjectId);
   } catch (error) {
     console.error('Failed to update goal progress:', error);
     // Don't fail the result creation if goal update fails
@@ -150,7 +161,7 @@ export async function createAcademicResult(
 export async function getStudentResults(
   studentId: string,
   filters?: {
-    subject?: string;
+    levelSubjectId?: string;
     startDate?: Date;
     endDate?: Date;
   }
@@ -159,8 +170,8 @@ export async function getStudentResults(
     studentId,
   };
 
-  if (filters?.subject) {
-    whereConditions.subject = filters.subject;
+  if (filters?.levelSubjectId) {
+    whereConditions.levelSubjectId = filters.levelSubjectId;
   }
 
   if (filters?.startDate || filters?.endDate) {
@@ -178,24 +189,32 @@ export async function getStudentResults(
     orderBy: {
       examDate: 'desc',
     },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
 
   return results;
 }
 
 /**
- * Calculate improvement percentage for a subject
+ * Calculate improvement percentage for a levelSubject
  * Validates: Requirements 10.3
  */
 export async function calculateImprovement(
   studentId: string,
-  subject: string
+  levelSubjectId: string
 ): Promise<number | null> {
-  // Get all results for the subject, ordered by date
+  // Get all results for the levelSubject, ordered by date
   const results = await prisma.academicResult.findMany({
     where: {
       studentId,
-      subject,
+      levelSubjectId,
     },
     orderBy: {
       examDate: 'asc',
@@ -223,26 +242,49 @@ export async function calculateImprovement(
 }
 
 /**
- * Get progress data for a specific subject
+ * Get progress data for a specific levelSubject
  * Validates: Requirements 10.2
  */
 export async function getSubjectProgress(
   studentId: string,
-  subject: string
+  levelSubjectId: string
 ): Promise<ProgressData> {
   const results = await prisma.academicResult.findMany({
     where: {
       studentId,
-      subject,
+      levelSubjectId,
     },
     orderBy: {
       examDate: 'asc',
     },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
+
+  // Get levelSubject info
+  const levelSubject = await prisma.levelSubject.findUnique({
+    where: { id: levelSubjectId },
+    include: {
+      subject: true,
+      level: true,
+    },
+  });
+
+  if (!levelSubject) {
+    throw new NotFoundError('LevelSubject not found');
+  }
 
   if (results.length === 0) {
     return {
-      subject,
+      levelSubjectId,
+      subjectName: levelSubject.subject.name,
+      levelName: levelSubject.level.name,
       results: [],
       averageScore: 0,
       improvement: null,
@@ -257,7 +299,7 @@ export async function getSubjectProgress(
   const averageScore = totalPercentage / results.length;
 
   // Calculate improvement
-  const improvement = await calculateImprovement(studentId, subject);
+  const improvement = await calculateImprovement(studentId, levelSubjectId);
 
   // Determine trend
   let trend: 'improving' | 'declining' | 'stable' = 'stable';
@@ -270,7 +312,9 @@ export async function getSubjectProgress(
   }
 
   return {
-    subject,
+    levelSubjectId,
+    subjectName: levelSubject.subject.name,
+    levelName: levelSubject.level.name,
     results,
     averageScore: Math.round(averageScore * 100) / 100,
     improvement,
@@ -333,17 +377,25 @@ export async function getProgressDashboard(
     },
   });
 
-  // Get all subjects with results
+  // Get all levelSubjects with results
   const allResults = await prisma.academicResult.findMany({
     where: { studentId },
     orderBy: { examDate: 'desc' },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
 
-  const subjects = [...new Set(allResults.map(r => r.subject))];
+  const levelSubjectIds = [...new Set(allResults.map(r => r.levelSubjectId).filter((id): id is string => id !== null))];
 
-  // Get progress for each subject
+  // Get progress for each levelSubject
   const progressBySubject = await Promise.all(
-    subjects.map(subject => getSubjectProgress(studentId, subject))
+    levelSubjectIds.map(levelSubjectId => getSubjectProgress(studentId, levelSubjectId))
   );
 
   // Calculate overall improvement
@@ -375,15 +427,15 @@ export async function getProgressDashboard(
  */
 export async function getProgressVisualizationData(
   studentId: string,
-  subject?: string
+  levelSubjectId?: string
 ): Promise<{
   labels: string[];
   scores: number[];
   averages: number[];
 }> {
   const whereConditions: any = { studentId };
-  if (subject) {
-    whereConditions.subject = subject;
+  if (levelSubjectId) {
+    whereConditions.levelSubjectId = levelSubjectId;
   }
 
   const results = await prisma.academicResult.findMany({
@@ -449,11 +501,15 @@ export async function updateAcademicResult(
   // Validate updated data
   const updateData: any = {};
   
-  if (data.subject !== undefined) {
-    if (!data.subject || data.subject.trim().length === 0) {
-      throw new ValidationError('Subject cannot be empty');
+  if (data.levelSubjectId !== undefined) {
+    // Verify levelSubject exists
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: data.levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject not found');
     }
-    updateData.subject = data.subject;
+    updateData.levelSubjectId = data.levelSubjectId;
   }
 
   if (data.examName !== undefined) {
@@ -546,16 +602,16 @@ export async function deleteAcademicResult(
  * Validates: Requirements 10.4
  */
 async function checkProgressisteBadge(studentId: string): Promise<void> {
-  // Get all subjects with results
+  // Get all levelSubjects with results
   const allResults = await prisma.academicResult.findMany({
     where: { studentId },
   });
 
-  const subjects = [...new Set(allResults.map(r => r.subject))];
+  const levelSubjectIds = [...new Set(allResults.map(r => r.levelSubjectId).filter((id): id is string => id !== null))];
 
-  // Check improvement for each subject
-  for (const subject of subjects) {
-    const improvement = await calculateImprovement(studentId, subject);
+  // Check improvement for each levelSubject
+  for (const levelSubjectId of levelSubjectIds) {
+    const improvement = await calculateImprovement(studentId, levelSubjectId);
     
     if (improvement !== null && improvement >= 10) {
       // Check if badge exists
@@ -611,21 +667,39 @@ async function checkProgressisteBadge(studentId: string): Promise<void> {
         console.log(`Progressiste badge awarded to student ${studentId}`);
       }
 
-      // Only award once, so break after first qualifying subject
+      // Only award once, so break after first qualifying levelSubject
       break;
     }
   }
 }
 
 /**
- * Get all subjects for a student
+ * Get all levelSubjects for a student
  */
-export async function getStudentSubjects(studentId: string): Promise<string[]> {
+export async function getStudentSubjects(studentId: string): Promise<Array<{
+  levelSubjectId: string;
+  subjectName: string;
+  levelName: string;
+}>> {
   const results = await prisma.academicResult.findMany({
     where: { studentId },
-    select: { subject: true },
-    distinct: ['subject'],
+    select: { 
+      levelSubjectId: true,
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
+    distinct: ['levelSubjectId'],
   });
 
-  return results.map(r => r.subject);
+  return results
+    .filter(r => r.levelSubjectId && r.levelSubject)
+    .map(r => ({
+      levelSubjectId: r.levelSubjectId!,
+      subjectName: r.levelSubject!.subject.name,
+      levelName: r.levelSubject!.level.name,
+    }));
 }

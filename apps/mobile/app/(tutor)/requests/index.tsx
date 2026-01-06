@@ -24,6 +24,7 @@ import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { PageHeader } from '@/components/PageHeader';
 import { formatEurAsFcfa } from '@/utils/currency';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 
 interface TutorAssignmentRequest {
   id: string;
@@ -220,9 +221,9 @@ export default function TutorRequestsScreen() {
               <View style={styles.sessionSection}>
                 <View style={styles.sessionHeader}>
                   <BookOpen size={16} color={Colors.primary} strokeWidth={2} />
-                  <Text style={styles.sessionSubject}>{request.session.subject}</Text>
+                  <Text style={styles.sessionSubject}>{getSubjectName(request.session)}</Text>
                 </View>
-                <Text style={styles.sessionClass}>{request.session.class.name}</Text>
+                <Text style={styles.sessionClass}>{getClassName(request.session)}</Text>
 
                 <View style={styles.sessionDetails}>
                   <View style={styles.sessionDetailRow}>

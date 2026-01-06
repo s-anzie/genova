@@ -5,29 +5,42 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, Users, BookOpen, Calendar } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { apiClient } from '@/utils/api-client';
-import { formatEducationLevel } from '@/utils/education-level-parser';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { useModal } from '@/hooks/useModal';
 
 interface ClassItem {
   id: string;
   name: string;
   description: string | null;
-  educationLevel: any;
-  subjects: string[];
+  educationLevelRel?: {
+    name: string;
+  } | null;
+  educationStreamRel?: {
+    name: string;
+  } | null;
+  classSubjects?: Array<{
+    levelSubject: {
+      subject: {
+        name: string;
+        icon?: string;
+      };
+    };
+  }>;
   _count: {
-    students: number;
+    members: number;
     timeSlots: number;
   };
 }
 
 export default function ClassesTab() {
   const router = useRouter();
+  const { modalState, hideModal, showError } = useModal();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<ClassItem[]>([]);
 
@@ -41,8 +54,8 @@ export default function ClassesTab() {
       const response = await apiClient.get('/classes');
       setClasses(response.data);
     } catch (error: any) {
-      console.error('Error loading classes:', error);
-      Alert.alert('Erreur', 'Impossible de charger les classes');
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Impossible de charger les classes');
+      showError('Erreur', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -57,6 +70,15 @@ export default function ClassesTab() {
   };
 
   const renderClassCard = (classItem: ClassItem) => {
+    // Format education level display
+    let educationDisplay = '';
+    if (classItem.educationLevelRel) {
+      educationDisplay = classItem.educationLevelRel.name;
+      if (classItem.educationStreamRel) {
+        educationDisplay += ` - ${classItem.educationStreamRel.name}`;
+      }
+    }
+
     return (
       <TouchableOpacity
         key={classItem.id}
@@ -82,7 +104,7 @@ export default function ClassesTab() {
           <View style={styles.statItem}>
             <Users size={16} color={Colors.textSecondary} />
             <Text style={styles.statText}>
-              {classItem._count.students} élève{classItem._count.students !== 1 ? 's' : ''}
+              {classItem._count.members} élève{classItem._count.members !== 1 ? 's' : ''}
             </Text>
           </View>
           <View style={styles.statItem}>
@@ -93,24 +115,27 @@ export default function ClassesTab() {
           </View>
         </View>
 
-        {classItem.subjects.length > 0 && (
+        {classItem.classSubjects && classItem.classSubjects.length > 0 && (
           <View style={styles.subjectsContainer}>
-            {classItem.subjects.slice(0, 3).map((subject, index) => (
+            {classItem.classSubjects.slice(0, 3).map((classSubject, index) => (
               <View key={index} style={styles.subjectTag}>
-                <Text style={styles.subjectText}>{subject}</Text>
+                <Text style={styles.subjectText}>
+                  {classSubject.levelSubject.subject.icon && `${classSubject.levelSubject.subject.icon} `}
+                  {classSubject.levelSubject.subject.name}
+                </Text>
               </View>
             ))}
-            {classItem.subjects.length > 3 && (
-              <Text style={styles.moreSubjects}>+{classItem.subjects.length - 3}</Text>
+            {classItem.classSubjects.length > 3 && (
+              <Text style={styles.moreSubjects}>+{classItem.classSubjects.length - 3}</Text>
             )}
           </View>
         )}
 
-        <View style={styles.classFooter}>
-          <Text style={styles.educationLevel}>
-            {formatEducationLevel(classItem.educationLevel)}
-          </Text>
-        </View>
+        {educationDisplay && (
+          <View style={styles.classFooter}>
+            <Text style={styles.educationLevel}>{educationDisplay}</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -159,6 +184,16 @@ export default function ClassesTab() {
           <Plus size={24} color={Colors.white} strokeWidth={2.5} />
         </TouchableOpacity>
       )}
+
+      <StyledModal
+        visible={modalState.visible}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        primaryButton={modalState.primaryButton}
+        secondaryButton={modalState.secondaryButton}
+        onClose={hideModal}
+      />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { 
@@ -21,70 +21,35 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Globe,
 } from 'lucide-react-native';
 import { apiClient } from '@/utils/api-client';
 import { Colors, Shadows, BorderRadius } from '@/constants/colors';
 import { useAuth } from '@/contexts/auth-context';
-
-const EDUCATION_SYSTEMS = [
-  { value: 'FRENCH', label: 'Système Français' },
-  { value: 'SENEGALESE', label: 'Système Sénégalais' },
-  { value: 'INTERNATIONAL', label: 'International' },
-  { value: 'OTHER', label: 'Autre' },
-];
-
-const EDUCATION_LEVELS = {
-  FRENCH: [
-    'CP', 'CE1', 'CE2', 'CM1', 'CM2',
-    '6ème', '5ème', '4ème', '3ème',
-    'Seconde', 'Première', 'Terminale',
-    'Licence', 'Master', 'Doctorat',
-  ],
-  SENEGALESE: [
-    'CI', 'CP', 'CE1', 'CE2', 'CM1', 'CM2',
-    '6ème', '5ème', '4ème', '3ème',
-    'Seconde', 'Première', 'Terminale',
-    'Licence', 'Master', 'Doctorat',
-  ],
-  INTERNATIONAL: [
-    'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
-    'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9',
-    'Grade 10', 'Grade 11', 'Grade 12',
-    'Undergraduate', 'Graduate', 'Postgraduate',
-  ],
-  OTHER: ['Autre'],
-};
-
-const SERIES = {
-  Seconde: ['Générale', 'Technologique', 'Professionnelle'],
-  Première: ['Générale', 'Technologique', 'Professionnelle', 'L', 'ES', 'S'],
-  Terminale: ['Générale', 'Technologique', 'Professionnelle', 'L', 'ES', 'S'],
-};
-
-const SUBJECTS = [
-  'Mathématiques',
-  'Physique-Chimie',
-  'SVT',
-  'Français',
-  'Anglais',
-  'Espagnol',
-  'Allemand',
-  'Histoire-Géographie',
-  'Philosophie',
-  'Économie',
-  'Informatique',
-  'Arts',
-  'Musique',
-  'Sport',
-];
+import { StyledModal } from '@/components/ui/StyledModal';
+import { fcfaToEur } from '@/utils/currency';
+import {
+  useCountries,
+  useEducationSystems,
+  useEducationLevels,
+  useEducationStreams,
+  useLevelSubjects,
+  useStreamSubjects,
+  type Country,
+  type EducationSystem,
+  type EducationLevel,
+  type EducationStream,
+  type LevelSubject,
+} from '@/hooks/useEducation';
 
 interface OnboardingData {
-  educationSystem: string;
-  educationLevel: string;
-  series?: string;
+  countryCode: string;
+  educationSystemId: string;
+  educationLevelId: string;
+  educationStreamId: string;
   schoolName: string;
-  learningGoals: string;
-  preferredSubjects: string[];
+  preferredLevelSubjectIds: string[];
+  preferredStreamSubjectIds: string[];
   parentEmail: string;
   parentPhone: string;
   budgetPerHour: string;
@@ -94,39 +59,88 @@ export default function StudentOnboardingScreen() {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState<OnboardingData>({
-    educationSystem: '',
-    educationLevel: '',
-    series: '',
+    countryCode: '',
+    educationSystemId: '',
+    educationLevelId: '',
+    educationStreamId: '',
     schoolName: '',
-    learningGoals: '',
-    preferredSubjects: [],
+    preferredLevelSubjectIds: [],
+    preferredStreamSubjectIds: [],
     parentEmail: '',
     parentPhone: '',
     budgetPerHour: '',
   });
 
+  // Fetch data using hooks
+  const { countries, loading: countriesLoading, error: countriesError } = useCountries();
+  const { systems, loading: systemsLoading, error: systemsError } = useEducationSystems(formData.countryCode);
+  const { levels, loading: levelsLoading, error: levelsError } = useEducationLevels(formData.educationSystemId);
+  const { streams, loading: streamsLoading, error: streamsError } = useEducationStreams(formData.educationLevelId);
+  
+  // Get selected level to check if it has streams
+  const selectedLevel = levels.find(l => l.id === formData.educationLevelId);
+  const hasStreams = selectedLevel?.hasStreams || false;
+  
+  // Fetch subjects based on whether level has streams or not
+  const { subjects: levelSubjects, loading: levelSubjectsLoading, error: levelSubjectsError } = useLevelSubjects(
+    hasStreams ? undefined : formData.educationLevelId
+  );
+  const { subjects: streamSubjects, loading: streamSubjectsLoading, error: streamSubjectsError } = useStreamSubjects(
+    hasStreams ? formData.educationStreamId : undefined
+  );
+  
+  // Use the appropriate subjects list and selected IDs
+  const availableSubjects = hasStreams ? streamSubjects : levelSubjects;
+  const subjectsLoading = hasStreams ? streamSubjectsLoading : levelSubjectsLoading;
+  const subjectsError = hasStreams ? streamSubjectsError : levelSubjectsError;
+  const selectedSubjectIds = hasStreams ? formData.preferredStreamSubjectIds : formData.preferredLevelSubjectIds;
+
   const totalSteps = 5;
 
+  // Get selected data
+  const selectedCountry = countries.find(c => c.code === formData.countryCode);
+  const selectedSystem = systems.find(s => s.id === formData.educationSystemId);
+  const selectedStream = streams.find(s => s.id === formData.educationStreamId);
+
   const updateField = (field: keyof OnboardingData, value: any) => {
-    setFormData({ ...formData, [field]: value });
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      return newData;
+    });
   };
 
-  const toggleSubject = (subject: string) => {
-    const subjects = formData.preferredSubjects.includes(subject)
-      ? formData.preferredSubjects.filter((s) => s !== subject)
-      : [...formData.preferredSubjects, subject];
-    updateField('preferredSubjects', subjects);
+  const toggleSubject = (subjectId: string) => {
+    if (hasStreams) {
+      // Toggle stream subject
+      setFormData(prev => {
+        const subjects = prev.preferredStreamSubjectIds.includes(subjectId)
+          ? prev.preferredStreamSubjectIds.filter((s) => s !== subjectId)
+          : [...prev.preferredStreamSubjectIds, subjectId];
+        return { ...prev, preferredStreamSubjectIds: subjects };
+      });
+    } else {
+      // Toggle level subject
+      setFormData(prev => {
+        const subjects = prev.preferredLevelSubjectIds.includes(subjectId)
+          ? prev.preferredLevelSubjectIds.filter((s) => s !== subjectId)
+          : [...prev.preferredLevelSubjectIds, subjectId];
+        return { ...prev, preferredLevelSubjectIds: subjects };
+      });
+    }
   };
 
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return formData.educationSystem && formData.educationLevel;
+        return formData.countryCode && formData.educationSystemId && formData.educationLevelId;
       case 2:
         return formData.schoolName.trim().length > 0;
       case 3:
-        return formData.preferredSubjects.length > 0;
+        return selectedSubjectIds.length > 0;
       case 4:
         return true; // Parent info is optional
       case 5:
@@ -154,39 +168,32 @@ export default function StudentOnboardingScreen() {
     try {
       setLoading(true);
 
-      const educationDetails = {
-        system: formData.educationSystem,
-        level: formData.educationLevel,
-        ...(formData.series && { series: formData.series }),
-      };
+      // Prepare subject data based on whether level has streams
+      const subjectData = hasStreams 
+        ? { preferredStreamSubjectIds: formData.preferredStreamSubjectIds }
+        : { preferredLevelSubjectIds: formData.preferredLevelSubjectIds };
+
+      // Convert budget from FCFA to EUR for backend
+      const budgetInEur = formData.budgetPerHour ? fcfaToEur(parseFloat(formData.budgetPerHour)) : null;
 
       const profileData = {
-        educationLevel: formData.educationLevel,
-        educationDetails,
+        educationSystemId: formData.educationSystemId,
+        educationLevelId: formData.educationLevelId,
+        educationStreamId: formData.educationStreamId || null,
         schoolName: formData.schoolName,
-        learningGoals: formData.learningGoals || null,
-        preferredSubjects: formData.preferredSubjects,
+        ...subjectData,
         parentEmail: formData.parentEmail || null,
         parentPhone: formData.parentPhone || null,
-        budgetPerHour: formData.budgetPerHour ? parseFloat(formData.budgetPerHour) : null,
-        onboardingCompleted: true,
+        budgetPerHour: budgetInEur,
       };
 
       await apiClient.post('/profiles/student', profileData);
 
-      Alert.alert(
-        'Bienvenue! 🎉',
-        'Votre profil a été créé avec succès. Vous pouvez maintenant commencer à apprendre!',
-        [
-          {
-            text: 'Commencer',
-            onPress: () => router.replace('/(student)/(tabs)/home'),
-          },
-        ]
-      );
+      setShowSuccessModal(true);
     } catch (error: any) {
-      console.error('Failed to create profile:', error);
-      Alert.alert('Erreur', error.message || 'Impossible de créer votre profil');
+      const message = error?.message || (typeof error === 'string' ? error : 'Impossible de créer votre profil');
+      setErrorMessage(message);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -211,119 +218,198 @@ export default function StudentOnboardingScreen() {
 
   const renderEducationStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        <GraduationCap size={48} color={Colors.primary} strokeWidth={2} />
+      <View style={styles.stepHeader}>
+        <GraduationCap size={40} color={Colors.primary} strokeWidth={2} />
+        <Text style={styles.stepTitle}>Votre niveau d'études</Text>
+        <Text style={styles.stepDescription}>
+          Sélectionnez votre pays, système éducatif et niveau actuel
+        </Text>
       </View>
-      <Text style={styles.stepTitle}>Votre niveau d'études</Text>
-      <Text style={styles.stepDescription}>
-        Sélectionnez votre système éducatif et votre niveau actuel
-      </Text>
 
+      {/* Country Selection */}
       <View style={styles.section}>
-        <Text style={styles.label}>Système éducatif</Text>
-        <View style={styles.optionsGrid}>
-          {EDUCATION_SYSTEMS.map((system) => (
-            <TouchableOpacity
-              key={system.value}
-              style={[
-                styles.optionCard,
-                formData.educationSystem === system.value && styles.optionCardActive,
-              ]}
-              onPress={() => {
-                updateField('educationSystem', system.value);
-                updateField('educationLevel', '');
-                updateField('series', '');
-              }}
-            >
-              <Text
+        <Text style={styles.sectionLabel}>Pays *</Text>
+        {countriesLoading ? (
+          <ActivityIndicator color={Colors.primary} />
+        ) : countriesError ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>❌ Erreur: {countriesError}</Text>
+          </View>
+        ) : countries.length === 0 ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>⚠️ Aucun pays disponible</Text>
+          </View>
+        ) : (
+          <View style={styles.selectList}>
+            {countries.map((country) => (
+              <TouchableOpacity
+                key={country.code}
                 style={[
-                  styles.optionText,
-                  formData.educationSystem === system.value && styles.optionTextActive,
+                  styles.selectItem,
+                  formData.countryCode === country.code && styles.selectItemActive,
                 ]}
+                onPress={() => {
+                  updateField('countryCode', country.code);
+                  updateField('educationSystemId', '');
+                  updateField('educationLevelId', '');
+                  updateField('educationStreamId', '');
+                }}
               >
-                {system.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.selectItemText,
+                    formData.countryCode === country.code && styles.selectItemTextActive,
+                  ]}
+                >
+                  {country.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
-      {formData.educationSystem && (
+      {/* Education System Selection */}
+      {formData.countryCode && (
         <View style={styles.section}>
-          <Text style={styles.label}>Niveau</Text>
-          <ScrollView style={styles.levelScroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.optionsGrid}>
-              {EDUCATION_LEVELS[formData.educationSystem as keyof typeof EDUCATION_LEVELS]?.map(
-                (level) => (
-                  <TouchableOpacity
-                    key={level}
-                    style={[
-                      styles.optionCard,
-                      formData.educationLevel === level && styles.optionCardActive,
-                    ]}
-                    onPress={() => updateField('educationLevel', level)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        formData.educationLevel === level && styles.optionTextActive,
-                      ]}
-                    >
-                      {level}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              )}
+          <Text style={styles.sectionLabel}>Système éducatif *</Text>
+          {systemsLoading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : systemsError ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>❌ Erreur: {systemsError}</Text>
             </View>
-          </ScrollView>
-        </View>
-      )}
-
-      {formData.educationLevel &&
-        SERIES[formData.educationLevel as keyof typeof SERIES] && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Série (optionnel)</Text>
-            <View style={styles.optionsGrid}>
-              {SERIES[formData.educationLevel as keyof typeof SERIES].map((serie) => (
+          ) : systems.length === 0 ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>⚠️ Aucun système éducatif disponible pour ce pays</Text>
+            </View>
+          ) : (
+            <View style={styles.selectList}>
+              {systems.map((system) => (
                 <TouchableOpacity
-                  key={serie}
+                  key={system.id}
                   style={[
-                    styles.optionCard,
-                    formData.series === serie && styles.optionCardActive,
+                    styles.selectItem,
+                    formData.educationSystemId === system.id && styles.selectItemActive,
                   ]}
-                  onPress={() => updateField('series', serie)}
+                  onPress={() => {
+                    updateField('educationSystemId', system.id);
+                    updateField('educationLevelId', '');
+                    updateField('educationStreamId', '');
+                  }}
                 >
                   <Text
                     style={[
-                      styles.optionText,
-                      formData.series === serie && styles.optionTextActive,
+                      styles.selectItemText,
+                      formData.educationSystemId === system.id && styles.selectItemTextActive,
                     ]}
                   >
-                    {serie}
+                    {system.name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
-        )}
+          )}
+        </View>
+      )}
+
+      {/* Education Level Selection */}
+      {formData.educationSystemId && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Niveau *</Text>
+          {levelsLoading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : levelsError ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>❌ Erreur: {levelsError}</Text>
+            </View>
+          ) : levels.length === 0 ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>⚠️ Aucun niveau disponible pour ce système</Text>
+            </View>
+          ) : (
+            <View style={styles.selectList}>
+              {levels.map((level) => (
+                <TouchableOpacity
+                  key={level.id}
+                  style={[
+                    styles.selectItem,
+                    formData.educationLevelId === level.id && styles.selectItemActive,
+                  ]}
+                  onPress={() => {
+                    updateField('educationLevelId', level.id);
+                    updateField('educationStreamId', '');
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.selectItemText,
+                      formData.educationLevelId === level.id && styles.selectItemTextActive,
+                    ]}
+                  >
+                    {level.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Stream Selection (if applicable) */}
+      {formData.educationLevelId && hasStreams && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Filière (optionnel)</Text>
+          {streamsLoading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : streamsError ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>❌ Erreur: {streamsError}</Text>
+            </View>
+          ) : (
+            <View style={styles.selectList}>
+              {streams.map((stream) => (
+                <TouchableOpacity
+                  key={stream.id}
+                  style={[
+                    styles.selectItem,
+                    formData.educationStreamId === stream.id && styles.selectItemActive,
+                  ]}
+                  onPress={() => updateField('educationStreamId', stream.id)}
+                >
+                  <Text
+                    style={[
+                      styles.selectItemText,
+                      formData.educationStreamId === stream.id && styles.selectItemTextActive,
+                    ]}
+                  >
+                    {stream.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 
   const renderSchoolStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        <School size={48} color={Colors.primary} strokeWidth={2} />
+      <View style={styles.stepHeader}>
+        <School size={40} color={Colors.primary} strokeWidth={2} />
+        <Text style={styles.stepTitle}>Votre établissement</Text>
+        <Text style={styles.stepDescription}>
+          Indiquez le nom de votre école ou université
+        </Text>
       </View>
-      <Text style={styles.stepTitle}>Votre établissement</Text>
-      <Text style={styles.stepDescription}>
-        Indiquez le nom de votre école ou université
-      </Text>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Nom de l'établissement</Text>
+        <Text style={styles.sectionLabel}>Nom de l'établissement *</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex: Lycée Blaise Diagne"
+          placeholderTextColor={Colors.textTertiary}
           value={formData.schoolName}
           onChangeText={(text) => updateField('schoolName', text)}
           autoCapitalize="words"
@@ -334,72 +420,83 @@ export default function StudentOnboardingScreen() {
 
   const renderSubjectsStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        <BookOpen size={48} color={Colors.primary} strokeWidth={2} />
+      <View style={styles.stepHeader}>
+        <BookOpen size={40} color={Colors.primary} strokeWidth={2} />
+        <Text style={styles.stepTitle}>Matières préférées</Text>
+        <Text style={styles.stepDescription}>
+          Sélectionnez les matières dans lesquelles vous souhaitez progresser
+        </Text>
       </View>
-      <Text style={styles.stepTitle}>Matières préférées</Text>
-      <Text style={styles.stepDescription}>
-        Sélectionnez les matières dans lesquelles vous souhaitez progresser
-      </Text>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Matières ({formData.preferredSubjects.length})</Text>
-        <View style={styles.subjectsGrid}>
-          {SUBJECTS.map((subject) => (
-            <TouchableOpacity
-              key={subject}
-              style={[
-                styles.subjectChip,
-                formData.preferredSubjects.includes(subject) && styles.subjectChipActive,
-              ]}
-              onPress={() => toggleSubject(subject)}
-            >
-              {formData.preferredSubjects.includes(subject) && (
-                <Check size={16} color={Colors.white} strokeWidth={3} />
-              )}
-              <Text
+        <Text style={styles.sectionLabel}>
+          Matières sélectionnées ({selectedSubjectIds.length})
+        </Text>
+        {subjectsLoading ? (
+          <ActivityIndicator color={Colors.primary} />
+        ) : subjectsError ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>❌ Erreur: {subjectsError}</Text>
+          </View>
+        ) : availableSubjects.length === 0 ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>
+              ⚠️ Aucune matière disponible {hasStreams ? 'pour cette filière' : 'pour ce niveau'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.subjectsGrid}>
+            {availableSubjects.map((levelSubject) => (
+              <TouchableOpacity
+                key={levelSubject.id}
                 style={[
-                  styles.subjectChipText,
-                  formData.preferredSubjects.includes(subject) && styles.subjectChipTextActive,
+                  styles.subjectChip,
+                  selectedSubjectIds.includes(levelSubject.id) && styles.subjectChipActive,
                 ]}
+                onPress={() => toggleSubject(levelSubject.id)}
               >
-                {subject}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                {selectedSubjectIds.includes(levelSubject.id) && (
+                  <Check size={16} color={Colors.white} strokeWidth={3} />
+                )}
+                <Text
+                  style={[
+                    styles.subjectChipText,
+                    selectedSubjectIds.includes(levelSubject.id) && styles.subjectChipTextActive,
+                  ]}
+                >
+                  {levelSubject.subject.icon && `${levelSubject.subject.icon} `}
+                  {levelSubject.subject.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Objectifs d'apprentissage (optionnel)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Ex: Améliorer mes notes en maths, préparer le bac..."
-          value={formData.learningGoals}
-          onChangeText={(text) => updateField('learningGoals', text)}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          💡 Ces matières nous aident à vous proposer les meilleurs tuteurs
+        </Text>
       </View>
     </View>
   );
 
   const renderParentStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        <Users size={48} color={Colors.primary} strokeWidth={2} />
+      <View style={styles.stepHeader}>
+        <Users size={40} color={Colors.primary} strokeWidth={2} />
+        <Text style={styles.stepTitle}>Contact des parents</Text>
+        <Text style={styles.stepDescription}>
+          Ces informations sont optionnelles mais recommandées pour les mineurs
+        </Text>
       </View>
-      <Text style={styles.stepTitle}>Contact des parents</Text>
-      <Text style={styles.stepDescription}>
-        Ces informations sont optionnelles mais recommandées pour les mineurs
-      </Text>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Email du parent/tuteur</Text>
+        <Text style={styles.sectionLabel}>Email du parent/tuteur</Text>
         <TextInput
           style={styles.input}
           placeholder="parent@example.com"
+          placeholderTextColor={Colors.textTertiary}
           value={formData.parentEmail}
           onChangeText={(text) => updateField('parentEmail', text)}
           keyboardType="email-address"
@@ -408,10 +505,11 @@ export default function StudentOnboardingScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Téléphone du parent/tuteur</Text>
+        <Text style={styles.sectionLabel}>Téléphone du parent/tuteur</Text>
         <TextInput
           style={styles.input}
           placeholder="+221 XX XXX XX XX"
+          placeholderTextColor={Colors.textTertiary}
           value={formData.parentPhone}
           onChangeText={(text) => updateField('parentPhone', text)}
           keyboardType="phone-pad"
@@ -428,19 +526,20 @@ export default function StudentOnboardingScreen() {
 
   const renderBudgetStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        <Wallet size={48} color={Colors.primary} strokeWidth={2} />
+      <View style={styles.stepHeader}>
+        <Wallet size={40} color={Colors.primary} strokeWidth={2} />
+        <Text style={styles.stepTitle}>Budget horaire</Text>
+        <Text style={styles.stepDescription}>
+          Indiquez votre budget approximatif par heure de cours (optionnel)
+        </Text>
       </View>
-      <Text style={styles.stepTitle}>Budget horaire</Text>
-      <Text style={styles.stepDescription}>
-        Indiquez votre budget approximatif par heure de cours (optionnel)
-      </Text>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Budget par heure (FCFA)</Text>
+        <Text style={styles.sectionLabel}>Budget par heure (FCFA)</Text>
         <TextInput
           style={styles.input}
-          placeholder="Ex: 5000"
+          placeholder="Ex: 7000"
+          placeholderTextColor={Colors.textTertiary}
           value={formData.budgetPerHour}
           onChangeText={(text) => updateField('budgetPerHour', text)}
           keyboardType="numeric"
@@ -517,6 +616,34 @@ export default function StudentOnboardingScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Success Modal */}
+      <StyledModal
+        visible={showSuccessModal}
+        type="success"
+        title="Bienvenue! 🎉"
+        message="Votre profil a été créé avec succès. Vous pouvez maintenant commencer à apprendre!"
+        primaryButton={{
+          text: 'Commencer',
+          onPress: () => {
+            setShowSuccessModal(false);
+            router.replace('/(student)/(tabs)/home');
+          },
+        }}
+        showCloseButton={false}
+      />
+
+      {/* Error Modal */}
+      <StyledModal
+        visible={showErrorModal}
+        type="error"
+        title="Erreur"
+        message={errorMessage}
+        primaryButton={{
+          text: 'OK',
+          onPress: () => setShowErrorModal(false),
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -529,25 +656,24 @@ const styles = StyleSheet.create({
   progressContainer: {
     paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: Colors.white,
-    ...Shadows.small,
+    paddingBottom: 16,
+    backgroundColor: Colors.primary,
   },
   progressBar: {
-    height: 6,
-    backgroundColor: Colors.border,
-    borderRadius: 3,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
+    backgroundColor: Colors.secondary,
+    borderRadius: 2,
   },
   progressText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: Colors.white,
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -561,38 +687,62 @@ const styles = StyleSheet.create({
   stepContainer: {
     gap: 24,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary + '15',
+  stepHeader: {
     alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
+    gap: 12,
+    marginBottom: 8,
   },
   stepTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.textPrimary,
     textAlign: 'center',
   },
   stepDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
   section: {
     gap: 12,
   },
-  label: {
+  sectionLabel: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
+  selectList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  selectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  selectItemActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+  },
+  selectItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  selectItemTextActive: {
+    color: Colors.white,
+  },
   input: {
     backgroundColor: Colors.white,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.border,
     borderRadius: BorderRadius.medium,
     paddingHorizontal: 16,
@@ -600,46 +750,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textPrimary,
   },
-  textArea: {
-    minHeight: 100,
-    paddingTop: 14,
-  },
   helperText: {
     fontSize: 13,
     color: Colors.textSecondary,
     marginTop: -4,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  optionCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.large,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  optionCardActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  optionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  optionTextActive: {
-    color: Colors.white,
-  },
-  levelScroll: {
-    maxHeight: 300,
   },
   subjectsGrid: {
     flexDirection: 'row',
@@ -670,13 +784,27 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   infoCard: {
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.secondary + '15',
     padding: 16,
     borderRadius: BorderRadius.large,
+    borderWidth: 1,
+    borderColor: Colors.secondary + '30',
   },
   infoText: {
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  errorCard: {
+    backgroundColor: '#ff000010',
+    padding: 16,
+    borderRadius: BorderRadius.large,
+    borderWidth: 1,
+    borderColor: '#ff000030',
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#cc0000',
     lineHeight: 18,
   },
   navigation: {
@@ -694,13 +822,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: BorderRadius.large,
-    gap: 8,
+    gap: 6,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.primary,
   },
@@ -710,10 +838,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: BorderRadius.large,
-    gap: 8,
+    gap: 6,
     ...Shadows.primary,
   },
   nextButtonFull: {
@@ -724,7 +852,7 @@ const styles = StyleSheet.create({
     ...Shadows.small,
   },
   nextButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.white,
   },

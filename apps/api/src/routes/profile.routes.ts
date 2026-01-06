@@ -17,66 +17,194 @@ import {
   UpdateUserData,
 } from '../services/profile.service';
 import { authenticate } from '../middleware/auth.middleware';
-import { ValidationError, AuthorizationError } from '@repo/utils';
-
+import { ValidationError } from '@repo/utils';
+import {
+  convertLegacyEducationLevel,
+  convertLegacyLanguages,
+  getTeachingLevelSubjectsFromLegacy,
+  parseExperienceYears,
+} from '../services/legacy-conversion.service';
+import { prisma } from '../lib/prisma';
+import { convertLegacySubjects } from '../services/legacy-conversion.service';
 const router = Router();
 
 /**
  * POST /api/profiles/student
- * Create a student profile
+ * Create or update a student profile (with backward compatibility)
  */
 router.post('/student', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     
-    const data: CreateStudentProfileData = {
-      userId,
-      educationLevel: req.body.educationLevel,
-      schoolName: req.body.schoolName,
-      parentEmail: req.body.parentEmail,
-      parentPhone: req.body.parentPhone,
-      learningGoals: req.body.learningGoals,
-      preferredSubjects: req.body.preferredSubjects,
-      budgetPerHour: req.body.budgetPerHour,
-    };
+    let data: CreateStudentProfileData;
 
-    if (!data.educationLevel) {
-      throw new ValidationError('Education level is required', 'educationLevel');
+    // Check if using new format or legacy format
+    if (req.body.educationLevelId) {
+      // New format
+      console.log('📱 Student profile: Using new format');
+      data = {
+        userId,
+        educationSystemId: req.body.educationSystemId,
+        educationLevelId: req.body.educationLevelId,
+        educationStreamId: req.body.educationStreamId,
+        schoolName: req.body.schoolName,
+        parentEmail: req.body.parentEmail,
+        parentPhone: req.body.parentPhone,
+        budgetPerHour: req.body.budgetPerHour,
+        preferredLevelSubjectIds: req.body.preferredLevelSubjectIds || [],
+      };
+    } else {
+      // Legacy format - convert to new format
+      console.log('📱 Student profile: Converting from legacy format');
+      console.log('Legacy data:', {
+        educationLevel: req.body.educationLevel,
+        educationDetails: req.body.educationDetails,
+        preferredSubjects: req.body.preferredSubjects,
+      });
+
+      const educationDetails = req.body.educationDetails || {};
+      const { educationSystemId, educationLevelId, educationStreamId } = 
+        await convertLegacyEducationLevel(
+          req.body.educationLevel,
+          educationDetails.system
+        );
+
+      console.log('Converted education:', { educationSystemId, educationLevelId, educationStreamId });
+
+      // Convert preferred subjects if provided
+      let preferredLevelSubjectIds: string[] = [];
+      if (req.body.preferredSubjects && req.body.preferredSubjects.length > 0) {
+        preferredLevelSubjectIds = await convertLegacySubjects(
+          req.body.preferredSubjects,
+          educationLevelId
+        );
+        console.log(`Converted ${req.body.preferredSubjects.length} subjects to ${preferredLevelSubjectIds.length} level subjects`);
+      }
+
+      data = {
+        userId,
+        educationSystemId,
+        educationLevelId,
+        educationStreamId,
+        schoolName: req.body.schoolName,
+        parentEmail: req.body.parentEmail,
+        parentPhone: req.body.parentPhone,
+        budgetPerHour: req.body.budgetPerHour,
+        preferredLevelSubjectIds,
+      };
     }
 
-    const profile = await createStudentProfile(data);
+    if (!data.educationLevelId) {
+      throw new ValidationError('Education level is required', 'educationLevelId');
+    }
 
-    res.status(201).json({
+    // Check if profile already exists
+    const existingProfile = await prisma.studentProfile.findUnique({
+      where: { userId },
+    });
+
+    let profile;
+    if (existingProfile) {
+      // Update existing profile
+      console.log('📱 Student profile already exists, updating...');
+      profile = await updateStudentProfile(userId, {
+        educationSystemId: data.educationSystemId,
+        educationLevelId: data.educationLevelId,
+        educationStreamId: data.educationStreamId,
+        schoolName: data.schoolName,
+        parentEmail: data.parentEmail,
+        parentPhone: data.parentPhone,
+        budgetPerHour: data.budgetPerHour,
+        preferredLevelSubjectIds: data.preferredLevelSubjectIds,
+      });
+    } else {
+      // Create new profile
+      console.log('📱 Creating new student profile...');
+      profile = await createStudentProfile(data);
+    }
+
+    res.status(existingProfile ? 200 : 201).json({
       success: true,
       data: profile,
-      message: 'Student profile created successfully',
+      message: existingProfile ? 'Student profile updated successfully' : 'Student profile created successfully',
     });
   } catch (error) {
+    console.error('❌ Failed to create/update student profile:', error);
     next(error);
   }
 });
 
 /**
  * POST /api/profiles/tutor
- * Create a tutor profile
+ * Create a tutor profile (with backward compatibility)
  */
 router.post('/tutor', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     
-    const data: CreateTutorProfileData = {
-      userId,
-      bio: req.body.bio,
-      experienceYears: req.body.experienceYears,
-      hourlyRate: req.body.hourlyRate,
-      subjects: req.body.subjects,
-      educationLevels: req.body.educationLevels,
-      languages: req.body.languages,
-      teachingMode: req.body.teachingMode,
-      serviceRadius: req.body.serviceRadius,
-      diplomas: req.body.diplomas,
-      availability: req.body.availability,
-    };
+    let data: CreateTutorProfileData;
+
+    // Check if using new format or legacy format
+    if (req.body.teachingLevelSubjectIds) {
+      // New format
+      console.log('📱 Tutor profile: Using new format');
+      data = {
+        userId,
+        bio: req.body.bio,
+        experienceYears: req.body.experienceYears,
+        hourlyRate: req.body.hourlyRate,
+        teachingLevelSubjectIds: req.body.teachingLevelSubjectIds,
+        teachingLanguageIds: req.body.teachingLanguageIds,
+        teachingMode: req.body.teachingMode,
+        serviceRadius: req.body.serviceRadius,
+        diplomas: req.body.diplomas || [],
+      };
+    } else {
+      // Legacy format - convert to new format
+      console.log('📱 Tutor profile: Converting from legacy format');
+      console.log('Legacy data:', {
+        subjects: req.body.subjects,
+        educationLevels: req.body.educationLevels,
+        languages: req.body.languages,
+      });
+
+      // Get default system (French) for conversion
+      const defaultSystem = await prisma.educationSystem.findFirst({
+        where: { code: 'FRENCH' },
+      });
+
+      if (!defaultSystem) {
+        throw new ValidationError('Default education system not found', 'system');
+      }
+
+      // Convert teaching subjects and levels
+      const teachingLevelSubjectIds = await getTeachingLevelSubjectsFromLegacy(
+        req.body.subjects || [],
+        req.body.educationLevels || [],
+        defaultSystem.id
+      );
+
+      console.log(`Converted to ${teachingLevelSubjectIds.length} teaching level subjects`);
+
+      // Convert languages
+      const teachingLanguageIds = await convertLegacyLanguages(req.body.languages || []);
+      console.log(`Converted to ${teachingLanguageIds.length} teaching languages`);
+
+      // Parse experience years
+      const experienceYears = parseExperienceYears(req.body.experienceYears);
+
+      data = {
+        userId,
+        bio: req.body.bio,
+        experienceYears,
+        hourlyRate: req.body.hourlyRate,
+        teachingLevelSubjectIds,
+        teachingLanguageIds,
+        teachingMode: req.body.teachingMode,
+        serviceRadius: req.body.serviceRadius,
+        diplomas: req.body.diplomas || [],
+      };
+    }
 
     if (!data.hourlyRate) {
       throw new ValidationError('Hourly rate is required', 'hourlyRate');
@@ -90,6 +218,7 @@ router.post('/tutor', authenticate, async (req: Request, res: Response, next: Ne
       message: 'Tutor profile created successfully',
     });
   } catch (error) {
+    console.error('❌ Failed to create tutor profile:', error);
     next(error);
   }
 });
@@ -101,16 +230,21 @@ router.post('/tutor', authenticate, async (req: Request, res: Response, next: Ne
 router.get('/student/:userId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.params.userId;
+    console.log(`📥 [GET /profiles/student/:userId] Request for userId: ${userId}`);
+    
     if (!userId) {
       throw new ValidationError('User ID is required');
     }
+    
     const profile = await getStudentProfile(userId);
 
+    console.log(`✅ [GET /profiles/student/:userId] Returning profile for userId: ${userId}`);
     res.status(200).json({
       success: true,
       data: profile,
     });
   } catch (error) {
+    console.log(`❌ [GET /profiles/student/:userId] Error:`, error);
     next(error);
   }
 });
@@ -144,15 +278,23 @@ router.put('/student', authenticate, async (req: Request, res: Response, next: N
   try {
     const userId = req.user!.userId;
     
+    console.log('📥 [PUT /profiles/student] Request body:', {
+      hasLevelSubjects: !!req.body.preferredLevelSubjectIds,
+      levelSubjectsCount: req.body.preferredLevelSubjectIds?.length || 0,
+      hasStreamSubjects: !!req.body.preferredStreamSubjectIds,
+      streamSubjectsCount: req.body.preferredStreamSubjectIds?.length || 0,
+    });
+    
     const data: UpdateStudentProfileData = {
-      educationLevel: req.body.educationLevel,
-      educationDetails: req.body.educationDetails,
+      educationSystemId: req.body.educationSystemId,
+      educationLevelId: req.body.educationLevelId,
+      educationStreamId: req.body.educationStreamId,
       schoolName: req.body.schoolName,
       parentEmail: req.body.parentEmail,
       parentPhone: req.body.parentPhone,
-      learningGoals: req.body.learningGoals,
-      preferredSubjects: req.body.preferredSubjects,
       budgetPerHour: req.body.budgetPerHour,
+      preferredLevelSubjectIds: req.body.preferredLevelSubjectIds,
+      preferredStreamSubjectIds: req.body.preferredStreamSubjectIds,
     };
 
     const profile = await updateStudentProfile(userId, data);
@@ -179,13 +321,11 @@ router.put('/tutor', authenticate, async (req: Request, res: Response, next: Nex
       bio: req.body.bio,
       experienceYears: req.body.experienceYears,
       hourlyRate: req.body.hourlyRate,
-      subjects: req.body.subjects,
-      educationLevels: req.body.educationLevels,
-      languages: req.body.languages,
+      teachingLevelSubjectIds: req.body.teachingLevelSubjectIds,
+      teachingLanguageIds: req.body.teachingLanguageIds,
       teachingMode: req.body.teachingMode,
       serviceRadius: req.body.serviceRadius,
       diplomas: req.body.diplomas,
-      availability: req.body.availability,
       teachingSkillsDetails: req.body.teachingSkillsDetails,
     };
 
@@ -217,7 +357,7 @@ router.put('/me', authenticate, async (req: Request, res: Response, next: NextFu
       address: req.body.address,
       city: req.body.city,
       postalCode: req.body.postalCode,
-      country: req.body.country,
+      countryCode: req.body.countryCode,
       preferredLanguage: req.body.preferredLanguage,
     };
 

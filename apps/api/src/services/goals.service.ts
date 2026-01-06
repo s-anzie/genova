@@ -1,4 +1,4 @@
-import { PrismaClient, LearningGoal, GoalPriority, GoalStatus } from '@prisma/client';
+import { PrismaClient, LearningGoal } from '@prisma/client';
 import { 
   ValidationError, 
   NotFoundError, 
@@ -9,23 +9,22 @@ const prisma = new PrismaClient();
 
 // Types
 export interface CreateGoalData {
-  subject: string;
+  levelSubjectId: string;
+  classId?: string;
   title: string;
   description?: string;
   targetScore: number;
   deadline: Date;
-  priority?: GoalPriority;
 }
 
 export interface UpdateGoalData {
-  subject?: string;
+  levelSubjectId?: string;
   title?: string;
   description?: string;
   targetScore?: number;
   currentScore?: number;
   deadline?: Date;
-  priority?: GoalPriority;
-  status?: GoalStatus;
+  isCompleted?: boolean;
 }
 
 export interface GoalWithProgress extends LearningGoal {
@@ -40,7 +39,9 @@ export interface GoalsDashboard {
   completedGoals: number;
   overdueGoals: number;
   goalsBySubject: {
-    subject: string;
+    levelSubjectId: string;
+    subjectName: string;
+    levelName: string;
     count: number;
     completed: number;
   }[];
@@ -51,7 +52,7 @@ export interface GoalsDashboard {
  * Validate goal data
  */
 function validateGoalData(data: CreateGoalData | UpdateGoalData): void {
-  if ('subject' in data && data.subject && data.subject.trim().length === 0) {
+  if ('levelSubjectId' in data && data.levelSubjectId && data.levelSubjectId.trim().length === 0) {
     throw new ValidationError('Le sujet est requis');
   }
 
@@ -94,7 +95,7 @@ function calculateGoalProgress(goal: LearningGoal): GoalWithProgress {
   const now = new Date();
   const deadline = new Date(goal.deadline);
   const daysRemaining = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  const isOverdue = daysRemaining < 0 && goal.status === 'IN_PROGRESS';
+  const isOverdue = daysRemaining < 0 && !goal.isCompleted;
 
   return {
     ...goal,
@@ -128,17 +129,26 @@ export async function createGoal(
     throw new AuthorizationError('Seuls les étudiants peuvent créer des objectifs');
   }
 
+  // Verify levelSubject exists
+  const levelSubject = await prisma.levelSubject.findUnique({
+    where: { id: data.levelSubjectId },
+  });
+
+  if (!levelSubject) {
+    throw new NotFoundError('LevelSubject non trouvé');
+  }
+
   // Create goal
   const goal = await prisma.learningGoal.create({
     data: {
       studentId,
-      subject: data.subject,
+      classId: data.classId,
+      levelSubjectId: data.levelSubjectId,
       title: data.title,
       description: data.description,
       targetScore: data.targetScore,
       deadline: data.deadline,
-      priority: data.priority || 'MEDIUM',
-      status: 'IN_PROGRESS',
+      isCompleted: false,
     },
   });
 
@@ -151,31 +161,34 @@ export async function createGoal(
 export async function getStudentGoals(
   studentId: string,
   filters?: {
-    subject?: string;
-    status?: GoalStatus;
-    priority?: GoalPriority;
+    levelSubjectId?: string;
+    isCompleted?: boolean;
   }
 ): Promise<GoalWithProgress[]> {
   const where: any = { studentId };
 
-  if (filters?.subject) {
-    where.subject = filters.subject;
+  if (filters?.levelSubjectId) {
+    where.levelSubjectId = filters.levelSubjectId;
   }
 
-  if (filters?.status) {
-    where.status = filters.status;
-  }
-
-  if (filters?.priority) {
-    where.priority = filters.priority;
+  if (filters?.isCompleted !== undefined) {
+    where.isCompleted = filters.isCompleted;
   }
 
   const goals = await prisma.learningGoal.findMany({
     where,
     orderBy: [
-      { status: 'asc' }, // IN_PROGRESS first
+      { isCompleted: 'asc' },
       { deadline: 'asc' },
     ],
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
 
   return goals.map(calculateGoalProgress);
@@ -227,13 +240,29 @@ export async function updateGoal(
     throw new AuthorizationError('Vous n\'avez pas accès à cet objectif');
   }
 
+  // Verify levelSubject exists if updating
+  if (data.levelSubjectId) {
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: data.levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject non trouvé');
+    }
+  }
+
+  // Check if goal should be marked as completed
+  const updateData: any = { ...data };
+  
+  if (data.isCompleted && !existingGoal.isCompleted) {
+    updateData.completedAt = new Date();
+  } else if (data.isCompleted === false && existingGoal.isCompleted) {
+    updateData.completedAt = null;
+  }
+
   // Update goal
   const goal = await prisma.learningGoal.update({
     where: { id: goalId },
-    data: {
-      ...data,
-      updatedAt: new Date(),
-    },
+    data: updateData,
   });
 
   return calculateGoalProgress(goal);
@@ -286,9 +315,8 @@ export async function completeGoal(
   const updatedGoal = await prisma.learningGoal.update({
     where: { id: goalId },
     data: {
-      status: 'COMPLETED',
+      isCompleted: true,
       completedAt: new Date(),
-      updatedAt: new Date(),
     },
   });
 
@@ -300,14 +328,14 @@ export async function completeGoal(
  */
 export async function updateGoalProgress(
   studentId: string,
-  subject: string
+  levelSubjectId: string
 ): Promise<void> {
-  // Get active goals for this subject
+  // Get active goals for this levelSubject
   const goals = await prisma.learningGoal.findMany({
     where: {
       studentId,
-      subject,
-      status: 'IN_PROGRESS',
+      levelSubjectId,
+      isCompleted: false,
     },
   });
 
@@ -315,11 +343,11 @@ export async function updateGoalProgress(
     return;
   }
 
-  // Get latest academic result for this subject
+  // Get latest academic result for this levelSubject
   const latestResult = await prisma.academicResult.findFirst({
     where: {
       studentId,
-      subject,
+      levelSubjectId,
     },
     orderBy: {
       examDate: 'desc',
@@ -335,7 +363,7 @@ export async function updateGoalProgress(
   const maxScore = parseFloat(latestResult.maxScore.toString());
   const percentage = (score / maxScore) * 100;
 
-  // Update all active goals for this subject
+  // Update all active goals for this levelSubject
   for (const goal of goals) {
     const targetScore = parseFloat(goal.targetScore.toString());
     
@@ -344,7 +372,6 @@ export async function updateGoalProgress(
       where: { id: goal.id },
       data: {
         currentScore: percentage,
-        updatedAt: new Date(),
       },
     });
 
@@ -353,9 +380,8 @@ export async function updateGoalProgress(
       await prisma.learningGoal.update({
         where: { id: goal.id },
         data: {
-          status: 'COMPLETED',
+          isCompleted: true,
           completedAt: new Date(),
-          updatedAt: new Date(),
         },
       });
     }
@@ -370,26 +396,47 @@ export async function getGoalsDashboard(
 ): Promise<GoalsDashboard> {
   const allGoals = await prisma.learningGoal.findMany({
     where: { studentId },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
 
   const now = new Date();
-  const activeGoals = allGoals.filter(g => g.status === 'IN_PROGRESS');
-  const completedGoals = allGoals.filter(g => g.status === 'COMPLETED');
+  const activeGoals = allGoals.filter(g => !g.isCompleted);
+  const completedGoals = allGoals.filter(g => g.isCompleted);
   const overdueGoals = activeGoals.filter(g => new Date(g.deadline) < now);
 
-  // Group by subject
-  const subjectMap = new Map<string, { count: number; completed: number }>();
+  // Group by levelSubject
+  const subjectMap = new Map<string, { 
+    subjectName: string; 
+    levelName: string; 
+    count: number; 
+    completed: number 
+  }>();
+  
   allGoals.forEach(goal => {
-    const existing = subjectMap.get(goal.subject) || { count: 0, completed: 0 };
-    existing.count++;
-    if (goal.status === 'COMPLETED') {
-      existing.completed++;
+    if (goal.levelSubjectId && goal.levelSubject) {
+      const existing = subjectMap.get(goal.levelSubjectId) || { 
+        subjectName: goal.levelSubject.subject.name,
+        levelName: goal.levelSubject.level.name,
+        count: 0, 
+        completed: 0 
+      };
+      existing.count++;
+      if (goal.isCompleted) {
+        existing.completed++;
+      }
+      subjectMap.set(goal.levelSubjectId, existing);
     }
-    subjectMap.set(goal.subject, existing);
   });
 
-  const goalsBySubject = Array.from(subjectMap.entries()).map(([subject, data]) => ({
-    subject,
+  const goalsBySubject = Array.from(subjectMap.entries()).map(([levelSubjectId, data]) => ({
+    levelSubjectId,
     ...data,
   }));
 
@@ -414,33 +461,64 @@ export async function getGoalsDashboard(
  */
 export async function getGoalSuggestions(
   studentId: string
-): Promise<Array<{ subject: string; suggestedTarget: number; reason: string }>> {
+): Promise<Array<{ 
+  levelSubjectId: string; 
+  subjectName: string;
+  levelName: string;
+  suggestedTarget: number; 
+  reason: string 
+}>> {
   // Get all academic results
   const results = await prisma.academicResult.findMany({
     where: { studentId },
     orderBy: { examDate: 'desc' },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+          level: true,
+        },
+      },
+    },
   });
 
   if (results.length === 0) {
     return [];
   }
 
-  // Group by subject and calculate average
-  const subjectMap = new Map<string, number[]>();
+  // Group by levelSubject and calculate average
+  const subjectMap = new Map<string, { 
+    scores: number[]; 
+    subjectName: string; 
+    levelName: string 
+  }>();
+  
   results.forEach(result => {
-    const score = parseFloat(result.score.toString());
-    const maxScore = parseFloat(result.maxScore.toString());
-    const percentage = (score / maxScore) * 100;
-    
-    const scores = subjectMap.get(result.subject) || [];
-    scores.push(percentage);
-    subjectMap.set(result.subject, scores);
+    if (result.levelSubjectId && result.levelSubject) {
+      const score = parseFloat(result.score.toString());
+      const maxScore = parseFloat(result.maxScore.toString());
+      const percentage = (score / maxScore) * 100;
+      
+      const existing = subjectMap.get(result.levelSubjectId) || { 
+        scores: [], 
+        subjectName: result.levelSubject.subject.name,
+        levelName: result.levelSubject.level.name
+      };
+      existing.scores.push(percentage);
+      subjectMap.set(result.levelSubjectId, existing);
+    }
   });
 
-  const suggestions: Array<{ subject: string; suggestedTarget: number; reason: string }> = [];
+  const suggestions: Array<{ 
+    levelSubjectId: string; 
+    subjectName: string;
+    levelName: string;
+    suggestedTarget: number; 
+    reason: string 
+  }> = [];
 
-  subjectMap.forEach((scores, subject) => {
-    const average = scores.reduce((a, b) => a + b, 0) / scores.length;
+  subjectMap.forEach((data, levelSubjectId) => {
+    const average = data.scores.reduce((a, b) => a + b, 0) / data.scores.length;
     
     // Suggest improvement based on current average
     let suggestedTarget: number;
@@ -461,7 +539,9 @@ export async function getGoalSuggestions(
     }
 
     suggestions.push({
-      subject,
+      levelSubjectId,
+      subjectName: data.subjectName,
+      levelName: data.levelName,
       suggestedTarget,
       reason,
     });

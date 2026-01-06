@@ -16,6 +16,7 @@ import { TransactionResponse } from '@/types/api';
 import { Colors, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { formatEurAsFcfa } from '@/utils/currency';
 import { PageHeader } from '@/components/PageHeader';
+import { getSubjectName } from '@/utils/session-helpers';
 
 export default function TransactionsScreen() {
   const router = useRouter();
@@ -202,7 +203,7 @@ export default function TransactionsScreen() {
                   </Text>
                   {tx.session && (
                     <Text style={styles.transactionSubtitle}>
-                      {tx.session.subject}
+                      {getSubjectName(tx.session)}
                     </Text>
                   )}
                   {tx.payee && (

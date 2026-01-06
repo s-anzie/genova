@@ -16,6 +16,7 @@ import { ApiClient } from '@/utils/api';
 import { SessionResponse } from '@/types/api';
 import { PageHeader, TabSelector } from '@/components/PageHeader';
 import { formatEurAsFcfa } from '@/utils/currency';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 
 // Separate component for session card to use hooks properly
 const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: () => void }) => {
@@ -141,7 +142,7 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
           </View>
           <View style={styles.subjectInfo}>
             <View style={styles.subjectRow}>
-              <Text style={styles.sessionSubject}>{session.subject}</Text>
+              <Text style={styles.sessionSubject}>{getSubjectName(session)}</Text>
               {isOngoing && (
                 <View style={styles.ongoingBadge}>
                   <Animated.View style={[styles.ongoingDot, { transform: [{ scale: pulseAnim }] }]} />
@@ -163,7 +164,7 @@ const SessionCard = ({ session, onPress }: { session: SessionResponse; onPress: 
       {session.class && (
         <View style={styles.classInfo}>
           <Text style={styles.classLabel}>Classe: </Text>
-          <Text style={styles.className}>{session.class.name}</Text>
+          <Text style={styles.className}>{getClassName(session)}</Text>
         </View>
       )}
 

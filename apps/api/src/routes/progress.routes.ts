@@ -28,15 +28,15 @@ router.post('/results', async (req: Request, res: Response, next: NextFunction) 
       throw new ValidationError('User not authenticated');
     }
 
-    const { subject, examName, score, maxScore, examDate } = req.body;
+    const { levelSubjectId, examName, score, maxScore, examDate } = req.body;
 
     // Validate required fields
-    if (!subject || !examName || score === undefined || maxScore === undefined || !examDate) {
-      throw new ValidationError('Subject, exam name, score, max score, and exam date are required');
+    if (!levelSubjectId || !examName || score === undefined || maxScore === undefined || !examDate) {
+      throw new ValidationError('levelSubjectId, exam name, score, max score, and exam date are required');
     }
 
     const resultData: CreateAcademicResultData = {
-      subject,
+      levelSubjectId,
       examName,
       score: parseFloat(score),
       maxScore: parseFloat(maxScore),
@@ -100,12 +100,12 @@ router.put('/results/:id', async (req: Request, res: Response, next: NextFunctio
     }
 
     const { id } = req.params;
-    const { subject, examName, score, maxScore, examDate } = req.body;
+    const { levelSubjectId, examName, score, maxScore, examDate } = req.body;
 
     const updateData: Partial<CreateAcademicResultData> = {};
 
-    if (subject !== undefined) {
-      updateData.subject = subject;
+    if (levelSubjectId !== undefined) {
+      updateData.levelSubjectId = levelSubjectId;
     }
     if (examName !== undefined) {
       updateData.examName = examName;

@@ -52,11 +52,15 @@ const CURRENCY_MAP: Record<string, CurrencyInfo> = {
 /**
  * Get currency info by currency code
  */
-export function getCurrencyInfo(currencyCode: string): CurrencyInfo {
-  const info = CURRENCY_MAP[currencyCode.toUpperCase()];
+export function getCurrencyInfo(currencyCode: string | undefined): CurrencyInfo {
+  if (!currencyCode) {
+    return CURRENCY_MAP.EUR!;
+  }
+  const upperCode = currencyCode.toUpperCase();
+  const info = CURRENCY_MAP[upperCode];
   if (!info) {
     // Default to EUR if currency not found
-    return CURRENCY_MAP.EUR;
+    return CURRENCY_MAP.EUR!;
   }
   return info;
 }
@@ -65,7 +69,7 @@ export function getCurrencyInfo(currencyCode: string): CurrencyInfo {
  * Map local currency to Stripe-supported currency
  * Stripe doesn't support all African currencies, so we map them
  */
-export function mapToStripeCurrency(currencyCode: string): string {
+export function mapToStripeCurrency(currencyCode: string | undefined): string {
   const info = getCurrencyInfo(currencyCode);
   return info.stripeCurrency;
 }
@@ -79,15 +83,15 @@ export function mapToStripeCurrency(currencyCode: string): string {
  */
 export function convertCurrency(
   amount: number,
-  fromCurrency: string,
-  toCurrency: string
+  fromCurrency: string | undefined,
+  toCurrency: string | undefined
 ): number {
-  if (fromCurrency === toCurrency) {
+  if (!fromCurrency || !toCurrency || fromCurrency === toCurrency) {
     return amount;
   }
 
-  const fromInfo = getCurrencyInfo(fromCurrency);
-  const toInfo = getCurrencyInfo(toCurrency);
+  const fromInfo: CurrencyInfo = getCurrencyInfo(fromCurrency);
+  const toInfo: CurrencyInfo = getCurrencyInfo(toCurrency);
 
   // Convert to EUR first (base currency), then to target currency
   const amountInEur = amount / fromInfo.conversionRate;
@@ -102,7 +106,7 @@ export function convertCurrency(
  * @param currencyCode Local currency code
  * @returns Amount in Stripe currency's smallest unit
  */
-export function toStripeAmount(amount: number, currencyCode: string): number {
+export function toStripeAmount(amount: number, currencyCode: string | undefined): number {
   const stripeCurrency = mapToStripeCurrency(currencyCode);
   const convertedAmount = convertCurrency(amount, currencyCode, stripeCurrency.toUpperCase());
   
@@ -119,14 +123,14 @@ export function toStripeAmount(amount: number, currencyCode: string): number {
  */
 export function fromStripeAmount(
   stripeAmount: number,
-  stripeCurrency: string,
-  localCurrency: string
+  stripeCurrency: string | undefined,
+  localCurrency: string | undefined
 ): number {
   // Convert from smallest unit to main unit
   const amountInStripeCurrency = stripeAmount / 100;
   
   // Convert to local currency
-  return convertCurrency(amountInStripeCurrency, stripeCurrency.toUpperCase(), localCurrency);
+  return convertCurrency(amountInStripeCurrency, stripeCurrency, localCurrency);
 }
 
 /**
@@ -135,17 +139,18 @@ export function fromStripeAmount(
  * @param currencyCode Currency code
  * @returns Formatted string (e.g., "5,000 FCFA", "€50.00")
  */
-export function formatCurrency(amount: number, currencyCode: string): string {
+export function formatCurrency(amount: number, currencyCode: string | undefined): string {
   const info = getCurrencyInfo(currencyCode);
+  const code = currencyCode?.toUpperCase() || 'EUR';
   
   // Format number with thousands separator
   const formatted = new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: currencyCode === 'XOF' || currencyCode === 'XAF' ? 0 : 2,
-    maximumFractionDigits: currencyCode === 'XOF' || currencyCode === 'XAF' ? 0 : 2,
+    minimumFractionDigits: code === 'XOF' || code === 'XAF' ? 0 : 2,
+    maximumFractionDigits: code === 'XOF' || code === 'XAF' ? 0 : 2,
   }).format(amount);
 
   // Position symbol based on currency
-  if (currencyCode === 'EUR') {
+  if (code === 'EUR') {
     return `${formatted}${info.symbol}`;
   }
   return `${formatted} ${info.symbol}`;

@@ -106,16 +106,28 @@ export async function saveTutorAvailability(
     }
   }
 
-  // Store in tutor profile as date-based availability
-  await prisma.tutorProfile.update({
-    where: { userId: tutorId },
-    data: {
-      availability: {
-        type: 'date-based',
-        slots: slots,
-        updatedAt: new Date().toISOString(),
-      } as any,
+  // Delete existing availability for these dates
+  const dates = slots.map(s => new Date(s.date));
+  await prisma.tutorAvailability.deleteMany({
+    where: {
+      tutorId,
+      specificDate: { in: dates },
     },
+  });
+
+  // Create new availability slots
+  const availabilityData = slots.map(slot => ({
+    tutorId,
+    tutorProfileId: tutorProfile.id,
+    specificDate: new Date(slot.date),
+    startTime: slot.start,
+    endTime: slot.end,
+    isRecurring: false,
+    isActive: true,
+  }));
+
+  await prisma.tutorAvailability.createMany({
+    data: availabilityData,
   });
 
   logger.info('Tutor availability saved', { tutorId, slotsCount: slots.length });
@@ -131,35 +143,30 @@ export async function getTutorAvailability(
   startDate?: string,
   endDate?: string
 ): Promise<DateSlot[]> {
-  const tutorProfile = await prisma.tutorProfile.findUnique({
-    where: { userId: tutorId },
-    select: { availability: true },
+  const where: any = {
+    tutorId,
+    isActive: true,
+    specificDate: { not: null },
+  };
+
+  if (startDate || endDate) {
+    where.specificDate = {};
+    if (startDate) where.specificDate.gte = new Date(startDate);
+    if (endDate) where.specificDate.lte = new Date(endDate);
+  }
+
+  const availabilities = await prisma.tutorAvailability.findMany({
+    where,
+    orderBy: { specificDate: 'asc' },
   });
 
-  if (!tutorProfile) {
-    throw new NotFoundError('Tutor profile not found');
-  }
-
-  const availability = tutorProfile.availability as any;
+  const filtered = availabilities.filter(avail => avail.specificDate !== null);
   
-  // Check if it's the new date-based format
-  if (availability && availability.type === 'date-based' && Array.isArray(availability.slots)) {
-    let slots = availability.slots as DateSlot[];
-    
-    // Filter by date range if provided
-    if (startDate || endDate) {
-      slots = slots.filter(slot => {
-        if (startDate && slot.date < startDate) return false;
-        if (endDate && slot.date > endDate) return false;
-        return true;
-      });
-    }
-    
-    return slots;
-  }
-  
-  // Old format or empty - return empty array
-  return [];
+  return filtered.map(avail => ({
+    date: avail.specificDate!.toISOString().split('T')[0],
+    start: avail.startTime,
+    end: avail.endTime,
+  })) as DateSlot[];
 }
 
 /**
@@ -231,39 +238,18 @@ export async function deleteTutorAvailability(
   tutorId: string,
   dates: string[]
 ): Promise<{ success: boolean; deleted: number }> {
-  const tutorProfile = await prisma.tutorProfile.findUnique({
-    where: { userId: tutorId },
-    select: { availability: true },
-  });
+  const datesToDelete = dates.map(d => new Date(d));
 
-  if (!tutorProfile) {
-    throw new NotFoundError('Tutor profile not found');
-  }
-
-  const availability = tutorProfile.availability as any;
-  
-  if (!availability || availability.type !== 'date-based' || !Array.isArray(availability.slots)) {
-    return { success: true, deleted: 0 };
-  }
-
-  const slots = availability.slots as DateSlot[];
-  const filteredSlots = slots.filter(slot => !dates.includes(slot.date));
-  const deletedCount = slots.length - filteredSlots.length;
-
-  await prisma.tutorProfile.update({
-    where: { userId: tutorId },
-    data: {
-      availability: {
-        type: 'date-based',
-        slots: filteredSlots,
-        updatedAt: new Date().toISOString(),
-      } as any,
+  const result = await prisma.tutorAvailability.deleteMany({
+    where: {
+      tutorId,
+      specificDate: { in: datesToDelete },
     },
   });
 
-  logger.info('Tutor availability deleted', { tutorId, deletedCount });
+  logger.info('Tutor availability deleted', { tutorId, deletedCount: result.count });
 
-  return { success: true, deleted: deletedCount };
+  return { success: true, deleted: result.count };
 }
 
 // ============================================================================

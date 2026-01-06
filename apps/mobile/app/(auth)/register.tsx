@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
@@ -19,10 +18,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, User, GraduationCap, UserCheck, Calendar, Eye, EyeOff } from 'lucide-react-native';
 import { Colors, Gradients, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { validateEmail, validatePassword, validatePasswordMatch, validateName, validateBirthDate } from '@/utils/validation';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { useModal } from '@/hooks/useModal';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuth();
+  const { modalState, hideModal, showError, showSuccess } = useModal();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     email: '',
@@ -78,7 +80,7 @@ export default function RegisterScreen() {
 
   const validateStep1 = (): boolean => {
     if (!formData.role) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un rôle');
+      showError('Erreur', 'Veuillez sélectionner un rôle');
       return false;
     }
     return true;
@@ -165,19 +167,15 @@ export default function RegisterScreen() {
         lastName: formData.lastName.trim(),
         role: formData.role,
       });
-      // Redirect to login after successful registration
-      Alert.alert(
+      
+      showSuccess(
         'Inscription réussie',
         'Votre compte a été créé avec succès. Veuillez vous connecter.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(auth)/login'),
-          },
-        ]
+        () => router.replace('/(auth)/login')
       );
     } catch (error: any) {
-      Alert.alert("Erreur d'inscription", error.message || 'Une erreur est survenue');
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Une erreur est survenue');
+      showError("Erreur d'inscription", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -480,6 +478,16 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          <StyledModal
+            visible={modalState.visible}
+            type={modalState.type}
+            title={modalState.title}
+            message={modalState.message}
+            primaryButton={modalState.primaryButton}
+            secondaryButton={modalState.secondaryButton}
+            onClose={hideModal}
+          />
     </LinearGradient>
   );
 }

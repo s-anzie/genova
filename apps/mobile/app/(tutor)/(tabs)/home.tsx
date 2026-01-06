@@ -29,6 +29,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { ApiClient, ApiClientClass } from '@/utils/api';
 import { SessionResponse, AvailableSessionSuggestion } from '@/types/api';
 import { eurToFcfa } from '@/utils/currency';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 
 export default function TutorHomeScreen() {
   const router = useRouter();
@@ -384,7 +385,7 @@ export default function TutorHomeScreen() {
                 onPress={() => router.push(`/(tutor)/(tabs)/sessions/${session.id}`)}
               >
                 <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionSubject}>{session.subject}</Text>
+                  <Text style={styles.sessionSubject}>{getSubjectName(session)}</Text>
                   <View style={styles.pendingBadge}>
                     <Text style={styles.pendingBadgeText}>Nouveau</Text>
                   </View>
@@ -392,7 +393,7 @@ export default function TutorHomeScreen() {
                 <Text style={styles.sessionTime}>{formatSessionTime(session)}</Text>
                 {session.class && (
                   <Text style={styles.sessionClass}>
-                    Classe: {session.class.name} ({session.class._count?.members || 0} étudiant{(session.class._count?.members || 0) > 1 ? 's' : ''})
+                    Classe: {getClassName(session)} ({session.class._count?.members || 0} étudiant{(session.class._count?.members || 0) > 1 ? 's' : ''})
                   </Text>
                 )}
                 <View style={styles.sessionActions}>
@@ -420,13 +421,13 @@ export default function TutorHomeScreen() {
                 onPress={() => router.push(`/(tutor)/(tabs)/sessions/${session.id}`)}
               >
                 <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionSubject}>{session.subject}</Text>
+                  <Text style={styles.sessionSubject}>{getSubjectName(session)}</Text>
                   <ChevronRight size={20} color={Colors.textSecondary} />
                 </View>
                 <Text style={styles.sessionTime}>{formatSessionTime(session)}</Text>
                 {session.class && (
                   <Text style={styles.sessionClass}>
-                    Classe: {session.class.name} ({session.class._count?.members || 0} étudiant{(session.class._count?.members || 0) > 1 ? 's' : ''})
+                    Classe: {getClassName(session)} ({session.class._count?.members || 0} étudiant{(session.class._count?.members || 0) > 1 ? 's' : ''})
                   </Text>
                 )}
               </TouchableOpacity>
@@ -458,8 +459,8 @@ export default function TutorHomeScreen() {
                     <BookOpen size={20} color={Colors.primary} strokeWidth={2} />
                   </View>
                   <View style={styles.availableSessionInfo}>
-                    <Text style={styles.availableSessionSubject}>{session.subject}</Text>
-                    <Text style={styles.availableSessionClass}>{session.class.name}</Text>
+                    <Text style={styles.availableSessionSubject}>{getSubjectName(session)}</Text>
+                    <Text style={styles.availableSessionClass}>{getClassName(session)}</Text>
                     <View style={styles.availableSessionMeta}>
                       <Text style={styles.availableSessionTime}>
                         {new Date(session.scheduledStart).toLocaleDateString('fr-FR', {

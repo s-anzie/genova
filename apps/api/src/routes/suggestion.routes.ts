@@ -68,8 +68,7 @@ router.get('/sessions/available-suggestions', authenticate, async (req, res) => 
       class: {
         id: s.class.id,
         name: s.class.name,
-        educationLevel: s.class.educationLevel,
-        subjects: s.class.subjects,
+        educationLevelId: s.class.educationLevelId,
         meetingLocation: s.class.meetingLocation,
         _count: {
           members: s.class.studentCount,

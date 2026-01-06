@@ -54,8 +54,15 @@ export interface SessionWithDetails extends TutoringSession {
   class: {
     id: string;
     name: string;
-    educationLevel: string;
-    subjects: string[]; // Changed from subject to subjects
+    educationLevelId: string | null;
+    classSubjects: Array<{
+      levelSubject: {
+        subject: {
+          name: string;
+          code: string;
+        };
+      };
+    }>;
     members: { studentId: string }[];
   };
   tutor?: {
@@ -234,8 +241,8 @@ export async function createSession(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -272,8 +279,8 @@ export async function getSessionById(sessionId: string): Promise<SessionWithDeta
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           meetingLocation: true,
           members: {
             where: { isActive: true },
@@ -376,8 +383,8 @@ export async function getUserSessions(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -437,8 +444,8 @@ export async function getUpcomingSessions(studentId: string): Promise<SessionWit
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -498,8 +505,8 @@ export async function getPastSessions(studentId: string): Promise<SessionWithDet
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -552,8 +559,8 @@ export async function getCancelledSessions(studentId: string): Promise<SessionWi
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -601,8 +608,8 @@ export async function getAssignedSessions(tutorId: string): Promise<SessionWithD
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -643,17 +650,33 @@ export async function getAssignedSessions(tutorId: string): Promise<SessionWithD
  * - The tutor is available at the session time
  */
 export async function getSuggestedSessions(tutorId: string): Promise<SessionWithDetails[]> {
-  // Get tutor profile with subjects
+  // Get tutor profile with teaching subjects
   const tutorProfile = await prisma.tutorProfile.findUnique({
     where: { userId: tutorId },
     select: {
-      subjects: true,
+      teachingSubjects: {
+        select: {
+          levelSubject: {
+            select: {
+              subject: {
+                select: {
+                  name: true,
+                  code: true,
+                }
+              }
+            }
+          }
+        }
+      }
     },
   });
 
   if (!tutorProfile) {
     throw new NotFoundError('Tutor profile not found');
   }
+
+  // Extract subject names from teaching subjects
+  const tutorSubjects = tutorProfile.teachingSubjects.map(ts => ts.levelSubject.subject.name);
 
   // Get all unassigned sessions with matching subjects
   const unassignedSessions = await prisma.tutoringSession.findMany({
@@ -663,7 +686,7 @@ export async function getSuggestedSessions(tutorId: string): Promise<SessionWith
         in: ['PENDING', 'CONFIRMED'],
       },
       subject: {
-        in: tutorProfile.subjects,
+        in: tutorSubjects,
       },
       scheduledStart: {
         gte: new Date(), // Only future sessions
@@ -674,8 +697,8 @@ export async function getSuggestedSessions(tutorId: string): Promise<SessionWith
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -747,8 +770,8 @@ export async function getTutorPastSessions(tutorId: string): Promise<SessionWith
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -794,8 +817,8 @@ export async function getTutorCancelledSessions(tutorId: string): Promise<Sessio
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -874,8 +897,8 @@ export async function confirmSession(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -952,8 +975,8 @@ export async function updateSessionStatus(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -1385,8 +1408,8 @@ export async function cancelSession(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -1538,8 +1561,8 @@ export async function updateSession(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -1615,8 +1638,8 @@ export async function getClassSessions(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },
@@ -1722,8 +1745,8 @@ export async function rescheduleSession(
         select: {
           id: true,
           name: true,
-          educationLevel: true,
-          subjects: true,
+          educationLevelId: true,
+          classSubjects: { select: { levelSubject: { select: { subject: { select: { name: true, code: true } } } } } },
           members: {
             where: { isActive: true },
             select: { studentId: true },

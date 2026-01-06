@@ -163,14 +163,8 @@ export async function register(data: RegisterData): Promise<AuthTokens> {
     });
 
     // Create corresponding profile based on role
-    if (roleValue === Role.STUDENT) {
-      await tx.studentProfile.create({
-        data: {
-          userId: newUser.id,
-          educationLevel: 'high_school', // Default value
-        },
-      });
-    } else if (roleValue === Role.TUTOR) {
+    // Note: Student profiles are created during onboarding, not at registration
+    if (roleValue === Role.TUTOR) {
       await tx.tutorProfile.create({
         data: {
           userId: newUser.id,
@@ -180,6 +174,7 @@ export async function register(data: RegisterData): Promise<AuthTokens> {
         },
       });
     }
+    // Admin profiles don't need a separate profile table
 
     return newUser;
   });

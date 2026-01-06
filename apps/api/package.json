@@ -18,7 +18,9 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "migrate:sessions": "ts-node scripts/migrate-generate-sessions.ts",
-    "migrate:sessions:dry": "ts-node scripts/migrate-generate-sessions.ts --dry-run"
+    "migrate:sessions:dry": "ts-node scripts/migrate-generate-sessions.ts --dry-run",
+    "check-onboarding": "ts-node scripts/check-onboarding-status.ts",
+    "check-user-profile": "ts-node scripts/check-user-profile.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

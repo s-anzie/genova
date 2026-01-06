@@ -17,6 +17,7 @@ import { apiClient } from '@/utils/api-client';
 import { Colors } from '@/constants/colors';
 import { API_BASE_URL } from '@/config/api';
 import type { SessionResponse } from '@/types/api';
+import { getSubjectName } from '@/utils/session-helpers';
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'Lun', fullLabel: 'Lundi', dayIndex: 1 },
@@ -332,7 +333,7 @@ export default function TutorAvailabilityScreen() {
                     }`}
                     onPress={() => {
                       if (session) {
-                        Alert.alert('Session', `${session.subject}\n${session.status}`);
+                        Alert.alert('Session', `${getSubjectName(session)}\n${session.status}`);
                       } else if (hasAvailability) {
                         const slotIndex = slots.findIndex(s => 
                           timeToMinutes(s.start) <= hour * 60 && timeToMinutes(s.end) > hour * 60
@@ -349,7 +350,7 @@ export default function TutorAvailabilityScreen() {
                     {session ? (
                       <View className={`w-[95%] h-[95%] ${getSessionColor(session.status)} rounded justify-center items-center`}>
                         <Text className="text-[10px] font-bold text-white text-center" numberOfLines={2}>
-                          {session.subject}
+                          {getSubjectName(session)}
                         </Text>
                       </View>
                     ) : hasAvailability ? (
@@ -376,7 +377,7 @@ export default function TutorAvailabilityScreen() {
               <View className="h-px bg-gray-100" />
               <View>
                 <Text className="text-xs text-gray-500 mb-1">Prochaine session</Text>
-                <Text className="text-sm font-semibold text-gray-900">{nextSession.subject}</Text>
+                <Text className="text-sm font-semibold text-gray-900">{getSubjectName(nextSession)}</Text>
                 <Text className="text-xs text-gray-600 mt-0.5">
                   {formatDate(nextSession.scheduledStart)} • {formatDuration(nextSession.scheduledStart, nextSession.scheduledEnd)}
                 </Text>

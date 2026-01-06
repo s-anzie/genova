@@ -85,8 +85,35 @@ export interface ClassResponse {
   name: string;
   description: string | null;
   createdBy: string;
-  educationLevel: EducationLevel;
-  subjects: string[]; // Changed from single subject to array
+  // New structured education fields
+  educationSystemId: string | null;
+  educationLevelId: string | null;
+  educationStreamId: string | null;
+  educationLevelRel?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  educationStreamRel?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  classSubjects?: Array<{
+    id: string;
+    levelSubject: {
+      id: string;
+      subject: {
+        id: string;
+        name: string;
+        code: string;
+        icon?: string;
+      };
+    };
+  }>;
+  // Legacy fields (deprecated, kept for backward compatibility)
+  educationLevel?: EducationLevel;
+  subjects?: string[];
   maxStudents: number | null;
   meetingType: 'IN_PERSON' | 'ONLINE';
   meetingLocation: string | null;
@@ -103,6 +130,7 @@ export interface ClassResponse {
   members?: ClassMemberResponse[];
   _count?: {
     members: number;
+    timeSlots?: number;
   };
 }
 
@@ -213,7 +241,29 @@ export interface SessionResponse {
   actualEnd: Date | null;
   location: string | null;
   onlineMeetingLink: string | null;
-  subject: string;
+  // New structured subject field
+  levelSubjectId?: string | null;
+  streamSubjectId?: string | null;
+  levelSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      code: string;
+      icon?: string;
+    };
+  };
+  streamSubject?: {
+    id: string;
+    subject: {
+      id: string;
+      name: string;
+      code: string;
+      icon?: string;
+    };
+  };
+  // Legacy field (deprecated, kept for backward compatibility)
+  subject?: string;
   description: string | null;
   price: number;
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';

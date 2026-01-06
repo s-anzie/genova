@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
@@ -18,17 +17,20 @@ import { useAuth } from '@/contexts/auth-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, ChevronLeft, ShieldCheck, CheckCircle } from 'lucide-react-native';
 import { Colors, Gradients, Shadows, Spacing, BorderRadius } from '@/constants/colors';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { useModal } from '@/hooks/useModal';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { resetPassword } = useAuth();
+  const { modalState, hideModal, showError } = useModal();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
   const handleResetPassword = async () => {
     if (!email) {
-      Alert.alert('Erreur', 'Veuillez entrer votre adresse email');
+      showError('Erreur', 'Veuillez entrer votre adresse email');
       return;
     }
 
@@ -37,7 +39,8 @@ export default function ForgotPasswordScreen() {
       await resetPassword(email.toLowerCase().trim());
       setEmailSent(true);
     } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Une erreur est survenue');
+      showError('Erreur', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -145,6 +148,16 @@ export default function ForgotPasswordScreen() {
         </View>
         </ScrollView>
       </TouchableWithoutFeedback>
+
+      <StyledModal
+        visible={modalState.visible}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        primaryButton={modalState.primaryButton}
+        secondaryButton={modalState.secondaryButton}
+        onClose={hideModal}
+      />
     </LinearGradient>
   );
 }

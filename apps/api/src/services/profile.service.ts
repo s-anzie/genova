@@ -12,24 +12,27 @@ const prisma = new PrismaClient();
 // Types
 export interface CreateStudentProfileData {
   userId: string;
-  educationLevel: string;
+  educationSystemId?: string;
+  educationLevelId?: string;
+  educationStreamId?: string;
   schoolName?: string;
   parentEmail?: string;
   parentPhone?: string;
-  learningGoals?: string;
-  preferredSubjects?: string[];
   budgetPerHour?: number;
+  preferredLevelSubjectIds?: string[]; // Array of LevelSubject IDs
+  preferredStreamSubjectIds?: string[]; // Array of StreamSubject IDs
 }
 
 export interface UpdateStudentProfileData {
-  educationLevel?: string;
-  educationDetails?: any; // JSON structure for detailed education info
+  educationSystemId?: string;
+  educationLevelId?: string;
+  educationStreamId?: string;
   schoolName?: string;
   parentEmail?: string;
   parentPhone?: string;
-  learningGoals?: string;
-  preferredSubjects?: string[];
   budgetPerHour?: number;
+  preferredLevelSubjectIds?: string[]; // Array of LevelSubject IDs
+  preferredStreamSubjectIds?: string[]; // Array of StreamSubject IDs
 }
 
 export interface CreateTutorProfileData {
@@ -37,26 +40,22 @@ export interface CreateTutorProfileData {
   bio?: string;
   experienceYears?: number;
   hourlyRate: number;
-  subjects: string[];
-  educationLevels: string[];
-  languages: string[];
+  teachingLevelSubjectIds: string[]; // Array of LevelSubject IDs
+  teachingLanguageIds: string[]; // Array of Language IDs
   teachingMode: 'IN_PERSON' | 'ONLINE' | 'BOTH';
   serviceRadius?: number;
   diplomas?: Diploma[];
-  availability?: WeeklySchedule;
 }
 
 export interface UpdateTutorProfileData {
   bio?: string;
   experienceYears?: number;
   hourlyRate?: number;
-  subjects?: string[];
-  educationLevels?: string[];
-  languages?: string[];
+  teachingLevelSubjectIds?: string[]; // Array of LevelSubject IDs
+  teachingLanguageIds?: string[]; // Array of Language IDs
   teachingMode?: 'IN_PERSON' | 'ONLINE' | 'BOTH';
   serviceRadius?: number;
   diplomas?: Diploma[];
-  availability?: WeeklySchedule;
   teachingSkillsDetails?: any; // JSON structure for detailed teaching skills
 }
 
@@ -84,7 +83,7 @@ export interface UpdateUserData {
   address?: string;
   city?: string;
   postalCode?: string;
-  country?: string;
+  countryCode?: string;
   preferredLanguage?: string;
 }
 
@@ -139,9 +138,6 @@ export async function createStudentProfile(data: CreateStudentProfileData) {
     throw new ValidationError('Student profile already exists');
   }
 
-  // Validate education level
-  validateEducationLevel(data.educationLevel);
-
   // Check if user is a minor and require parent email
   if (user.birthDate) {
     const age = Math.floor((Date.now() - user.birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
@@ -154,15 +150,76 @@ export async function createStudentProfile(data: CreateStudentProfileData) {
   const profile = await prisma.studentProfile.create({
     data: {
       userId: data.userId,
-      educationLevel: data.educationLevel,
+      educationSystemId: data.educationSystemId,
+      educationLevelId: data.educationLevelId,
+      educationStreamId: data.educationStreamId,
       schoolName: data.schoolName,
       parentEmail: data.parentEmail,
       parentPhone: data.parentPhone,
-      learningGoals: data.learningGoals,
-      preferredSubjects: data.preferredSubjects || [],
       budgetPerHour: data.budgetPerHour,
+      onboardingCompleted: true,
     },
   });
+
+  // Create preferred level subjects if provided
+  if (data.preferredLevelSubjectIds && data.preferredLevelSubjectIds.length > 0) {
+    // Verify that all IDs are valid LevelSubject IDs
+    const validLevelSubjects = await prisma.levelSubject.findMany({
+      where: {
+        id: {
+          in: data.preferredLevelSubjectIds,
+        },
+      },
+      select: { id: true },
+    });
+
+    const validIds = validLevelSubjects.map(ls => ls.id);
+
+    // Only create preferences for valid LevelSubject IDs
+    if (validIds.length > 0) {
+      await prisma.studentPreferredSubject.createMany({
+        data: validIds.map(levelSubjectId => ({
+          studentProfileId: profile.id,
+          levelSubjectId,
+        })),
+      });
+    }
+
+    // Log if some IDs were invalid
+    if (validIds.length !== data.preferredLevelSubjectIds.length) {
+      console.log(`⚠️ Some level subject IDs were invalid (${data.preferredLevelSubjectIds.length - validIds.length} ignored)`);
+    }
+  }
+
+  // Create preferred stream subjects if provided
+  if (data.preferredStreamSubjectIds && data.preferredStreamSubjectIds.length > 0) {
+    // Verify that all IDs are valid StreamSubject IDs
+    const validStreamSubjects = await prisma.streamSubject.findMany({
+      where: {
+        id: {
+          in: data.preferredStreamSubjectIds,
+        },
+      },
+      select: { id: true },
+    });
+
+    const validIds = validStreamSubjects.map(ss => ss.id);
+
+    // Only create preferences for valid StreamSubject IDs
+    if (validIds.length > 0) {
+      await prisma.studentPreferredStreamSubject.createMany({
+        data: validIds.map(streamSubjectId => ({
+          studentProfileId: profile.id,
+          streamSubjectId,
+        })),
+      });
+    }
+
+    // Log if some IDs were invalid
+    if (validIds.length !== data.preferredStreamSubjectIds.length) {
+      console.log(`⚠️ Some stream subject IDs were invalid (${data.preferredStreamSubjectIds.length - validIds.length} ignored)`);
+    }
+  }
 
   return profile;
 }
@@ -196,16 +253,12 @@ export async function createTutorProfile(data: CreateTutorProfileData) {
   validateTeachingMode(data.teachingMode);
 
   // Validate required fields
-  if (!data.subjects || data.subjects.length === 0) {
-    throw new ValidationError('At least one subject is required', 'subjects');
+  if (!data.teachingLevelSubjectIds || data.teachingLevelSubjectIds.length === 0) {
+    throw new ValidationError('At least one teaching subject is required', 'teachingLevelSubjectIds');
   }
 
-  if (!data.educationLevels || data.educationLevels.length === 0) {
-    throw new ValidationError('At least one education level is required', 'educationLevels');
-  }
-
-  if (!data.languages || data.languages.length === 0) {
-    throw new ValidationError('At least one language is required', 'languages');
+  if (!data.teachingLanguageIds || data.teachingLanguageIds.length === 0) {
+    throw new ValidationError('At least one language is required', 'teachingLanguageIds');
   }
 
   // Create tutor profile
@@ -215,16 +268,28 @@ export async function createTutorProfile(data: CreateTutorProfileData) {
       bio: data.bio,
       experienceYears: data.experienceYears || 0,
       hourlyRate: data.hourlyRate,
-      subjects: data.subjects,
-      educationLevels: data.educationLevels,
-      languages: data.languages,
       teachingMode: data.teachingMode,
       serviceRadius: data.serviceRadius,
       diplomas: (data.diplomas || []) as any,
-      availability: (data.availability || {}) as any,
       isVerified: false,
       verificationDocuments: [],
     },
+  });
+
+  // Create teaching subjects
+  await prisma.tutorTeachingSubject.createMany({
+    data: data.teachingLevelSubjectIds.map(levelSubjectId => ({
+      tutorProfileId: profile.id,
+      levelSubjectId,
+    })),
+  });
+
+  // Create teaching languages
+  await prisma.tutorTeachingLanguage.createMany({
+    data: data.teachingLanguageIds.map(languageId => ({
+      tutorProfileId: profile.id,
+      teachingLanguageId: languageId,
+    })),
   });
 
   return profile;
@@ -234,6 +299,8 @@ export async function createTutorProfile(data: CreateTutorProfileData) {
  * Get student profile by user ID
  */
 export async function getStudentProfile(userId: string) {
+  console.log(`🔍 [getStudentProfile] Looking for profile with userId: ${userId}`);
+  
   const profile = await prisma.studentProfile.findUnique({
     where: { userId },
     include: {
@@ -246,16 +313,52 @@ export async function getStudentProfile(userId: string) {
           avatarUrl: true,
           birthDate: true,
           preferredLanguage: true,
+          isVerified: true,
+          subscriptionType: true,
+          walletBalance: true,
           createdAt: true,
+        },
+      },
+      educationSystem: {
+        include: {
+          country: true,
+        },
+      },
+      educationLevel: true,
+      educationStream: true,
+      preferredLevelSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+            },
+          },
+        },
+      },
+      preferredStreamSubjects: {
+        include: {
+          streamSubject: {
+            include: {
+              subject: true,
+            },
+          },
         },
       },
     },
   });
 
+  console.log(`📋 [getStudentProfile] Profile found:`, {
+    exists: !!profile,
+    userId: profile?.userId,
+    onboardingCompleted: profile?.onboardingCompleted,
+  });
+
   if (!profile) {
-    throw new NotFoundError('Student profile not found');
+    console.log(`❌ [getStudentProfile] No profile found for userId: ${userId}`);
+    throw new NotFoundError('Student profile');
   }
 
+  console.log(`✅ [getStudentProfile] Returning profile for userId: ${userId}`);
   return profile;
 }
 
@@ -292,6 +395,14 @@ export async function getTutorProfile(userId: string) {
  * Update student profile
  */
 export async function updateStudentProfile(userId: string, data: UpdateStudentProfileData) {
+  console.log('📝 [updateStudentProfile] Starting update for userId:', userId);
+  console.log('📝 [updateStudentProfile] Data received:', {
+    hasLevelSubjects: !!data.preferredLevelSubjectIds,
+    levelSubjectsCount: data.preferredLevelSubjectIds?.length || 0,
+    hasStreamSubjects: !!data.preferredStreamSubjectIds,
+    streamSubjectsCount: data.preferredStreamSubjectIds?.length || 0,
+  });
+
   // Verify profile exists
   const existingProfile = await prisma.studentProfile.findUnique({
     where: { userId },
@@ -301,26 +412,118 @@ export async function updateStudentProfile(userId: string, data: UpdateStudentPr
     throw new NotFoundError('Student profile not found');
   }
 
-  // Validate education level if provided
-  if (data.educationLevel) {
-    validateEducationLevel(data.educationLevel);
-  }
+  console.log('✅ [updateStudentProfile] Profile found:', existingProfile.id);
 
   // Update profile
   const profile = await prisma.studentProfile.update({
     where: { userId },
     data: {
-      educationLevel: data.educationLevel,
-      educationDetails: data.educationDetails as any,
+      educationSystemId: data.educationSystemId,
+      educationLevelId: data.educationLevelId,
+      educationStreamId: data.educationStreamId,
       schoolName: data.schoolName,
       parentEmail: data.parentEmail,
       parentPhone: data.parentPhone,
-      learningGoals: data.learningGoals,
-      preferredSubjects: data.preferredSubjects,
       budgetPerHour: data.budgetPerHour,
+      onboardingCompleted: true,
     },
   });
 
+  console.log('✅ [updateStudentProfile] Profile updated');
+
+  // Update preferred level subjects if provided
+  if (data.preferredLevelSubjectIds !== undefined) {
+    console.log('🔄 [updateStudentProfile] Updating level subjects:', data.preferredLevelSubjectIds);
+    
+    // Delete existing level subject preferences
+    await prisma.studentPreferredSubject.deleteMany({
+      where: { studentProfileId: existingProfile.id },
+    });
+
+    console.log('🗑️ [updateStudentProfile] Deleted existing level subjects');
+
+    // Create new level subject preferences
+    if (data.preferredLevelSubjectIds.length > 0) {
+      // Verify that all IDs are valid LevelSubject IDs
+      const validLevelSubjects = await prisma.levelSubject.findMany({
+        where: {
+          id: {
+            in: data.preferredLevelSubjectIds,
+          },
+        },
+        select: { id: true },
+      });
+
+      const validIds = validLevelSubjects.map(ls => ls.id);
+
+      console.log('✅ [updateStudentProfile] Valid level subject IDs:', validIds);
+
+      // Only create preferences for valid LevelSubject IDs
+      if (validIds.length > 0) {
+        await prisma.studentPreferredSubject.createMany({
+          data: validIds.map(levelSubjectId => ({
+            studentProfileId: existingProfile.id,
+            levelSubjectId,
+          })),
+        });
+        
+        console.log('✅ [updateStudentProfile] Created', validIds.length, 'level subject preferences');
+      }
+
+      // Log if some IDs were invalid
+      if (validIds.length !== data.preferredLevelSubjectIds.length) {
+        console.log(`⚠️ Some level subject IDs were invalid (${data.preferredLevelSubjectIds.length - validIds.length} ignored)`);
+      }
+    }
+  }
+
+  // Update preferred stream subjects if provided
+  if (data.preferredStreamSubjectIds !== undefined) {
+    console.log('🔄 [updateStudentProfile] Updating stream subjects:', data.preferredStreamSubjectIds);
+    
+    // Delete existing stream subject preferences
+    await prisma.studentPreferredStreamSubject.deleteMany({
+      where: { studentProfileId: existingProfile.id },
+    });
+
+    console.log('🗑️ [updateStudentProfile] Deleted existing stream subjects');
+
+    // Create new stream subject preferences
+    if (data.preferredStreamSubjectIds.length > 0) {
+      // Verify that all IDs are valid StreamSubject IDs
+      const validStreamSubjects = await prisma.streamSubject.findMany({
+        where: {
+          id: {
+            in: data.preferredStreamSubjectIds,
+          },
+        },
+        select: { id: true },
+      });
+
+      const validIds = validStreamSubjects.map(ss => ss.id);
+
+      console.log('✅ [updateStudentProfile] Valid stream subject IDs:', validIds);
+
+      // Only create preferences for valid StreamSubject IDs
+      if (validIds.length > 0) {
+        await prisma.studentPreferredStreamSubject.createMany({
+          data: validIds.map(streamSubjectId => ({
+            studentProfileId: existingProfile.id,
+            streamSubjectId,
+          })),
+        });
+        
+        console.log('✅ [updateStudentProfile] Created', validIds.length, 'stream subject preferences');
+      }
+
+      // Log if some IDs were invalid
+      if (validIds.length !== data.preferredStreamSubjectIds.length) {
+        console.log(`⚠️ Some stream subject IDs were invalid (${data.preferredStreamSubjectIds.length - validIds.length} ignored)`);
+      }
+    }
+  }
+
+  console.log('✅ [updateStudentProfile] Update complete');
   return profile;
 }
 
@@ -358,16 +561,48 @@ export async function updateTutorProfile(userId: string, data: UpdateTutorProfil
       bio: data.bio,
       experienceYears: data.experienceYears,
       hourlyRate: data.hourlyRate,
-      subjects: data.subjects,
-      educationLevels: data.educationLevels,
-      languages: data.languages,
       teachingMode: data.teachingMode,
       serviceRadius: data.serviceRadius,
       diplomas: data.diplomas as any,
-      availability: data.availability as any,
       teachingSkillsDetails: data.teachingSkillsDetails as any,
     },
   });
+
+  // Update teaching subjects if provided
+  if (data.teachingLevelSubjectIds !== undefined) {
+    // Delete existing teaching subjects
+    await prisma.tutorTeachingSubject.deleteMany({
+      where: { tutorProfileId: existingProfile.id },
+    });
+
+    // Create new teaching subjects
+    if (data.teachingLevelSubjectIds.length > 0) {
+      await prisma.tutorTeachingSubject.createMany({
+        data: data.teachingLevelSubjectIds.map(levelSubjectId => ({
+          tutorProfileId: existingProfile.id,
+          levelSubjectId,
+        })),
+      });
+    }
+  }
+
+  // Update teaching languages if provided
+  if (data.teachingLanguageIds !== undefined) {
+    // Delete existing teaching languages
+    await prisma.tutorTeachingLanguage.deleteMany({
+      where: { tutorProfileId: existingProfile.id },
+    });
+
+    // Create new teaching languages
+    if (data.teachingLanguageIds.length > 0) {
+      await prisma.tutorTeachingLanguage.createMany({
+        data: data.teachingLanguageIds.map(languageId => ({
+          tutorProfileId: existingProfile.id,
+          teachingLanguageId: languageId,
+        })),
+      });
+    }
+  }
 
   // If hourly rate changed, recalculate prices for future PENDING sessions (Requirement 6.3)
   if (hourlyRateChanged && data.hourlyRate !== undefined) {
@@ -401,7 +636,7 @@ export async function updateUser(userId: string, data: UpdateUserData) {
       address: data.address,
       city: data.city,
       postalCode: data.postalCode,
-      country: data.country,
+      countryCode: data.countryCode,
       preferredLanguage: data.preferredLanguage,
     },
     select: {
@@ -415,7 +650,7 @@ export async function updateUser(userId: string, data: UpdateUserData) {
       address: true,
       city: true,
       postalCode: true,
-      country: true,
+      countryCode: true,
       preferredLanguage: true,
       role: true,
       subscriptionType: true,
@@ -531,7 +766,7 @@ export async function getUserById(userId: string) {
       address: true,
       city: true,
       postalCode: true,
-      country: true,
+      countryCode: true,
       preferredLanguage: true,
       role: true,
       subscriptionType: true,

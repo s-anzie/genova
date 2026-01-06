@@ -10,8 +10,11 @@ interface CreateProductData {
   title: string;
   description?: string;
   productType: ProductType;
-  subject: string;
-  educationLevel: string;
+  // New education relation
+  levelSubjectId?: string;
+  // Legacy fields (DEPRECATED - for backward compatibility)
+  subject?: string;
+  educationLevel?: string;
   price: number;
   fileUrl?: string;
   previewUrl?: string;
@@ -27,6 +30,9 @@ interface UpdateProductData {
 }
 
 interface ProductFilters {
+  // New education relation
+  levelSubjectId?: string;
+  // Legacy fields (DEPRECATED - for backward compatibility)
   subject?: string;
   educationLevel?: string;
   productType?: ProductType;
@@ -44,11 +50,16 @@ interface PurchaseProductData {
  * Create a new product listing
  */
 export async function createProduct(data: CreateProductData) {
-  const { sellerId, title, description, productType, subject, educationLevel, price, fileUrl, previewUrl } = data;
+  const { sellerId, title, description, productType, levelSubjectId, subject, educationLevel, price, fileUrl, previewUrl } = data;
 
   // Validate price
   if (price <= 0) {
     throw new ValidationError('Product price must be greater than zero');
+  }
+
+  // Check if using new format or legacy format
+  if (!levelSubjectId && !subject) {
+    throw new ValidationError('Either levelSubjectId or subject is required');
   }
 
   // Verify seller exists and is a tutor
@@ -72,8 +83,7 @@ export async function createProduct(data: CreateProductData) {
       title,
       description,
       productType,
-      subject,
-      educationLevel,
+      levelSubjectId,
       price,
       fileUrl,
       previewUrl,
@@ -118,12 +128,18 @@ export async function getProductById(productId: string) {
  * Browse products with filters
  */
 export async function browseProducts(filters: ProductFilters, page: number = 1, limit: number = 20) {
-  const { subject, educationLevel, productType, minPrice, maxPrice, sellerId } = filters;
+  const { levelSubjectId, subject, educationLevel, productType, minPrice, maxPrice, sellerId } = filters;
 
   const where: any = {
     isActive: true,
   };
 
+  // New education relation filter
+  if (levelSubjectId) {
+    where.levelSubjectId = levelSubjectId;
+  }
+
+  // Legacy filters (for backward compatibility)
   if (subject) {
     where.subject = subject;
   }

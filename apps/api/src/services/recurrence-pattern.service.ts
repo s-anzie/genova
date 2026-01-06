@@ -57,17 +57,26 @@ export async function getNextTutor(
   // Get all sessions for this time slot to determine session index
   const timeSlot = await prisma.classTimeSlot.findUnique({
     where: { id: timeSlotId },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+    },
   });
 
   if (!timeSlot) {
     return null;
   }
 
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+
   // Get all sessions for this class/subject/time slot pattern
   const allSessions = await prisma.tutoringSession.findMany({
     where: {
       classId: timeSlot.classId,
-      subject: timeSlot.subject,
+      subject: subjectName,
       scheduledStart: {
         gte: activeAssignments[0]?.startDate || new Date(0),
       },
@@ -256,17 +265,26 @@ export async function applyPattern(
     const timeSlots = await prisma.classTimeSlot.findMany({
       where: {
         classId: session.classId,
-        subject: session.subject,
+        levelSubjectId: { not: null },
         isActive: true,
+      },
+      include: {
+        levelSubject: {
+          include: {
+            subject: true,
+          },
+        },
       },
     });
 
-    // Find matching time slot by day and time
+    // Find matching time slot by day and time and subject
     const sessionDay = session.scheduledStart.getDay();
     const sessionStartTime = `${session.scheduledStart.getHours().toString().padStart(2, '0')}:${session.scheduledStart.getMinutes().toString().padStart(2, '0')}`;
 
     const matchingTimeSlot = timeSlots.find(ts => 
-      ts.dayOfWeek === sessionDay && ts.startTime === sessionStartTime
+      ts.dayOfWeek === sessionDay && 
+      ts.startTime === sessionStartTime &&
+      ts.levelSubject?.subject.name === session.subject
     );
 
     if (!matchingTimeSlot) {

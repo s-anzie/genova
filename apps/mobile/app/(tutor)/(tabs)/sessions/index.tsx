@@ -17,6 +17,7 @@ import { ApiClient } from '@/utils/api';
 import { SessionResponse } from '@/types/api';
 import { PageHeader, TabSelector } from '@/components/PageHeader';
 import { formatEurAsFcfa } from '@/utils/currency';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 
 // Separate component for session card to use hooks properly
 const SessionCard = ({ 
@@ -178,7 +179,7 @@ const SessionCard = ({
         </View>
 
         {/* Subject - Large and prominent */}
-        <Text style={styles.sessionSubject}>{session.subject}</Text>
+        <Text style={styles.sessionSubject}>{getSubjectName(session)}</Text>
 
         {/* Class Info */}
         {session.class && (
@@ -186,7 +187,7 @@ const SessionCard = ({
             <View style={styles.classIconWrapper}>
               <Users size={14} color={Colors.primary} strokeWidth={2} />
             </View>
-            <Text style={styles.classText}>{session.class.name}</Text>
+            <Text style={styles.classText}>{getClassName(session)}</Text>
             {session.class._count && (
               <View style={styles.studentBadge}>
                 <Text style={styles.studentBadgeText}>

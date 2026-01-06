@@ -33,6 +33,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { ApiClient, ApiClientClass } from '@/utils/api';
 import { SessionResponse, TutorSuggestion } from '@/types/api';
 import { eurToFcfa } from '@/utils/currency';
+import { getSubjectName } from '@/utils/session-helpers';
 
 export default function StudentHomeScreen() {
   const router = useRouter();
@@ -458,7 +459,7 @@ export default function StudentHomeScreen() {
                 onPress={() => router.push(`/(student)/sessions/${session.id}`)}
               >
                 <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionSubject}>{session.subject}</Text>
+                  <Text style={styles.sessionSubject}>{getSubjectName(session)}</Text>
                   <ChevronRight size={20} color={Colors.textSecondary} />
                 </View>
                 <Text style={styles.sessionTime}>{formatSessionTime(session)}</Text>

@@ -1,36 +1,174 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
+# Application Web Genova
 
-## Getting Started
+Application web Next.js professionnelle avec Tailwind CSS et design system Genova.
 
-First, run the development server:
+## 🚀 Démarrage rapide
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Installer les dépendances (depuis la racine du monorepo)
+npm install
+
+# Lancer le serveur de développement
+npm run dev --workspace=web
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🎨 Design System
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
+### Couleurs Genova
+- **Primary**: `#0d7377` (Genova Teal)
+- **Secondary**: `#14FFEC` (Genova Cyan)
+- **Accent Coral**: `#ff6b6b`
+- **Accent Gold**: `#ffd93d`
+- **Cream**: `#fef9f3`
+- **Success**: `#4ade80`
+- **Warning**: `#f59e0b`
+- **Error**: `#ef4444`
 
-## Learn More
+### Composants UI
+- **Button**: Variantes primary, secondary, outline, ghost, danger, success
+- **Card**: Conteneur avec header, content, footer
+- **Badge**: Indicateurs de statut
+- **Input**: Champs de formulaire stylisés
+- **Sidebar**: Navigation latérale avec variantes par rôle
 
-To learn more about Next.js, take a look at the following resources:
+## 📁 Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/
+├── (admin)/              # Section administration
+│   ├── layout.tsx        # Layout avec sidebar noir
+│   └── admin/
+│       ├── page.tsx      # Dashboard
+│       ├── users/        # Gestion utilisateurs
+│       ├── tutors/       # Gestion tuteurs
+│       ├── students/     # Gestion étudiants
+│       ├── sessions/     # Gestion sessions
+│       ├── reports/      # Rapports
+│       └── settings/     # Paramètres
+│
+├── (tutor)/              # Section tuteur
+│   ├── layout.tsx        # Layout avec sidebar bleu (primary)
+│   └── tutor/
+│       ├── page.tsx      # Dashboard
+│       ├── sessions/     # Mes sessions
+│       ├── students/     # Mes étudiants
+│       ├── schedule/     # Mon planning
+│       ├── earnings/     # Mes revenus
+│       └── profile/      # Mon profil
+│
+├── (student)/            # Section étudiant
+│   ├── layout.tsx        # Layout avec sidebar vert (success)
+│   └── student/
+│       ├── page.tsx      # Dashboard
+│       ├── sessions/     # Mes sessions
+│       ├── tutors/       # Mes tuteurs
+│       ├── schedule/     # Mon planning
+│       ├── progress/     # Ma progression
+│       └── profile/      # Mon profil
+│
+├── layout.tsx            # Layout racine
+├── page.tsx              # Page d'accueil
+└── globals.css           # Styles Tailwind
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+components/
+├── ui/                   # Composants UI de base
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── badge.tsx
+│   └── input.tsx
+│
+└── layout/               # Composants de layout
+    ├── sidebar.tsx       # Navigation latérale
+    ├── page-header.tsx   # En-tête de page
+    ├── stats-card.tsx    # Carte de statistiques
+    └── search-bar.tsx    # Barre de recherche
 
-## Deploy on Vercel
+lib/
+├── utils.ts              # Utilitaires (cn, formatters)
+├── api.ts                # Client API
+└── constants.ts          # Constantes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+types/
+└── index.ts              # Types TypeScript
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Technologies
+
+- **Next.js 16** - App Router, Server Components
+- **React 19** - Dernière version
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling utility-first
+- **Lucide React** - Icônes
+- **CVA** - Class Variance Authority pour les variantes
+- **clsx + tailwind-merge** - Gestion des classes
+
+## 🎯 Fonctionnalités
+
+### ✅ Implémenté
+- Architecture avec route groups isolés
+- Design system Genova complet
+- Composants UI réutilisables
+- Layouts avec sidebar par rôle
+- Pages dashboard pour chaque rôle
+- Gestion utilisateurs (admin)
+- Gestion sessions (admin)
+- Rapports et statistiques (admin)
+- Responsive design
+- Type-safe avec TypeScript
+
+### 🚧 À implémenter
+- Authentification (NextAuth.js)
+- Connexion API backend
+- State management (Context API / Zustand)
+- Formulaires avec validation (React Hook Form + Zod)
+- Graphiques (Recharts / Chart.js)
+- Tables de données avancées
+- Upload de fichiers
+- Notifications en temps réel
+- Tests (Jest + React Testing Library)
+- E2E tests (Playwright)
+
+## 📝 Conventions
+
+### Composants
+- Utiliser `'use client'` uniquement si nécessaire
+- Préférer les Server Components par défaut
+- Exporter les types d'interface
+- Utiliser `cn()` pour merger les classes Tailwind
+
+### Styling
+- Utiliser Tailwind CSS en priorité
+- Classes utilitaires pour le responsive
+- Variantes avec CVA pour les composants
+- Couleurs du design system Genova
+
+### Routes
+- Route groups `(role)` pour isoler les sections
+- Layouts dédiés par section
+- Metadata SEO par page
+
+## 🔐 Sécurité
+
+Le middleware (`middleware.ts`) est prêt pour :
+- Vérification d'authentification
+- Contrôle des rôles utilisateur
+- Redirections automatiques
+
+## 🚀 Déploiement
+
+```bash
+# Build de production
+npm run build --workspace=web
+
+# Démarrer en production
+npm run start --workspace=web
+```
+
+## 📚 Documentation
+
+- [Next.js](https://nextjs.org/docs)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+- [Lucide Icons](https://lucide.dev)
+- [CVA](https://cva.style)

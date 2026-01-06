@@ -33,7 +33,7 @@ async function createAdmin() {
 
     console.log('✅ Admin user created successfully');
     console.log('Email: admin@genova.com');
-    console.log('Password: Admin123!');
+    console.log('Password: opé');
     console.log('User ID:', admin.id);
   } catch (error) {
     console.error('❌ Error creating admin:', error);

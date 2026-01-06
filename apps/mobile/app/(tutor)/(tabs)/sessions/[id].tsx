@@ -27,6 +27,7 @@ import { SessionResponse, SessionReportResponse, AttendanceResponse } from '@/ty
 import { useAuth } from '@/contexts/auth-context';
 import { PageHeader } from '@/components/PageHeader';
 import { formatHourlyRateAsFcfa, formatEurAsFcfa } from '@/utils/currency';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -279,7 +280,7 @@ export default function SessionDetailScreen() {
     <View style={styles.container}>
       <PageHeader 
         title="Ma session" 
-        subtitle={session.subject}
+        subtitle={getSubjectName(session)}
         showBackButton
         variant="primary"
       />
@@ -294,7 +295,7 @@ export default function SessionDetailScreen() {
         {/* Subject */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Matière</Text>
-          <Text style={styles.subjectText}>{session.subject}</Text>
+          <Text style={styles.subjectText}>{getSubjectName(session)}</Text>
         </View>
 
         {/* Date & Time */}
@@ -318,7 +319,7 @@ export default function SessionDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Classe</Text>
             <View style={styles.classHeader}>
-              <Text style={styles.className}>{session.class.name}</Text>
+              <Text style={styles.className}>{getClassName(session)}</Text>
               <View style={styles.studentCountBadge}>
                 <Users size={14} color={Colors.primary} />
                 <Text style={styles.studentCountText}>

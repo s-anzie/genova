@@ -28,6 +28,7 @@ import {
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, SessionReportResponse, AttendanceResponse, TutorSearchResult } from '@/types/api';
+import { getSubjectName, getClassName } from '@/utils/session-helpers';
 import { useAuth } from '@/contexts/auth-context';
 import { eurToFcfa, formatHourlyRateAsFcfa, formatEurAsFcfa } from '@/utils/currency';
 import { PageHeader } from '@/components/PageHeader';
@@ -274,9 +275,9 @@ export default function SessionDetailScreen() {
             <BookOpen size={18} color={Colors.primary} strokeWidth={2} />
             <Text style={styles.sectionTitle}>Matière</Text>
           </View>
-          <Text style={styles.subjectText}>{session.subject}</Text>
+          <Text style={styles.subjectText}>{getSubjectName(session)}</Text>
           {session.class && (
-            <Text style={styles.className}>{session.class.name}</Text>
+            <Text style={styles.className}>{getClassName(session)}</Text>
           )}
         </View>
 

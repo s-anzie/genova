@@ -152,8 +152,7 @@ router.get(
         include: {
           class: {
             select: {
-              subjects: true,
-              educationLevel: true,
+              educationLevelId: true,
             },
           },
         },
@@ -165,23 +164,12 @@ router.get(
 
       console.log('Session found:', session.id);
       console.log('Session subject:', session.subject);
-      console.log('Session class educationLevel:', session.class.educationLevel);
-
-      // Extract education level string from the object
-      let educationLevelStr = '';
-      if (typeof session.class.educationLevel === 'string') {
-        educationLevelStr = session.class.educationLevel;
-      } else if (typeof session.class.educationLevel === 'object' && session.class.educationLevel !== null) {
-        // If it's an object, try to extract the level property
-        educationLevelStr = (session.class.educationLevel as any).level || '';
-      }
-
-      console.log('Education level string:', educationLevelStr);
+      console.log('Session class educationLevelId:', session.class.educationLevelId);
 
       // Find tutors matching the session criteria
       const criteria: TutorSearchCriteria = {
         subject: session.subject,
-        educationLevel: educationLevelStr,
+        educationLevel: session.class.educationLevelId || undefined,
       };
 
       console.log('Search criteria:', criteria);

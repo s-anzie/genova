@@ -25,8 +25,7 @@ model User {
   address               String?
   city                  String?
   postalCode            String?
-  country               String?          // Nom du pays (legacy)
-  countryCode           String?          // Code ISO 3166-1 alpha-2 (ex: SN, CM, CI)
+  countryCode           String? // Code ISO 3166-1 alpha-2 (ex: SN, CM, CI)
   preferredLanguage     String           @default("en")
   role                  Role             @default(STUDENT)
   subscriptionType      SubscriptionType @default(FREE)
@@ -38,32 +37,32 @@ model User {
   isActive              Boolean          @default(true)
 
   // Relations
-  refreshTokens         RefreshToken[]
-  passwordResets        PasswordReset[]
-  studentProfile        StudentProfile?
-  tutorProfile          TutorProfile?
-  createdClasses        Class[]          @relation("ClassCreator")
-  classMembers          ClassMember[]
-  tutorAssignments      ClassTutorAssignment[] @relation("TutorAssignments")
-  createdConsortiums    Consortium[]     @relation("ConsortiumCreator")
-  consortiumMembers     ConsortiumMember[]
-  sessionsAsTutor       TutoringSession[] @relation("SessionTutor")
-  attendances           Attendance[]
-  sessionReports        SessionReport[]
-  reviewsGiven          Review[]         @relation("Reviewer")
-  reviewsReceived       Review[]         @relation("Reviewee")
-  transactionsAsPayer   Transaction[]    @relation("Payer")
-  transactionsAsPayee   Transaction[]    @relation("Payee")
-  paymentMethods        PaymentMethod[]
-  badges                UserBadge[]
-  academicResults       AcademicResult[]
-  learningGoals         LearningGoal[]       @relation("StudentGoals")
-  shopProducts          ShopProduct[]
-  shopPurchases         ShopPurchase[]
-  notifications         Notification[]
-  tutorAvailability     TutorAvailability[]
-  studentRequests       TutorAssignmentRequest[] @relation("StudentRequests")
-  tutorRequests         TutorAssignmentRequest[] @relation("TutorRequests")
+  refreshTokens       RefreshToken[]
+  passwordResets      PasswordReset[]
+  studentProfile      StudentProfile?
+  tutorProfile        TutorProfile?
+  createdClasses      Class[]                  @relation("ClassCreator")
+  classMembers        ClassMember[]
+  tutorAssignments    ClassTutorAssignment[]   @relation("TutorAssignments")
+  createdConsortiums  Consortium[]             @relation("ConsortiumCreator")
+  consortiumMembers   ConsortiumMember[]
+  sessionsAsTutor     TutoringSession[]        @relation("SessionTutor")
+  attendances         Attendance[]
+  sessionReports      SessionReport[]
+  reviewsGiven        Review[]                 @relation("Reviewer")
+  reviewsReceived     Review[]                 @relation("Reviewee")
+  transactionsAsPayer Transaction[]            @relation("Payer")
+  transactionsAsPayee Transaction[]            @relation("Payee")
+  paymentMethods      PaymentMethod[]
+  badges              UserBadge[]
+  academicResults     AcademicResult[]
+  learningGoals       LearningGoal[]           @relation("StudentGoals")
+  shopProducts        ShopProduct[]
+  shopPurchases       ShopPurchase[]
+  notifications       Notification[]
+  tutorAvailability   TutorAvailability[]
+  studentRequests     TutorAssignmentRequest[] @relation("StudentRequests")
+  tutorRequests       TutorAssignmentRequest[] @relation("TutorRequests")
 
   @@index([email])
   @@map("users")
@@ -104,45 +103,53 @@ model PasswordReset {
 // ============================================================================
 
 model StudentProfile {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
-  educationLevel        String
-  educationDetails      Json?    // Detailed education information (system, class, series)
-  schoolName            String?
-  parentEmail           String?
-  parentPhone           String?
-  learningGoals         String?
-  preferredSubjects     String[]
-  budgetPerHour         Decimal? @db.Decimal(10, 2)
-  onboardingCompleted   Boolean  @default(false)
+  id     String @id @default(uuid())
+  userId String @unique
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // New structured education fields
+  educationSystemId String?
+  educationLevelId  String?
+  educationStreamId String?
+
+  schoolName          String?
+  parentEmail         String?
+  parentPhone         String?
+  budgetPerHour       Decimal? @db.Decimal(10, 2)
+  onboardingCompleted Boolean  @default(false)
+
+
+  user                      User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  educationSystem           EducationSystem?               @relation(fields: [educationSystemId], references: [id])
+  educationLevel            EducationLevel?                @relation(fields: [educationLevelId], references: [id])
+  educationStream           EducationStream?               @relation(fields: [educationStreamId], references: [id])
+  preferredLevelSubjects    StudentPreferredSubject[]      // Preferred subjects for levels without streams
+  preferredStreamSubjects   StudentPreferredStreamSubject[] // Preferred subjects for levels with streams
 
   @@map("student_profiles")
 }
 
 model TutorProfile {
-  id                     String       @id @default(uuid())
-  userId                 String       @unique
-  bio                    String?
-  experienceYears        Int          @default(0)
-  hourlyRate             Decimal      @db.Decimal(10, 2)
-  subjects               String[]
-  educationLevels        String[]
-  languages              String[]
-  teachingMode           TeachingMode
-  serviceRadius          Int?
-  diplomas               Json         @default("[]")
-  availability           Json         @default("{}")
-  teachingSkillsDetails  Json?        // Detailed teaching skills structure
-  totalHoursTaught       Decimal      @default(0) @db.Decimal(10, 2)
-  averageRating          Decimal      @default(0) @db.Decimal(3, 2)
-  totalReviews           Int          @default(0)
-  isVerified             Boolean      @default(false)
-  verificationDocuments  String[]
-  onboardingCompleted    Boolean      @default(false)
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  bio             String?
+  experienceYears Int     @default(0)
+  hourlyRate      Decimal @db.Decimal(10, 2)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teachingMode          TeachingMode
+  serviceRadius         Int?
+  diplomas              Json         @default("[]")
+  teachingSkillsDetails Json?
+  totalHoursTaught      Decimal      @default(0) @db.Decimal(10, 2)
+  averageRating         Decimal      @default(0) @db.Decimal(3, 2)
+  totalReviews          Int          @default(0)
+  isVerified            Boolean      @default(false)
+  verificationDocuments String[]
+  onboardingCompleted   Boolean      @default(false)
+
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teachingSubjects  TutorTeachingSubject[] // What the tutor actually teaches (subject + level)
+  teachingLanguages TutorTeachingLanguage[] // New: Teaching languages as relations
+  availabilities    TutorAvailability[] // Use TutorAvailability table for availability
 
   @@map("tutor_profiles")
 }
@@ -150,15 +157,17 @@ model TutorProfile {
 model TutorAvailability {
   id           String    @id @default(uuid())
   tutorId      String
-  dayOfWeek    Int?      // 0-6 for recurring, null for one-time
+  dayOfWeek    Int? // 0-6 for recurring, null for one-time
   specificDate DateTime? // null for recurring, specific date for one-time
-  startTime    String    // Format: "HH:MM"
-  endTime      String    // Format: "HH:MM"
+  startTime    String // Format: "HH:MM"
+  endTime      String // Format: "HH:MM"
   isRecurring  Boolean   @default(false)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
 
-  tutor User @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+  tutor          User          @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+  TutorProfile   TutorProfile? @relation(fields: [tutorProfileId], references: [id])
+  tutorProfileId String?
 
   @@index([tutorId])
   @@index([dayOfWeek])
@@ -171,56 +180,68 @@ model TutorAvailability {
 // ============================================================================
 
 model Class {
-  id              String        @id @default(uuid())
-  name            String
-  description     String?
-  createdBy       String
-  educationLevel  Json          // Structured: { level, system, specificLevel, stream }
-  subjects        String[]      // Multiple subjects per class
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  createdBy   String
+
+  // New structured education fields
+  educationSystemId String?
+  educationLevelId  String?
+  educationStreamId String?
+
   maxStudents     Int?
   meetingType     MeetingType
   meetingLocation String?
-  createdAt       DateTime      @default(now())
-  isActive        Boolean       @default(true)
+  createdAt       DateTime    @default(now())
+  isActive        Boolean     @default(true)
 
-  creator       User              @relation("ClassCreator", fields: [createdBy], references: [id])
-  members       ClassMember[]
-  sessions      TutoringSession[]
-  timeSlots     ClassTimeSlot[]
-  tutorAssignments ClassTutorAssignment[]
+  creator            User                   @relation("ClassCreator", fields: [createdBy], references: [id])
+  members            ClassMember[]
+  sessions           TutoringSession[]
+  timeSlots          ClassTimeSlot[]
+  tutorAssignments   ClassTutorAssignment[]
+  educationSystemRel EducationSystem?       @relation(fields: [educationSystemId], references: [id])
+  educationLevelRel  EducationLevel?        @relation(fields: [educationLevelId], references: [id])
+  educationStreamRel EducationStream?       @relation(fields: [educationStreamId], references: [id])
+  classSubjects      ClassSubject[] // Subjects taught in this class
 
   @@index([createdBy])
+  @@index([educationSystemId])
+  @@index([educationLevelId])
   @@map("classes")
 }
 
 model ClassTimeSlot {
-  id          String   @id @default(uuid())
-  classId     String
-  subject     String
-  dayOfWeek   Int      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  startTime   String   // Format: "HH:MM" (e.g., "14:00")
-  endTime     String   // Format: "HH:MM" (e.g., "16:00")
-  createdAt   DateTime @default(now())
-  isActive    Boolean  @default(true)
+  id             String   @id @default(uuid())
+  classId        String
+  levelSubjectId String? // New: Reference to LevelSubject
+  dayOfWeek      Int // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime      String // Format: "HH:MM" (e.g., "14:00")
+  endTime        String // Format: "HH:MM" (e.g., "16:00")
+  createdAt      DateTime @default(now())
+  isActive       Boolean  @default(true)
 
-  class       Class                 @relation(fields: [classId], references: [id], onDelete: Cascade)
-  cancellations ClassSlotCancellation[]
+  class            Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  levelSubject     LevelSubject?           @relation(fields: [levelSubjectId], references: [id])
+  cancellations    ClassSlotCancellation[]
   tutorAssignments ClassTutorAssignment[]
 
   @@index([classId])
   @@index([dayOfWeek])
+  @@index([levelSubjectId])
   @@map("class_time_slots")
 }
 
 model ClassSlotCancellation {
-  id          String   @id @default(uuid())
-  timeSlotId  String
-  weekStart   DateTime // Start of the week (Monday) for which this slot is cancelled
-  reason      String?
-  createdAt   DateTime @default(now())
-  createdBy   String
+  id         String   @id @default(uuid())
+  timeSlotId String
+  weekStart  DateTime // Start of the week (Monday) for which this slot is cancelled
+  reason     String?
+  createdAt  DateTime @default(now())
+  createdBy  String
 
-  timeSlot    ClassTimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  timeSlot ClassTimeSlot @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
 
   @@unique([timeSlotId, weekStart])
   @@index([timeSlotId])
@@ -229,22 +250,22 @@ model ClassSlotCancellation {
 }
 
 model ClassTutorAssignment {
-  id                String              @id @default(uuid())
+  id                String            @id @default(uuid())
   classId           String
-  timeSlotId        String?             // Null if assignment is for all slots of a subject
+  timeSlotId        String? // Null if assignment is for all slots of a subject
   subject           String
   tutorId           String
-  recurrencePattern RecurrencePattern   @default(MANUAL)
-  recurrenceConfig  Json?               // Configuration for recurrence (e.g., week numbers, consecutive days count)
-  startDate         DateTime?           // When this assignment starts
-  endDate           DateTime?           // When this assignment ends (null = indefinite)
-  status            AssignmentStatus    @default(PENDING)
-  createdAt         DateTime            @default(now())
-  isActive          Boolean             @default(true)
+  recurrencePattern RecurrencePattern @default(MANUAL)
+  recurrenceConfig  Json? // Configuration for recurrence (e.g., week numbers, consecutive days count)
+  startDate         DateTime? // When this assignment starts
+  endDate           DateTime? // When this assignment ends (null = indefinite)
+  status            AssignmentStatus  @default(PENDING)
+  createdAt         DateTime          @default(now())
+  isActive          Boolean           @default(true)
 
-  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
-  timeSlot    ClassTimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
-  tutor       User           @relation("TutorAssignments", fields: [tutorId], references: [id], onDelete: Cascade)
+  class    Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  timeSlot ClassTimeSlot? @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  tutor    User           @relation("TutorAssignments", fields: [tutorId], references: [id], onDelete: Cascade)
 
   @@index([classId])
   @@index([timeSlotId])
@@ -291,12 +312,12 @@ model Consortium {
 }
 
 model ConsortiumMember {
-  id           String           @id @default(uuid())
+  id           String         @id @default(uuid())
   consortiumId String
   tutorId      String
   role         ConsortiumRole
-  revenueShare Decimal          @db.Decimal(5, 2)
-  joinedAt     DateTime         @default(now())
+  revenueShare Decimal        @db.Decimal(5, 2)
+  joinedAt     DateTime       @default(now())
 
   consortium Consortium @relation(fields: [consortiumId], references: [id], onDelete: Cascade)
   tutor      User       @relation(fields: [tutorId], references: [id], onDelete: Cascade)
@@ -329,13 +350,13 @@ model TutoringSession {
   cancellationReason String?
   createdAt          DateTime      @default(now())
 
-  class        Class           @relation(fields: [classId], references: [id])
-  tutor        User?           @relation("SessionTutor", fields: [tutorId], references: [id])
-  consortium   Consortium?     @relation(fields: [consortiumId], references: [id])
-  attendances  Attendance[]
-  reports      SessionReport[]
-  reviews      Review[]
-  transactions Transaction[]
+  class              Class                    @relation(fields: [classId], references: [id])
+  tutor              User?                    @relation("SessionTutor", fields: [tutorId], references: [id])
+  consortium         Consortium?              @relation(fields: [consortiumId], references: [id])
+  attendances        Attendance[]
+  reports            SessionReport[]
+  reviews            Review[]
+  transactions       Transaction[]
   assignmentRequests TutorAssignmentRequest[]
 
   @@index([classId])
@@ -431,27 +452,27 @@ model Review {
 // ============================================================================
 
 model MobileMoneyOperator {
-  id              String              @id @default(uuid())
-  code            String              @unique // e.g., "ORANGE_MONEY_CM", "MTN_MOMO_CM"
-  name            String              // e.g., "Orange Money"
-  displayName     String              // e.g., "Orange Money Cameroun"
-  provider        MobileMoneyProvider
-  country         String              // ISO country code (e.g., "CM", "CI", "SN")
-  countryName     String              // e.g., "Cameroun"
-  currency        String              // e.g., "XAF", "XOF"
-  phonePrefix     String              // e.g., "+237"
-  phoneFormat     String              // e.g., "XX XX XX XX XX"
-  phoneLength     Int                 // Number of digits after country code
-  color           String              // Hex color for UI
-  logoUrl         String?
-  isActive        Boolean             @default(true)
-  supportedFeatures Json              @default("{}") // { "withdrawal": true, "deposit": true, "transfer": true }
-  fees            Json                @default("{}") // Fee structure
-  limits          Json                @default("{}") // Transaction limits
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                String              @id @default(uuid())
+  code              String              @unique // e.g., "ORANGE_MONEY_CM", "MTN_MOMO_CM"
+  name              String // e.g., "Orange Money"
+  displayName       String // e.g., "Orange Money Cameroun"
+  provider          MobileMoneyProvider
+  country           String // ISO country code (e.g., "CM", "CI", "SN")
+  countryName       String // e.g., "Cameroun"
+  currency          String // e.g., "XAF", "XOF"
+  phonePrefix       String // e.g., "+237"
+  phoneFormat       String // e.g., "XX XX XX XX XX"
+  phoneLength       Int // Number of digits after country code
+  color             String // Hex color for UI
+  logoUrl           String?
+  isActive          Boolean             @default(true)
+  supportedFeatures Json                @default("{}") // { "withdrawal": true, "deposit": true, "transfer": true }
+  fees              Json                @default("{}") // Fee structure
+  limits            Json                @default("{}") // Transaction limits
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
-  paymentMethods  PaymentMethod[]
+  paymentMethods PaymentMethod[]
 
   @@index([country])
   @@index([provider])
@@ -460,21 +481,21 @@ model MobileMoneyOperator {
 }
 
 model PaymentMethod {
-  id              String              @id @default(uuid())
-  userId          String
-  operatorId      String
-  phoneNumber     String
-  accountName     String
-  accountHolder   String?             // Full name of account holder
-  isDefault       Boolean             @default(false)
-  isVerified      Boolean             @default(false)
-  lastUsedAt      DateTime?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  isActive        Boolean             @default(true)
+  id            String    @id @default(uuid())
+  userId        String
+  operatorId    String
+  phoneNumber   String
+  accountName   String
+  accountHolder String? // Full name of account holder
+  isDefault     Boolean   @default(false)
+  isVerified    Boolean   @default(false)
+  lastUsedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  isActive      Boolean   @default(true)
 
-  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  operator  MobileMoneyOperator  @relation(fields: [operatorId], references: [id])
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operator MobileMoneyOperator @relation(fields: [operatorId], references: [id])
 
   @@index([userId])
   @@index([operatorId])
@@ -482,18 +503,18 @@ model PaymentMethod {
 }
 
 model Transaction {
-  id                  String            @id @default(uuid())
-  sessionId           String?
-  payerId             String
-  payeeId             String?
-  amount              Decimal           @db.Decimal(10, 2)
-  platformFee         Decimal           @db.Decimal(10, 2)
-  netAmount           Decimal           @db.Decimal(10, 2)
-  paymentMethod       String
-  paymentProviderId   String?
-  status              TransactionStatus @default(PENDING)
-  transactionType     TransactionType
-  createdAt           DateTime          @default(now())
+  id                String            @id @default(uuid())
+  sessionId         String?
+  payerId           String
+  payeeId           String?
+  amount            Decimal           @db.Decimal(10, 2)
+  platformFee       Decimal           @db.Decimal(10, 2)
+  netAmount         Decimal           @db.Decimal(10, 2)
+  paymentMethod     String
+  paymentProviderId String?
+  status            TransactionStatus @default(PENDING)
+  transactionType   TransactionType
+  createdAt         DateTime          @default(now())
 
   session TutoringSession? @relation(fields: [sessionId], references: [id])
   payer   User             @relation("Payer", fields: [payerId], references: [id])
@@ -511,8 +532,8 @@ model Transaction {
 // ============================================================================
 
 model Badge {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String        @id @default(uuid())
+  name        String        @unique
   description String?
   iconUrl     String?
   category    BadgeCategory
@@ -543,44 +564,53 @@ model UserBadge {
 // ============================================================================
 
 model AcademicResult {
-  id        String   @id @default(uuid())
-  studentId String
-  subject   String
-  examName  String
-  score     Decimal  @db.Decimal(5, 2)
-  maxScore  Decimal  @db.Decimal(5, 2)
-  examDate  DateTime
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  studentId      String
+  levelSubjectId String? // New: Reference to LevelSubject
+  examName       String
+  score          Decimal  @db.Decimal(5, 2)
+  maxScore       Decimal  @db.Decimal(5, 2)
+  examDate       DateTime
+  createdAt      DateTime @default(now())
 
-  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student      User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  levelSubject LevelSubject? @relation(fields: [levelSubjectId], references: [id])
 
   @@index([studentId])
-  @@index([subject])
+  @@index([levelSubjectId])
   @@index([examDate])
   @@map("academic_results")
 }
 
 model LearningGoal {
-  id              String   @id @default(uuid())
-  studentId       String
-  classId         String?  // Optional: link to specific class
-  subject         String   // Subject name
-  educationLevel  Json?    // Education level details (level, system, class, series)
-  title           String
-  description     String?
-  targetScore     Decimal  @db.Decimal(5, 2)
-  currentScore    Decimal  @default(0) @db.Decimal(5, 2)
-  deadline        DateTime
-  isCompleted     Boolean  @default(false)
-  completedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id        String  @id @default(uuid())
+  studentId String
+  classId   String? // Optional: link to specific class
 
-  student User @relation("StudentGoals", fields: [studentId], references: [id], onDelete: Cascade)
+  // New structured fields
+  levelSubjectId String? // Reference to LevelSubject
+
+  // Legacy fields (to be removed after migration)
+  subject        String? // Subject name - DEPRECATED
+  educationLevel Json? // Education level details - DEPRECATED
+
+  title        String
+  description  String?
+  targetScore  Decimal   @db.Decimal(5, 2)
+  currentScore Decimal   @default(0) @db.Decimal(5, 2)
+  deadline     DateTime
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  student      User          @relation("StudentGoals", fields: [studentId], references: [id], onDelete: Cascade)
+  levelSubject LevelSubject? @relation(fields: [levelSubjectId], references: [id])
 
   @@index([studentId])
   @@index([classId])
   @@index([subject])
+  @@index([levelSubjectId])
   @@index([deadline])
   @@index([isCompleted])
   @@map("learning_goals")
@@ -596,8 +626,7 @@ model ShopProduct {
   title          String
   description    String?
   productType    ProductType
-  subject        String
-  educationLevel String
+  levelSubjectId String? // New: Reference to LevelSubject
   price          Decimal     @db.Decimal(10, 2)
   fileUrl        String?
   previewUrl     String?
@@ -606,12 +635,12 @@ model ShopProduct {
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())
 
-  seller    User           @relation(fields: [sellerId], references: [id])
-  purchases ShopPurchase[]
+  seller       User           @relation(fields: [sellerId], references: [id])
+  levelSubject LevelSubject?  @relation(fields: [levelSubjectId], references: [id])
+  purchases    ShopPurchase[]
 
   @@index([sellerId])
-  @@index([subject])
-  @@index([educationLevel])
+  @@index([levelSubjectId])
   @@map("shop_products")
 }
 
@@ -735,17 +764,17 @@ enum ProductType {
 }
 
 enum RecurrencePattern {
-  ROUND_ROBIN      // Rotate tutors evenly across all time slots
-  WEEKLY           // Tutor teaches specific weeks (e.g., every week, alternating weeks)
+  ROUND_ROBIN // Rotate tutors evenly across all time slots
+  WEEKLY // Tutor teaches specific weeks (e.g., every week, alternating weeks)
   CONSECUTIVE_DAYS // Tutor teaches for N consecutive days before rotation
-  MANUAL           // Manual assignment for each session
+  MANUAL // Manual assignment for each session
 }
 
 enum AssignmentStatus {
-  PENDING          // Waiting for tutor acceptance
-  ACCEPTED         // Tutor accepted the assignment
-  DECLINED         // Tutor declined the assignment
-  CANCELLED        // Assignment was cancelled
+  PENDING // Waiting for tutor acceptance
+  ACCEPTED // Tutor accepted the assignment
+  DECLINED // Tutor declined the assignment
+  CANCELLED // Assignment was cancelled
 }
 
 enum RequestStatus {
@@ -754,45 +783,238 @@ enum RequestStatus {
   DECLINED
 }
 
+enum LevelCategory {
+  PRIMARY
+  MIDDLE_SCHOOL
+  HIGH_SCHOOL
+  UNIVERSITY
+  PROFESSIONAL
+}
+
+enum SubjectCategory {
+  SCIENCE
+  LANGUAGE
+  HUMANITIES
+  ARTS
+  SPORTS
+  TECHNOLOGY
+  ECONOMICS
+}
+
+// ============================================================================
+// EDUCATION SYSTEM (NEW ARCHITECTURE)
+// ============================================================================
+
+// 1. Education System by Country
+model EducationSystem {
+  id          String   @id @default(uuid())
+  countryId   String
+  code        String // FRENCH, SENEGALESE, ANGLOPHONE, INTERNATIONAL
+  name        String // "Système Français", "Système Sénégalais"
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  country         Country          @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  levels          EducationLevel[]
+  studentProfiles StudentProfile[]
+  classes         Class[] // Classes using this system
+
+  @@unique([countryId, code])
+  @@index([countryId])
+  @@map("education_systems")
+}
+
+// 2. Education Levels by System
+model EducationLevel {
+  id         String        @id @default(uuid())
+  systemId   String
+  code       String // CP, CE1, 6EME, SECONDE, TERMINALE, LICENCE
+  name       String // "CP", "6ème", "Seconde"
+  category   LevelCategory // PRIMARY, MIDDLE_SCHOOL, HIGH_SCHOOL, UNIVERSITY
+  order      Int // For sorting levels
+  hasStreams Boolean       @default(false) // If this level has streams (Seconde, Première, Terminale)
+  isActive   Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  system          EducationSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  streams         EducationStream[]
+  subjects        LevelSubject[]
+  studentProfiles StudentProfile[]
+  classes         Class[] // Classes at this level
+
+  @@unique([systemId, code])
+  @@index([systemId])
+  @@index([category])
+  @@map("education_levels")
+}
+
+// 3. Streams/Series by Level (optional)
+model EducationStream {
+  id          String   @id @default(uuid())
+  levelId     String
+  code        String // L, ES, S, C, D, TI, F4
+  name        String // "Littéraire", "Scientifique", "Série C"
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  level           EducationLevel   @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  studentProfiles StudentProfile[]
+  classes         Class[] // Classes in this stream
+  streamSubjects  StreamSubject[] // Subjects available in this stream
+
+  @@unique([levelId, code])
+  @@index([levelId])
+  @@map("education_streams")
+}
+
+// 4. Global Subjects (independent of country)
+model Subject {
+  id        String          @id @default(uuid())
+  code      String          @unique // MATH, PHYSICS, FRENCH, ENGLISH
+  name      String // "Mathématiques", "Physique-Chimie"
+  nameEn    String? // "Mathematics", "Physics-Chemistry"
+  category  SubjectCategory // SCIENCE, LANGUAGE, HUMANITIES, ARTS
+  icon      String? // Emoji or icon name
+  color     String? // Color for UI
+  isActive  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  levelSubjects  LevelSubject[]
+  streamSubjects StreamSubject[]
+
+  @@map("subjects")
+}
+
+// 5. Subjects available by level (junction table)
+model LevelSubject {
+  id           String   @id @default(uuid())
+  levelId      String
+  subjectId    String
+  isCore       Boolean  @default(false) // Required or optional subject
+  coefficient  Int? // Coefficient for exams
+  hoursPerWeek Int? // Recommended hours per week
+  createdAt    DateTime @default(now())
+
+  level                    EducationLevel            @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  subject                  Subject                   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  tutorTeachings           TutorTeachingSubject[] // Tutors who teach this subject at this level
+  classTimeSlots           ClassTimeSlot[] // Time slots for this subject
+  learningGoals            LearningGoal[] // Learning goals for this subject
+  academicResults          AcademicResult[] // Academic results for this subject
+  shopProducts             ShopProduct[] // Products for this subject
+  classSubjects            ClassSubject[] // Classes teaching this subject
+  studentPreferredSubjects StudentPreferredSubject[] // Students who prefer this subject
+
+  @@unique([levelId, subjectId])
+  @@index([levelId])
+  @@index([subjectId])
+  @@map("level_subjects")
+}
+
+// 5b. Subjects available by stream (for levels with streams)
+model StreamSubject {
+  id           String   @id @default(uuid())
+  streamId     String
+  subjectId    String
+  isCore       Boolean  @default(false) // Required or optional subject
+  coefficient  Int? // Coefficient for exams
+  hoursPerWeek Int? // Recommended hours per week
+  createdAt    DateTime @default(now())
+
+  stream                         EducationStream                   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  subject                        Subject                           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studentPreferredStreamSubjects StudentPreferredStreamSubject[] // Students who prefer this stream subject
+
+  @@unique([streamId, subjectId])
+  @@index([streamId])
+  @@index([subjectId])
+  @@map("stream_subjects")
+}
+
+// 6. Teaching Languages (global, not country-specific)
+model TeachingLanguage {
+  id         String   @id @default(uuid())
+  code       String   @unique // fr, en, es, de, ar
+  name       String // "Français", "English", "Español"
+  nativeName String // "Français", "English", "Español"
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tutorLanguages TutorTeachingLanguage[] // Tutors who teach in this language
+
+  @@map("teaching_languages")
+}
+
+// 7. Local Languages by Country (for cultural context)
+model LocalLanguage {
+  id         String   @id @default(uuid())
+  countryId  String
+  name       String // "Wolof", "Ewondo", "Dioula"
+  code       String? // ISO 639-3 if available
+  isOfficial Boolean  @default(false)
+  speakers   Int? // Approximate number of speakers
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("local_languages")
+}
+
 // ============================================================================
 // REGIONAL CONFIGURATION
 // ============================================================================
 
 model Country {
-  id            String   @id @default(uuid())
-  code          String   @unique // ISO 3166-1 alpha-2 (e.g., SN, CM, CI)
-  name          String
-  phoneCode     String   // e.g., +221
-  phoneRegex    String   // Regex pattern for phone validation
-  phoneFormat   String   // Display format (e.g., +221 XX XXX XX XX)
-  phoneExample  String   // Example phone number
-  currencyCode  String   // ISO 4217 (e.g., XOF, XAF)
-  currencyName  String   // e.g., Franc CFA
-  currencySymbol String  // e.g., FCFA
-  timezone      String   // IANA timezone (e.g., Africa/Dakar)
-  isActive      Boolean  @default(true)
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(uuid())
+  code           String   @unique // ISO 3166-1 alpha-2 (e.g., SN, CM, CI)
+  name           String
+  phoneCode      String // e.g., +221
+  phoneRegex     String // Regex pattern for phone validation
+  phoneFormat    String // Display format (e.g., +221 XX XXX XX XX)
+  phoneExample   String // Example phone number
+  currencyCode   String // ISO 4217 (e.g., XOF, XAF)
+  currencyName   String // e.g., Franc CFA
+  currencySymbol String // e.g., FCFA
+  timezone       String // IANA timezone (e.g., Africa/Dakar)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  cities        City[]
-  operators     PhoneOperator[]
-  languages     CountryLanguage[]
-  educationSystems CountryEducationSystem[]
+  cities           City[]
+  operators        PhoneOperator[]
+  // Legacy relations removed - CountryLanguage and CountryEducationSystem tables no longer exist
+  educationSystems EducationSystem[]
+  localLanguages   LocalLanguage[]
 
   @@map("countries")
 }
 
 model City {
-  id         String   @id @default(uuid())
-  countryId  String
-  name       String
-  region     String?  // State/Province/Region
-  isActive   Boolean  @default(true)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  countryId String
+  name      String
+  region    String? // State/Province/Region
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
 
@@ -802,14 +1024,14 @@ model City {
 }
 
 model PhoneOperator {
-  id         String   @id @default(uuid())
-  countryId  String
-  name       String   // e.g., Orange, MTN
-  prefixes   String[] // e.g., ["77", "78"]
-  regex      String   // Specific regex for this operator
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  countryId String
+  name      String // e.g., Orange, MTN
+  prefixes  String[] // e.g., ["77", "78"]
+  regex     String // Specific regex for this operator
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
 
@@ -817,36 +1039,108 @@ model PhoneOperator {
   @@map("phone_operators")
 }
 
-model CountryLanguage {
-  id         String   @id @default(uuid())
-  countryId  String
-  name       String   // e.g., Français, Wolof
-  code       String?  // ISO 639-1 (e.g., fr, wo)
-  isOfficial Boolean  @default(false)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+// ============================================================================
+// TUTOR TEACHING SUBJECTS (NEW)
+// ============================================================================
 
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+// 8. Tutor Teaching Subjects - What tutors actually teach
+// This links tutors to specific LevelSubject combinations
+// Example: "Math in 6ème", "Physics in Terminale", "Math in Seconde"
+// This allows precise matching: a tutor can teach Math at multiple levels
+model TutorTeachingSubject {
+  id              String   @id @default(uuid())
+  tutorProfileId  String
+  levelSubjectId  String
+  yearsExperience Int? // Years teaching this specific subject at this level
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@unique([countryId, name])
-  @@index([countryId])
-  @@map("country_languages")
+  tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  levelSubject LevelSubject @relation(fields: [levelSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([tutorProfileId, levelSubjectId])
+  @@index([tutorProfileId])
+  @@index([levelSubjectId])
+  @@map("tutor_teaching_subjects")
 }
 
-model CountryEducationSystem {
-  id         String   @id @default(uuid())
-  countryId  String
-  name       String   // e.g., FRENCH, SENEGALESE, ANGLOPHONE
-  label      String   // Display name
-  isActive   Boolean  @default(true)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+// ============================================================================
+// TUTOR TEACHING LANGUAGES (NEW)
+// ============================================================================
 
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+// Links tutors to the languages they can teach in
+// Example: A tutor can teach in French and English
+model TutorTeachingLanguage {
+  id                 String   @id @default(uuid())
+  tutorProfileId     String
+  teachingLanguageId String
+  createdAt          DateTime @default(now())
 
-  @@unique([countryId, name])
-  @@index([countryId])
-  @@map("country_education_systems")
+  tutorProfile     TutorProfile     @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  teachingLanguage TeachingLanguage @relation(fields: [teachingLanguageId], references: [id], onDelete: Cascade)
+
+  @@unique([tutorProfileId, teachingLanguageId])
+  @@index([tutorProfileId])
+  @@index([teachingLanguageId])
+  @@map("tutor_teaching_languages")
+}
+
+// ============================================================================
+// STUDENT PREFERRED SUBJECTS (NEW)
+// ============================================================================
+
+// Links students to their preferred subjects
+// Example: A student prefers Math and Physics at their level
+model StudentPreferredSubject {
+  id               String   @id @default(uuid())
+  studentProfileId String
+  levelSubjectId   String
+  createdAt        DateTime @default(now())
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  levelSubject   LevelSubject   @relation(fields: [levelSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, levelSubjectId])
+  @@index([studentProfileId])
+  @@index([levelSubjectId])
+  @@map("student_preferred_subjects")
+}
+
+// Links students to their preferred subjects from streams
+// Example: A student in "Terminale S" prefers Math and Physics from their stream
+model StudentPreferredStreamSubject {
+  id               String   @id @default(uuid())
+  studentProfileId String
+  streamSubjectId  String
+  createdAt        DateTime @default(now())
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  streamSubject  StreamSubject  @relation(fields: [streamSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, streamSubjectId])
+  @@index([studentProfileId])
+  @@index([streamSubjectId])
+  @@map("student_preferred_stream_subjects")
+}
+
+// ============================================================================
+// CLASS SUBJECTS (NEW)
+// ============================================================================
+
+// 9. Class Subjects - Subjects taught in a class
+// Links a class to specific LevelSubject combinations
+// Example: A "Terminale S" class teaches Math, Physics, French at Terminale level
+model ClassSubject {
+  id             String   @id @default(uuid())
+  classId        String
+  levelSubjectId String
+  createdAt      DateTime @default(now())
+
+  class        Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  levelSubject LevelSubject @relation(fields: [levelSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, levelSubjectId])
+  @@index([classId])
+  @@index([levelSubjectId])
+  @@map("class_subjects")
 }

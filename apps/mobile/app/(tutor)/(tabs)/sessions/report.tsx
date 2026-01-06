@@ -16,6 +16,7 @@ import { X, Save } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { ApiClient } from '@/utils/api';
 import { SessionResponse, Performance } from '@/types/api';
+import { getSubjectName } from '@/utils/session-helpers';
 
 export default function SessionReportScreen() {
   const router = useRouter();
@@ -164,7 +165,7 @@ export default function SessionReportScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sessionTitle}>{session.subject}</Text>
+        <Text style={styles.sessionTitle}>{getSubjectName(session)}</Text>
 
         {/* Topics Covered */}
         <View style={styles.section}>

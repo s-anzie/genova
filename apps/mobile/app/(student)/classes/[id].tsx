@@ -154,6 +154,7 @@ export default function ClassDetailScreen() {
       <View style={styles.container}>
         <PageHeader 
           title="Détails"
+          variant='primary'
           showBackButton={true}
           centerTitle={true}
           showGradient={false}
@@ -167,26 +168,9 @@ export default function ClassDetailScreen() {
 
   const isCreator = classData.createdBy === user?.id;
 
-  // Format education level labels
-  const LEVEL_LABELS: Record<string, string> = {
-    primary: 'Primaire',
-    middle_school: 'Collège',
-    high_school: 'Lycée',
-    university: 'Université',
-  };
-
-  const SYSTEM_LABELS: Record<string, string> = {
-    francophone: 'Francophone',
-    anglophone: 'Anglophone',
-    francophone_general: 'Général (Francophone)',
-    francophone_technical: 'Technique (Francophone)',
-    licence: 'Licence',
-    master: 'Master',
-  };
-
-  const educationLevel = classData.educationLevel;
-  const levelLabel = LEVEL_LABELS[educationLevel.level] || educationLevel.level;
-  const systemLabel = educationLevel.system ? (SYSTEM_LABELS[educationLevel.system] || educationLevel.system) : undefined;
+  // Get education level and stream names from relations
+  const levelName = classData.educationLevelRel?.name || 'Non spécifié';
+  const streamName = classData.educationStreamRel?.name;
 
   return (
     <View style={styles.container}>
@@ -226,46 +210,36 @@ export default function ClassDetailScreen() {
             </View>
           </View>
 
-          {/* Education Level - Granular Display */}
+          {/* Education Level */}
           <View style={styles.educationSection}>
             <Text style={styles.sectionLabel}>Niveau d'éducation</Text>
             <View style={styles.educationGrid}>
               <View style={styles.educationItem}>
                 <Text style={styles.educationLabel}>Niveau</Text>
-                <Text style={styles.educationValue}>{levelLabel}</Text>
+                <Text style={styles.educationValue}>{levelName}</Text>
               </View>
-              {systemLabel && (
-                <View style={styles.educationItem}>
-                  <Text style={styles.educationLabel}>Système</Text>
-                  <Text style={styles.educationValue}>{systemLabel}</Text>
-                </View>
-              )}
-              {educationLevel.specificLevel && (
-                <View style={styles.educationItem}>
-                  <Text style={styles.educationLabel}>Classe</Text>
-                  <Text style={styles.educationValue}>{educationLevel.specificLevel}</Text>
-                </View>
-              )}
-              {educationLevel.stream && (
+              {streamName && (
                 <View style={styles.educationItem}>
                   <Text style={styles.educationLabel}>Filière</Text>
-                  <Text style={styles.educationValue}>{educationLevel.stream}</Text>
+                  <Text style={styles.educationValue}>{streamName}</Text>
                 </View>
               )}
             </View>
           </View>
 
           {/* Subjects - Multiple Display */}
-          <View style={styles.subjectsSection}>
-            <Text style={styles.sectionLabel}>Matières</Text>
-            <View style={styles.subjectsContainer}>
-              {classData.subjects.map((subject, index) => (
-                <View key={index} style={styles.subjectChip}>
-                  <Text style={styles.subjectChipText}>{subject}</Text>
-                </View>
-              ))}
+          {classData.classSubjects && classData.classSubjects.length > 0 && (
+            <View style={styles.subjectsSection}>
+              <Text style={styles.sectionLabel}>Matières</Text>
+              <View style={styles.subjectsContainer}>
+                {classData.classSubjects.map((cs: any) => (
+                  <View key={cs.id} style={styles.subjectChip}>
+                    <Text style={styles.subjectChipText}>{cs.levelSubject?.subject?.name || 'Matière'}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Other Info */}
           <View style={styles.infoGrid}>

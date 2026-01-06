@@ -153,6 +153,28 @@ export class OperatorsController {
     }
   }
 
+  // Delete operator (admin only)
+  async deleteOperator(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      await prisma.mobileMoneyOperator.delete({
+        where: { id },
+      });
+
+      res.json({
+        success: true,
+        message: 'Operator deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting operator:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete operator',
+      });
+    }
+  }
+
   // Seed default operators for Cameroon
   async seedCameroonOperators(req: Request, res: Response) {
     try {

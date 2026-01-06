@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   Keyboard,
   TouchableWithoutFeedback,
   ScrollView,
@@ -17,10 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, GraduationCap, Eye, EyeOff, Fingerprint } from 'lucide-react-native';
 import { Colors, Gradients, Shadows, Spacing, BorderRadius } from '@/constants/colors';
 import { validateEmail } from '@/utils/validation';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { useModal } from '@/hooks/useModal';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { login, biometricLogin } = useAuth();
+  const { modalState, hideModal, showError } = useModal();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -54,8 +56,8 @@ export default function LoginScreen() {
       await login(email.toLowerCase().trim(), password.trim());
       // Redirection gérée automatiquement par le layout principal selon le rôle
     } catch (error: any) {
-      const errorMessage = error.message || 'Email ou mot de passe incorrect';
-      Alert.alert('Erreur de connexion', errorMessage);
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Email ou mot de passe incorrect');
+      showError('Erreur de connexion', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +68,8 @@ export default function LoginScreen() {
       setIsLoading(true);
       await biometricLogin();
     } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Authentification biométrique échouée');
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Authentification biométrique échouée');
+      showError('Erreur', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -221,6 +224,16 @@ export default function LoginScreen() {
           </View>
         </View>
       </TouchableWithoutFeedback>
+
+      <StyledModal
+        visible={modalState.visible}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        primaryButton={modalState.primaryButton}
+        secondaryButton={modalState.secondaryButton}
+        onClose={hideModal}
+      />
     </LinearGradient>
   );
 }

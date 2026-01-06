@@ -31,7 +31,7 @@ export async function getCountryByCode(code: string) {
       operators: {
         where: { isActive: true },
       },
-      languages: {
+      localLanguages: {
         orderBy: { sortOrder: 'asc' },
       },
       educationSystems: {
@@ -103,7 +103,7 @@ export async function getLanguagesByCountry(countryCode: string) {
     throw new AppError('Country not found', 'NOT_FOUND', 404);
   }
 
-  return prisma.countryLanguage.findMany({
+  return prisma.localLanguage.findMany({
     where: {
       countryId: country.id,
     },
@@ -129,7 +129,7 @@ export async function getEducationSystemsByCountry(countryCode: string) {
     throw new AppError('Country not found', 'NOT_FOUND', 404);
   }
 
-  return prisma.countryEducationSystem.findMany({
+  return prisma.educationSystem.findMany({
     where: {
       countryId: country.id,
       isActive: true,
@@ -138,7 +138,8 @@ export async function getEducationSystemsByCountry(countryCode: string) {
     select: {
       id: true,
       name: true,
-      label: true,
+      code: true,
+      description: true,
     },
   });
 }

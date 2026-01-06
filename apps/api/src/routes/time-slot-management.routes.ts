@@ -146,7 +146,7 @@ router.post('/:classId/time-slots/:timeSlotId/assignments', async (req: Request,
       throw new ValidationError(`Invalid recurrence pattern. Must be one of: ${validPatterns.join(', ')}`);
     }
 
-    // Get time slot to get subject
+    // Get time slot to get levelSubjectId
     const timeSlot = await prisma.classTimeSlot.findUnique({
       where: { id: timeSlotId },
     });
@@ -159,8 +159,12 @@ router.post('/:classId/time-slots/:timeSlotId/assignments', async (req: Request,
       throw new ValidationError('Time slot does not belong to this class');
     }
 
+    if (!timeSlot.levelSubjectId) {
+      throw new ValidationError('Time slot does not have a subject assigned');
+    }
+
     const assignmentData: TutorAssignmentData = {
-      subject: timeSlot.subject,
+      levelSubjectId: timeSlot.levelSubjectId,
       tutorId,
       timeSlotIds: [timeSlotId],
       recurrencePattern,

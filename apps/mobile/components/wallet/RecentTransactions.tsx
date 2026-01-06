@@ -5,6 +5,7 @@ import { TrendingUp, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { formatEurAsFcfa } from '@/utils/currency';
 import { TransactionResponse } from '@/types/api';
+import { getSubjectName } from '@/utils/session-helpers';
 
 interface RecentTransactionsProps {
   transactions: TransactionResponse[];
@@ -99,7 +100,7 @@ export function RecentTransactions({ transactions, userRole = 'student' }: Recen
                   </Text>
                   {transaction.session && (
                     <Text style={styles.transactionSubtitle}>
-                      {transaction.session.subject}
+                      {getSubjectName(transaction.session)}
                     </Text>
                   )}
                   {transaction.payee && !transaction.session && (

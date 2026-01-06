@@ -13,14 +13,14 @@ const prisma = new PrismaClient();
 
 // Types
 export interface CreateTimeSlotData {
-  subject: string;
+  levelSubjectId: string; // Required: Reference to LevelSubject
   dayOfWeek: number; // 0-6
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
 }
 
 export interface UpdateTimeSlotData {
-  subject?: string;
+  levelSubjectId?: string;
   dayOfWeek?: number;
   startTime?: string;
   endTime?: string;
@@ -33,9 +33,9 @@ export interface CancelTimeSlotData {
 }
 
 export interface TutorAssignmentData {
-  subject: string;
+  levelSubjectId: string; // Required: Reference to LevelSubject
   tutorId: string;
-  timeSlotIds?: string[]; // Specific slots, or null for all slots of subject
+  timeSlotIds?: string[]; // Specific slots, or null for all slots of levelSubject
   recurrencePattern: RecurrencePattern;
   recurrenceConfig?: any; // Pattern-specific configuration
   startDate?: Date;
@@ -109,6 +109,11 @@ export async function createTimeSlot(
     throw new AuthorizationError('Only the class creator can create time slots');
   }
 
+  // Check if using new format
+  if (!data.levelSubjectId) {
+    throw new ValidationError('levelSubjectId is required');
+  }
+
   // Validate time format
   if (!validateTimeFormat(data.startTime) || !validateTimeFormat(data.endTime)) {
     throw new ValidationError('Invalid time format. Use HH:MM format (e.g., 14:00)');
@@ -129,9 +134,14 @@ export async function createTimeSlot(
     throw new ValidationError('Day of week must be between 0 (Sunday) and 6 (Saturday)');
   }
 
-  // Validate subject is in class subjects
-  if (!classData.subjects.includes(data.subject)) {
-    throw new ValidationError(`Subject "${data.subject}" is not assigned to this class`);
+  // Verify levelSubject exists
+  if (data.levelSubjectId) {
+    const levelSubject = await prisma.levelSubject.findUnique({
+      where: { id: data.levelSubjectId },
+    });
+    if (!levelSubject) {
+      throw new NotFoundError('LevelSubject not found');
+    }
   }
 
   // Check for overlapping time slots
@@ -140,6 +150,13 @@ export async function createTimeSlot(
       classId,
       isActive: true,
     },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+    },
   });
 
   for (const slot of existingSlots) {
@@ -147,8 +164,9 @@ export async function createTimeSlot(
       data.dayOfWeek, data.startTime, data.endTime,
       slot.dayOfWeek, slot.startTime, slot.endTime
     )) {
+      const subjectName = slot.levelSubject?.subject.name || 'Unknown';
       throw new ConflictError(
-        `Time slot overlaps with existing slot: ${slot.subject} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
+        `Time slot overlaps with existing slot: ${subjectName} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
       );
     }
   }
@@ -157,7 +175,7 @@ export async function createTimeSlot(
   const timeSlot = await prisma.classTimeSlot.create({
     data: {
       classId,
-      subject: data.subject,
+      levelSubjectId: data.levelSubjectId,
       dayOfWeek: data.dayOfWeek,
       startTime: data.startTime,
       endTime: data.endTime,
@@ -259,6 +277,13 @@ export async function updateTimeSlot(
       isActive: true,
       id: { not: timeSlotId },
     },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+    },
   });
 
   for (const slot of existingSlots) {
@@ -266,8 +291,9 @@ export async function updateTimeSlot(
       dayOfWeek, startTime, endTime,
       slot.dayOfWeek, slot.startTime, slot.endTime
     )) {
+      const subjectName = slot.levelSubject?.subject.name || 'Unknown';
       throw new ConflictError(
-        `Time slot overlaps with existing slot: ${slot.subject} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
+        `Time slot overlaps with existing slot: ${subjectName} on ${getDayName(slot.dayOfWeek)} ${slot.startTime}-${slot.endTime}`
       );
     }
   }
@@ -293,6 +319,11 @@ export async function deleteTimeSlot(
     include: { 
       class: true,
       tutorAssignments: { where: { isActive: true } },
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
     },
   });
 
@@ -305,9 +336,10 @@ export async function deleteTimeSlot(
   }
 
   // Cancel all future sessions for this time slot (Requirement 1.3)
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
   await cancelFutureSessionsForTimeSlot(
     timeSlotId,
-    `Time slot deleted: ${timeSlot.subject} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`
+    `Time slot deleted: ${subjectName} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`
   );
 
   // Soft delete
@@ -335,7 +367,14 @@ export async function cancelTimeSlotForWeek(
 ): Promise<void> {
   const timeSlot = await prisma.classTimeSlot.findUnique({
     where: { id: data.timeSlotId },
-    include: { class: true },
+    include: { 
+      class: true,
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+    },
   });
 
   if (!timeSlot) {
@@ -435,7 +474,14 @@ export async function assignTutorToSubject(
   // Check if class exists and user is the creator
   const classData = await prisma.class.findUnique({
     where: { id: classId },
-    include: { timeSlots: { where: { isActive: true } } },
+    include: { 
+      timeSlots: { where: { isActive: true } },
+      classSubjects: {
+        include: {
+          levelSubject: true,
+        },
+      },
+    },
   });
 
   if (!classData) {
@@ -446,32 +492,46 @@ export async function assignTutorToSubject(
     throw new AuthorizationError('Only the class creator can assign tutors');
   }
 
-  // Validate subject
-  if (!classData.subjects.includes(data.subject)) {
-    throw new ValidationError(`Subject "${data.subject}" is not assigned to this class`);
+  // Verify levelSubject exists
+  const levelSubject = await prisma.levelSubject.findUnique({
+    where: { id: data.levelSubjectId },
+  });
+
+  if (!levelSubject) {
+    throw new NotFoundError('LevelSubject not found');
   }
 
-  // Validate tutor exists and has expertise in subject
+  // Validate tutor exists and has expertise in this levelSubject
   const tutor = await prisma.user.findUnique({
     where: { id: data.tutorId },
-    include: { tutorProfile: true },
+    include: { 
+      tutorProfile: {
+        include: {
+          teachingSubjects: {
+            where: {
+              levelSubjectId: data.levelSubjectId,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!tutor || tutor.role !== 'TUTOR') {
     throw new NotFoundError('Tutor not found');
   }
 
-  if (tutor.tutorProfile && !tutor.tutorProfile.subjects.includes(data.subject)) {
-    throw new ValidationError(`Tutor does not have expertise in ${data.subject}`);
+  if (tutor.tutorProfile && tutor.tutorProfile.teachingSubjects.length === 0) {
+    throw new ValidationError(`Tutor does not have expertise in this subject`);
   }
 
-  // If specific time slots provided, validate they exist and belong to the subject
+  // If specific time slots provided, validate they exist and belong to the levelSubject
   if (data.timeSlotIds && data.timeSlotIds.length > 0) {
     const slots = await prisma.classTimeSlot.findMany({
       where: {
         id: { in: data.timeSlotIds },
         classId,
-        subject: data.subject,
+        levelSubjectId: data.levelSubjectId,
         isActive: true,
       },
     });
@@ -482,16 +542,13 @@ export async function assignTutorToSubject(
   }
 
   // Create tutor assignment
-  // For simplicity, if multiple time slots, create one assignment per slot
-  // In production, you might want more sophisticated handling based on recurrence pattern
-  
   if (data.timeSlotIds && data.timeSlotIds.length > 0) {
     // Assign to specific slots
     const assignment = await prisma.classTutorAssignment.create({
       data: {
         classId,
         timeSlotId: data.timeSlotIds[0], // For now, assign to first slot
-        subject: data.subject,
+        subject: '', // Keep for backward compatibility, but empty
         tutorId: data.tutorId,
         recurrencePattern: data.recurrencePattern,
         recurrenceConfig: data.recurrenceConfig,
@@ -515,12 +572,12 @@ export async function assignTutorToSubject(
     // TODO: Send notification to tutor for acceptance
     return assignment;
   } else {
-    // Assign to all slots of the subject
+    // Assign to all slots of the levelSubject
     const assignment = await prisma.classTutorAssignment.create({
       data: {
         classId,
         timeSlotId: null,
-        subject: data.subject,
+        subject: '', // Keep for backward compatibility, but empty
         tutorId: data.tutorId,
         recurrencePattern: data.recurrencePattern,
         recurrenceConfig: data.recurrenceConfig,
@@ -688,7 +745,7 @@ function getDayName(dayOfWeek: number): string {
  */
 async function cancelSessionsForSlotCancellation(
   cancellationId: string,
-  timeSlot: ClassTimeSlot & { class: any },
+  timeSlot: ClassTimeSlot & { class: any; levelSubject?: { subject: { name: string } } | null },
   weekStart: Date
 ): Promise<void> {
   // Calculate the week end (Sunday)
@@ -696,11 +753,13 @@ async function cancelSessionsForSlotCancellation(
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekEnd.setHours(23, 59, 59, 999);
 
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+
   // Find all sessions for this time slot in this week
   const sessionsToCancel = await prisma.tutoringSession.findMany({
     where: {
       classId: timeSlot.classId,
-      subject: timeSlot.subject,
+      subject: subjectName,
       scheduledStart: {
         gte: weekStart,
         lte: weekEnd,
@@ -723,7 +782,7 @@ async function cancelSessionsForSlotCancellation(
   });
 
   // Cancel each matching session with reference to slot cancellation (Requirement 7.2)
-  const cancellationReason = `Slot cancelled for week of ${weekStart.toISOString().split('T')[0]}: ${timeSlot.subject} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} (Cancellation ID: ${cancellationId})`;
+  const cancellationReason = `Slot cancelled for week of ${weekStart.toISOString().split('T')[0]}: ${subjectName} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} (Cancellation ID: ${cancellationId})`;
 
   const updatePromises = matchingSessions.map(session =>
     prisma.tutoringSession.update({
@@ -756,7 +815,7 @@ async function cancelSessionsForSlotCancellation(
  */
 async function createCancellationNotifications(
   cancelledSessions: any[],
-  timeSlot: ClassTimeSlot & { class: any },
+  timeSlot: ClassTimeSlot & { class: any; levelSubject?: { subject: { name: string } } | null },
   weekStart: Date
 ): Promise<void> {
   // Get all class members
@@ -780,18 +839,19 @@ async function createCancellationNotifications(
 
   const notifications = [];
   const weekStartStr = weekStart.toISOString().split('T')[0];
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
 
   // Create notifications for all class members
   for (const member of classMembers) {
     notifications.push({
       userId: member.studentId,
       title: 'Session Cancelled',
-      message: `The ${timeSlot.subject} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
+      message: `The ${subjectName} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
       type: 'SESSION_CANCELLED',
       data: {
         classId: timeSlot.classId,
         timeSlotId: timeSlot.id,
-        subject: timeSlot.subject,
+        subject: subjectName,
         weekStart: weekStartStr,
       },
     });
@@ -802,12 +862,12 @@ async function createCancellationNotifications(
     notifications.push({
       userId: tutorId,
       title: 'Session Cancelled',
-      message: `Your ${timeSlot.subject} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
+      message: `Your ${subjectName} session on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime} for the week of ${weekStartStr} has been cancelled.`,
       type: 'SESSION_CANCELLED',
       data: {
         classId: timeSlot.classId,
         timeSlotId: timeSlot.id,
-        subject: timeSlot.subject,
+        subject: subjectName,
         weekStart: weekStartStr,
       },
     });

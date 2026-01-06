@@ -28,7 +28,7 @@ const router = Router();
 router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, res: Response) => {
   try {
     const { classId } = req.params;
-    const { subject, dayOfWeek, startTime, endTime } = req.body;
+    const { levelSubjectId, dayOfWeek, startTime, endTime } = req.body;
 
     if (!classId) {
       return res.status(400).json({
@@ -37,10 +37,10 @@ router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, 
       });
     }
 
-    if (!subject || dayOfWeek === undefined || !startTime || !endTime) {
+    if (!levelSubjectId || dayOfWeek === undefined || !startTime || !endTime) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Subject, dayOfWeek, startTime, and endTime are required' },
+        error: { message: 'levelSubjectId, dayOfWeek, startTime, and endTime are required' },
       });
     }
 
@@ -52,7 +52,7 @@ router.post('/:classId/schedule/time-slots', authenticate, async (req: Request, 
     }
 
     const data: CreateTimeSlotData = {
-      subject,
+      levelSubjectId,
       dayOfWeek: parseInt(dayOfWeek),
       startTime,
       endTime,
@@ -303,7 +303,7 @@ router.get('/:classId/schedule/cancellations', authenticate, async (req: Request
 router.post('/:classId/schedule/tutor-assignments', authenticate, async (req: Request, res: Response) => {
   try {
     const { classId } = req.params;
-    const { subject, tutorId, timeSlotIds, recurrencePattern, recurrenceConfig, startDate, endDate } = req.body;
+    const { levelSubjectId, tutorId, timeSlotIds, recurrencePattern, recurrenceConfig, startDate, endDate } = req.body;
 
     if (!classId) {
       return res.status(400).json({
@@ -312,10 +312,10 @@ router.post('/:classId/schedule/tutor-assignments', authenticate, async (req: Re
       });
     }
 
-    if (!subject || !tutorId || !recurrencePattern) {
+    if (!levelSubjectId || !tutorId || !recurrencePattern) {
       return res.status(400).json({
         success: false,
-        error: { message: 'subject, tutorId, and recurrencePattern are required' },
+        error: { message: 'levelSubjectId, tutorId, and recurrencePattern are required' },
       });
     }
 
@@ -335,7 +335,7 @@ router.post('/:classId/schedule/tutor-assignments', authenticate, async (req: Re
     }
 
     const data: TutorAssignmentData = {
-      subject,
+      levelSubjectId,
       tutorId,
       timeSlotIds,
       recurrencePattern,

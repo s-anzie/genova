@@ -51,8 +51,14 @@ export async function getAvailableTutors(sessionId: string): Promise<User[]> {
   // Find tutors with matching subject
   const tutorsWithSubject = await prisma.tutorProfile.findMany({
     where: {
-      subjects: {
-        has: session.subject,
+      teachingSubjects: {
+        some: {
+          levelSubject: {
+            subject: {
+              name: session.subject,
+            },
+          },
+        },
       },
     },
     include: {
@@ -64,6 +70,15 @@ export async function getAvailableTutors(sessionId: string): Promise<User[]> {
           email: true,
           avatarUrl: true,
           role: true,
+        },
+      },
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+            },
+          },
         },
       },
     },
@@ -199,6 +214,15 @@ export async function createRequest(
     where: { userId: tutorId },
     include: {
       user: true,
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -207,7 +231,8 @@ export async function createRequest(
   }
 
   // Check if tutor teaches this subject
-  if (!tutorProfile.subjects.includes(session.subject)) {
+  const tutorSubjects = tutorProfile.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+  if (!tutorSubjects.includes(session.subject)) {
     throw new ValidationError('Tutor does not teach this subject');
   }
 
@@ -616,8 +641,16 @@ export async function getTutorRequests(
             select: {
               id: true,
               name: true,
-              educationLevel: true,
-              subjects: true,
+              educationLevelId: true,
+              classSubjects: {
+                include: {
+                  levelSubject: {
+                    include: {
+                      subject: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },

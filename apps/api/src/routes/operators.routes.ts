@@ -33,6 +33,7 @@ console.log('🔧 Public routes registered');
 // Admin routes (require authentication and admin role)
 router.post('/', authenticate, controller.createOperator.bind(controller));
 router.put('/:id', authenticate, controller.updateOperator.bind(controller));
+router.delete('/:id', authenticate, controller.deleteOperator.bind(controller));
 
 console.log('🔧 Admin routes registered');
 

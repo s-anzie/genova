@@ -216,19 +216,9 @@ export async function searchTutors(
     },
   };
 
-  // Filter by subject
-  if (criteria.subject) {
-    where.subjects = {
-      has: criteria.subject,
-    };
-  }
-
-  // Filter by education level
-  if (criteria.educationLevel) {
-    where.educationLevels = {
-      has: criteria.educationLevel,
-    };
-  }
+  // Note: Subject and education level filtering now requires joins through relation tables
+  // We'll fetch all tutors and filter in memory for now
+  // In production, you might want to use raw SQL or more complex Prisma queries
 
   // Filter by price range
   if (criteria.minPrice !== undefined || criteria.maxPrice !== undefined) {
@@ -264,8 +254,27 @@ export async function searchTutors(
           lastName: true,
           avatarUrl: true,
           city: true,
-          country: true,
           countryCode: true,
+        },
+      },
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+              level: true,
+            },
+          },
+        },
+      },
+      teachingLanguages: {
+        include: {
+          teachingLanguage: true,
+        },
+      },
+      availabilities: {
+        where: {
+          isActive: true,
         },
       },
     },
@@ -275,6 +284,21 @@ export async function searchTutors(
   const results: TutorSearchResult[] = [];
 
   for (const tutor of tutors) {
+    // Extract subjects, education levels, and languages from relations
+    const tutorSubjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+    const tutorEducationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
+    const tutorLanguages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
+
+    // Filter by subject if specified
+    if (criteria.subject && !tutorSubjects.includes(criteria.subject)) {
+      continue;
+    }
+
+    // Filter by education level if specified
+    if (criteria.educationLevel && !tutorEducationLevels.includes(criteria.educationLevel)) {
+      continue;
+    }
+
     // Calculate distance if location criteria provided
     let distance: number | undefined;
     if (
@@ -296,7 +320,7 @@ export async function searchTutors(
 
     // Filter by language if specified
     if (criteria.languages && criteria.languages.length > 0) {
-      const hasMatchingLanguage = tutor.languages.some((lang) =>
+      const hasMatchingLanguage = tutorLanguages.some((lang) =>
         criteria.languages!.includes(lang)
       );
       if (!hasMatchingLanguage) {
@@ -304,8 +328,34 @@ export async function searchTutors(
       }
     }
 
+    // Build availability object from TutorAvailability records
+    const availability: any = {};
+    for (const avail of tutor.availabilities) {
+      const dayOfWeek = avail.dayOfWeek;
+      if (typeof dayOfWeek === 'number' && dayOfWeek >= 0 && dayOfWeek < 7) {
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+        const dayName = days[dayOfWeek] as string;
+        if (!availability[dayName]) {
+          availability[dayName] = [];
+        }
+        availability[dayName].push({
+          start: avail.startTime,
+          end: avail.endTime,
+        });
+      }
+    }
+
+    // Create a tutor object with the old structure for compatibility with calculateMatchingScore
+    const tutorForScoring = {
+      ...tutor,
+      subjects: tutorSubjects,
+      educationLevels: tutorEducationLevels,
+      languages: tutorLanguages,
+      availability,
+    };
+
     // Calculate matching score
-    const matchingScore = calculateMatchingScore(tutor, criteria, distance);
+    const matchingScore = calculateMatchingScore(tutorForScoring, criteria, distance);
 
     // Enrich with regional data
     let countryData = null;
@@ -325,9 +375,9 @@ export async function searchTutors(
       avatarUrl: tutor.user.avatarUrl,
       bio: tutor.bio,
       hourlyRate: Number(tutor.hourlyRate),
-      subjects: tutor.subjects,
-      educationLevels: tutor.educationLevels,
-      languages: tutor.languages,
+      subjects: tutorSubjects,
+      educationLevels: tutorEducationLevels,
+      languages: tutorLanguages,
       teachingMode: tutor.teachingMode,
       averageRating: Number(tutor.averageRating),
       totalReviews: tutor.totalReviews,
@@ -335,7 +385,7 @@ export async function searchTutors(
       matchingScore,
       distance,
       city: tutor.user.city,
-      country: countryData?.name || tutor.user.country,
+      country: countryData?.name,
       countryCode: tutor.user.countryCode,
       currencySymbol: countryData?.currencySymbol,
       timezone: countryData?.timezone,
@@ -362,9 +412,28 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
           lastName: true,
           avatarUrl: true,
           city: true,
-          country: true,
           countryCode: true,
           createdAt: true,
+        },
+      },
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+              level: true,
+            },
+          },
+        },
+      },
+      teachingLanguages: {
+        include: {
+          teachingLanguage: true,
+        },
+      },
+      availabilities: {
+        where: {
+          isActive: true,
         },
       },
     },
@@ -372,6 +441,28 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
 
   if (!tutor) {
     throw new NotFoundError('Tutor not found');
+  }
+
+  // Extract subjects, education levels, and languages from relations
+  const subjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+  const educationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
+  const languages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
+
+  // Build availability object from TutorAvailability records
+  const availability: any = {};
+  for (const avail of tutor.availabilities) {
+    const dayOfWeek = avail.dayOfWeek;
+    if (typeof dayOfWeek === 'number' && dayOfWeek >= 0 && dayOfWeek < 7) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+      const dayName = days[dayOfWeek] as string;
+      if (!availability[dayName]) {
+        availability[dayName] = [];
+      }
+      availability[dayName].push({
+        start: avail.startTime,
+        end: avail.endTime,
+      });
+    }
   }
 
   // Enrich with regional data
@@ -393,19 +484,19 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
     bio: tutor.bio,
     experienceYears: tutor.experienceYears,
     hourlyRate: Number(tutor.hourlyRate),
-    subjects: tutor.subjects,
-    educationLevels: tutor.educationLevels,
-    languages: tutor.languages,
+    subjects,
+    educationLevels,
+    languages,
     teachingMode: tutor.teachingMode,
     serviceRadius: tutor.serviceRadius,
     diplomas: tutor.diplomas,
-    availability: tutor.availability,
+    availability,
     totalHoursTaught: Number(tutor.totalHoursTaught),
     averageRating: Number(tutor.averageRating),
     totalReviews: tutor.totalReviews,
     isVerified: tutor.isVerified,
     city: tutor.user.city,
-    country: countryData?.name || tutor.user.country,
+    country: countryData?.name,
     countryCode: tutor.user.countryCode,
     currencySymbol: countryData?.currencySymbol,
     timezone: countryData?.timezone,
@@ -427,9 +518,28 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
           lastName: true,
           avatarUrl: true,
           city: true,
-          country: true,
           countryCode: true,
           createdAt: true,
+        },
+      },
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              subject: true,
+              level: true,
+            },
+          },
+        },
+      },
+      teachingLanguages: {
+        include: {
+          teachingLanguage: true,
+        },
+      },
+      availabilities: {
+        where: {
+          isActive: true,
         },
       },
     },
@@ -437,6 +547,28 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
 
   if (!tutor) {
     throw new NotFoundError('Tutor not found');
+  }
+
+  // Extract subjects, education levels, and languages from relations
+  const subjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+  const educationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
+  const languages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
+
+  // Build availability object from TutorAvailability records
+  const availability: any = {};
+  for (const avail of tutor.availabilities) {
+    const dayOfWeek = avail.dayOfWeek;
+    if (typeof dayOfWeek === 'number' && dayOfWeek >= 0 && dayOfWeek < 7) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+      const dayName = days[dayOfWeek] as string;
+      if (!availability[dayName]) {
+        availability[dayName] = [];
+      }
+      availability[dayName].push({
+        start: avail.startTime,
+        end: avail.endTime,
+      });
+    }
   }
 
   // Enrich with regional data
@@ -458,19 +590,19 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
     bio: tutor.bio,
     experienceYears: tutor.experienceYears,
     hourlyRate: Number(tutor.hourlyRate),
-    subjects: tutor.subjects,
-    educationLevels: tutor.educationLevels,
-    languages: tutor.languages,
+    subjects,
+    educationLevels,
+    languages,
     teachingMode: tutor.teachingMode,
     serviceRadius: tutor.serviceRadius,
     diplomas: tutor.diplomas,
-    availability: tutor.availability,
+    availability,
     totalHoursTaught: Number(tutor.totalHoursTaught),
     averageRating: Number(tutor.averageRating),
     totalReviews: tutor.totalReviews,
     isVerified: tutor.isVerified,
     city: tutor.user.city,
-    country: countryData?.name || tutor.user.country,
+    country: countryData?.name,
     countryCode: tutor.user.countryCode,
     currencySymbol: countryData?.currencySymbol,
     timezone: countryData?.timezone,

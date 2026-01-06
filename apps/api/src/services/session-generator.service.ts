@@ -153,6 +153,11 @@ export async function generateSessionsForTimeSlot(
           },
         },
       },
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
     },
   });
 
@@ -165,6 +170,7 @@ export async function generateSessionsForTimeSlot(
     return [];
   }
 
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
   const generatedSessions: TutoringSession[] = [];
   const startWeek = startFromWeek ? getWeekStart(startFromWeek) : getWeekStart(new Date());
 
@@ -221,7 +227,7 @@ export async function generateSessionsForTimeSlot(
         tutorId: null, // Will be assigned by recurrence pattern engine
         scheduledStart,
         scheduledEnd,
-        subject: timeSlot.subject,
+        subject: subjectName,
         price: 0, // Default price when no tutor assigned (Requirement 6.2)
         status: 'PENDING',
       },
@@ -231,7 +237,7 @@ export async function generateSessionsForTimeSlot(
     logger.info('Generated session', {
       sessionId: session.id,
       classId: timeSlot.classId,
-      subject: timeSlot.subject,
+      subject: subjectName,
       scheduledStart: scheduledStart.toISOString(),
     });
   }
@@ -312,18 +318,27 @@ export async function cancelFutureSessionsForTimeSlot(
   // Get the time slot to find associated sessions
   const timeSlot = await prisma.classTimeSlot.findUnique({
     where: { id: timeSlotId },
+    include: {
+      levelSubject: {
+        include: {
+          subject: true,
+        },
+      },
+    },
   });
 
   if (!timeSlot) {
     throw new NotFoundError('Time slot not found');
   }
 
+  const subjectName = timeSlot.levelSubject?.subject.name || 'Unknown';
+
   // Find all future sessions that match this time slot's schedule
   // We need to match by classId, subject, and day of week pattern
   const futureSessions = await prisma.tutoringSession.findMany({
     where: {
       classId: timeSlot.classId,
-      subject: timeSlot.subject,
+      subject: subjectName,
       scheduledStart: {
         gte: now,
       },
@@ -350,7 +365,7 @@ export async function cancelFutureSessionsForTimeSlot(
       where: { id: session.id },
       data: {
         status: 'CANCELLED',
-        cancellationReason: cancellationReason || `Time slot deleted/deactivated: ${timeSlot.subject} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`,
+        cancellationReason: cancellationReason || `Time slot deleted/deactivated: ${subjectName} on ${getDayName(timeSlot.dayOfWeek)} ${timeSlot.startTime}-${timeSlot.endTime}`,
       },
     })
   );
