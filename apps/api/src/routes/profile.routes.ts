@@ -144,10 +144,67 @@ router.post('/tutor', authenticate, async (req: Request, res: Response, next: Ne
     
     let data: CreateTutorProfileData;
 
-    // Check if using new format or legacy format
-    if (req.body.teachingLevelSubjectIds) {
-      // New format
-      console.log('📱 Tutor profile: Using new format');
+    // Check format: new structured format, teachingLevelSubjectIds, or legacy
+    if (req.body.educationSystemId && req.body.levelIds && req.body.subjectIds) {
+      // New structured format from onboarding
+      console.log('📱 Tutor profile: Using new structured format');
+      console.log('Structured data:', {
+        systemId: req.body.educationSystemId,
+        levelIds: req.body.levelIds,
+        streamIds: req.body.streamIds,
+        subjectIds: req.body.subjectIds,
+      });
+
+      // Convert to teachingLevelSubjectIds
+      const teachingLevelSubjectIds: string[] = [];
+
+      // For each level, find or create LevelSubjects that match the subjects
+      for (const levelId of req.body.levelIds) {
+        for (const subjectId of req.body.subjectIds) {
+          // Try to find existing LevelSubject
+          let levelSubject = await prisma.levelSubject.findFirst({
+            where: {
+              levelId,
+              subjectId,
+            },
+          });
+
+          // If not found, create it
+          if (!levelSubject) {
+            console.log(`Creating LevelSubject for level ${levelId} and subject ${subjectId}`);
+            levelSubject = await prisma.levelSubject.create({
+              data: {
+                levelId,
+                subjectId,
+                isCore: false,
+              },
+            });
+          }
+
+          teachingLevelSubjectIds.push(levelSubject.id);
+        }
+      }
+
+      console.log(`Converted to ${teachingLevelSubjectIds.length} teaching level subjects`);
+
+      // Convert languages
+      const teachingLanguageIds = await convertLegacyLanguages(req.body.languages || []);
+      console.log(`Converted to ${teachingLanguageIds.length} teaching languages`);
+
+      data = {
+        userId,
+        bio: req.body.bio,
+        experienceYears: req.body.experienceYears,
+        hourlyRate: req.body.hourlyRate,
+        teachingLevelSubjectIds,
+        teachingLanguageIds,
+        teachingMode: req.body.teachingMode,
+        serviceRadius: req.body.serviceRadius,
+        diplomas: req.body.diplomas || [],
+      };
+    } else if (req.body.teachingLevelSubjectIds) {
+      // Direct teachingLevelSubjectIds format
+      console.log('📱 Tutor profile: Using direct format');
       data = {
         userId,
         bio: req.body.bio,
@@ -210,15 +267,38 @@ router.post('/tutor', authenticate, async (req: Request, res: Response, next: Ne
       throw new ValidationError('Hourly rate is required', 'hourlyRate');
     }
 
-    const profile = await createTutorProfile(data);
+    // Check if profile already exists
+    const existingProfile = await prisma.tutorProfile.findUnique({
+      where: { userId },
+    });
 
-    res.status(201).json({
+    let profile;
+    if (existingProfile) {
+      // Update existing profile
+      console.log('📱 Tutor profile already exists, updating...');
+      profile = await updateTutorProfile(userId, {
+        bio: data.bio,
+        experienceYears: data.experienceYears,
+        hourlyRate: data.hourlyRate,
+        teachingLevelSubjectIds: data.teachingLevelSubjectIds,
+        teachingLanguageIds: data.teachingLanguageIds,
+        teachingMode: data.teachingMode,
+        serviceRadius: data.serviceRadius,
+        diplomas: data.diplomas,
+      });
+    } else {
+      // Create new profile
+      console.log('📱 Creating new tutor profile...');
+      profile = await createTutorProfile(data);
+    }
+
+    res.status(existingProfile ? 200 : 201).json({
       success: true,
       data: profile,
-      message: 'Tutor profile created successfully',
+      message: existingProfile ? 'Tutor profile updated successfully' : 'Tutor profile created successfully',
     });
   } catch (error) {
-    console.error('❌ Failed to create tutor profile:', error);
+    console.error('❌ Failed to create/update tutor profile:', error);
     next(error);
   }
 });
@@ -317,19 +397,93 @@ router.put('/tutor', authenticate, async (req: Request, res: Response, next: Nex
   try {
     const userId = req.user!.userId;
     
-    const data: UpdateTutorProfileData = {
-      bio: req.body.bio,
-      experienceYears: req.body.experienceYears,
-      hourlyRate: req.body.hourlyRate,
-      teachingLevelSubjectIds: req.body.teachingLevelSubjectIds,
-      teachingLanguageIds: req.body.teachingLanguageIds,
-      teachingMode: req.body.teachingMode,
-      serviceRadius: req.body.serviceRadius,
-      diplomas: req.body.diplomas,
-      teachingSkillsDetails: req.body.teachingSkillsDetails,
-    };
+    console.log('📥 PUT /tutor - Request body:', JSON.stringify(req.body, null, 2));
+    
+    let updateData: UpdateTutorProfileData;
 
-    const profile = await updateTutorProfile(userId, data);
+    // Check format: new structured format or direct teachingLevelSubjectIds
+    if (req.body.educationSystemId && req.body.levelIds && req.body.subjectIds) {
+      // New structured format from edit page
+      console.log('📱 Tutor profile update: Using new structured format');
+      console.log('Structured data:', {
+        systemId: req.body.educationSystemId,
+        levelIds: req.body.levelIds,
+        streamIds: req.body.streamIds,
+        subjectIds: req.body.subjectIds,
+        languages: req.body.languages,
+      });
+
+      // Convert to teachingLevelSubjectIds
+      const teachingLevelSubjectIds: string[] = [];
+
+      // For each level, find or create LevelSubjects that match the subjects
+      for (const levelId of req.body.levelIds) {
+        for (const subjectId of req.body.subjectIds) {
+          // Try to find existing LevelSubject
+          let levelSubject = await prisma.levelSubject.findFirst({
+            where: {
+              levelId,
+              subjectId,
+            },
+          });
+
+          // If not found, create it
+          if (!levelSubject) {
+            console.log(`Creating LevelSubject for level ${levelId} and subject ${subjectId}`);
+            levelSubject = await prisma.levelSubject.create({
+              data: {
+                levelId,
+                subjectId,
+                isCore: false,
+              },
+            });
+          }
+
+          teachingLevelSubjectIds.push(levelSubject.id);
+        }
+      }
+
+      console.log(`✅ Converted to ${teachingLevelSubjectIds.length} teaching level subjects:`, teachingLevelSubjectIds);
+
+      // Convert languages
+      const teachingLanguageIds = await convertLegacyLanguages(req.body.languages || []);
+      console.log(`✅ Converted to ${teachingLanguageIds.length} teaching languages:`, teachingLanguageIds);
+
+      updateData = {
+        bio: req.body.bio,
+        experienceYears: req.body.experienceYears,
+        hourlyRate: req.body.hourlyRate,
+        teachingLevelSubjectIds,
+        teachingLanguageIds,
+        teachingMode: req.body.teachingMode,
+        serviceRadius: req.body.serviceRadius,
+        diplomas: req.body.diplomas,
+        teachingSkillsDetails: req.body.teachingSkillsDetails,
+      };
+    } else {
+      // Direct teachingLevelSubjectIds format
+      console.log('📱 Tutor profile update: Using direct format');
+      updateData = {
+        bio: req.body.bio,
+        experienceYears: req.body.experienceYears,
+        hourlyRate: req.body.hourlyRate,
+        teachingLevelSubjectIds: req.body.teachingLevelSubjectIds,
+        teachingLanguageIds: req.body.teachingLanguageIds,
+        teachingMode: req.body.teachingMode,
+        serviceRadius: req.body.serviceRadius,
+        diplomas: req.body.diplomas,
+        teachingSkillsDetails: req.body.teachingSkillsDetails,
+      };
+    }
+
+    console.log('📤 Calling updateTutorProfile with:', JSON.stringify(updateData, null, 2));
+
+    const profile = await updateTutorProfile(userId, updateData);
+
+    console.log('✅ Profile updated successfully, returning:', {
+      teachingSubjectsCount: profile.teachingSubjects?.length,
+      teachingLanguagesCount: profile.teachingLanguages?.length,
+    });
 
     res.status(200).json({
       success: true,
@@ -337,6 +491,7 @@ router.put('/tutor', authenticate, async (req: Request, res: Response, next: Nex
       message: 'Tutor profile updated successfully',
     });
   } catch (error) {
+    console.error('❌ PUT /tutor error:', error);
     next(error);
   }
 });

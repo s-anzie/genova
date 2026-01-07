@@ -6,261 +6,331 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Image,
-  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { 
-  ArrowLeft, 
   Camera, 
   User as UserIcon, 
-  Mail, 
-  Phone, 
   MapPin, 
-  Home,
-  GraduationCap,
   BookOpen,
-  Target,
-  DollarSign,
   Check,
-  X,
-  Plus,
-  Trash2,
-  ChevronDown,
+  Globe,
+  GraduationCap,
+  Home,
+  Briefcase,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/auth-context';
-import { ApiClient } from '@/utils/api';
-import { Colors } from '@/constants/colors';
+import { apiClient } from '@/utils/api-client';
+import { Colors, Shadows, BorderRadius } from '@/constants/colors';
 import * as ImagePicker from 'expo-image-picker';
-import type { UserResponse, TutorProfileResponse } from '@/types/api';
 import { fcfaToEur, eurToFcfa } from '@/utils/currency';
+import { StyledModal } from '@/components/ui/StyledModal';
+import { useModal } from '@/hooks/useModal';
+import { PageHeader } from '@/components/PageHeader';
+import { Ionicons } from '@expo/vector-icons';
 
-// Education levels with their available systems and teaching types
-const EDUCATION_LEVELS = [
-  { 
-    value: 'primary', 
-    label: 'Primaire',
-    systems: [
-      { value: 'francophone', label: 'Francophone', teachingTypes: [] },
-      { value: 'anglophone', label: 'Anglophone', teachingTypes: [] },
-    ],
-  },
-  { 
-    value: 'middle_school', 
-    label: 'Collège',
-    systems: [
-      { value: 'francophone', label: 'Francophone', teachingTypes: ['Général', 'Technique'] },
-      { value: 'anglophone', label: 'Anglophone', teachingTypes: [] },
-    ],
-  },
-  { 
-    value: 'high_school', 
-    label: 'Lycée',
-    systems: [
-      { value: 'francophone', label: 'Francophone', teachingTypes: ['Général', 'Technique'] },
-      { value: 'anglophone', label: 'Anglophone', teachingTypes: ['Science', 'Literature'] },
-    ],
-  },
-  { 
-    value: 'higher', 
-    label: 'Supérieur',
-    systems: [], // No system for higher education
-  },
+interface ProfileData {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  bio: string;
+  experienceYears: string;
+  hourlyRate: string;
+  educationSystemId: string;
+  levelIds: string[];
+  streamIds: string[];
+  subjectIds: string[];
+  languages: string[];
+  teachingMode: 'IN_PERSON' | 'ONLINE' | 'BOTH';
+  serviceRadius: string;
+}
+
+const LANGUAGES = [
+  'Français',
+  'Anglais',
+  'Espagnol',
+  'Allemand',
+  'Arabe',
+  'Wolof',
+  'Pulaar',
+  'Serer',
+  'Dioula',
+  'Ewondo',
+  'Duala',
 ];
 
-// Classes per level, system, and teaching type
-const CLASSES: Record<string, any> = {
-  primary: {
-    francophone: {
-      default: ['SIL', 'CP', 'CE1', 'CE2', 'CM1', 'CM2'],
-    },
-    anglophone: {
-      default: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6'],
-    },
-  },
-  middle_school: {
-    francophone: {
-      Général: ['6ème', '5ème', '4ème', '3ème'],
-      Technique: {
-        '1ére A': ['ESF', 'STT', 'STI', 'STG'],
-        '2ème A': ['ESF', 'STT', 'STI', 'STG'],
-        '3ème A': ['ESF', 'STT', 'STI', 'STG'],
-        '4ème A': ['ESF', 'STT', 'STI', 'STG'],
-      },
-    },
-    anglophone: {
-      default: ['Form 1', 'Form 2', 'Form 3', 'Form 4', 'Form 5'],
-    },
-  },
-  high_school: {
-    francophone: {
-      Général: {
-        Seconde: ['C', 'A', 'E'],
-        Première: ['C', 'D', 'E', 'A'],
-        Terminale: ['C', 'D', 'E', 'A'],
-      },
-      Technique: {
-        Seconde: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
-        Première: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
-        Terminale: ['F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
-      },
-    },
-    anglophone: {
-      Science: ['Lower Sixth', 'Upper Sixth'],
-      Literature: ['Lower Sixth', 'Upper Sixth'],
-    },
-  },
-  higher: {
-    default: {
-      default: ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2', 'Doctorat'],
-    },
-  },
+const TEACHING_MODES = [
+  { value: 'IN_PERSON', label: 'En présentiel', icon: Home },
+  { value: 'ONLINE', label: 'En ligne', icon: Globe },
+  { value: 'BOTH', label: 'Les deux', icon: GraduationCap },
+];
+
+const EXPERIENCE_RANGES = ['0-1', '1-3', '3-5', '5-10', '10+'];
+
+// Convert numeric experience to range
+const getExperienceRange = (years: number): string => {
+  if (years <= 1) return '0-1';
+  if (years <= 3) return '1-3';
+  if (years <= 5) return '3-5';
+  if (years <= 10) return '5-10';
+  return '10+';
 };
 
-const SUBJECTS = [
-  'Mathématiques',
-  'Physique',
-  'Chimie',
-  'Biologie',
-  'Anglais',
-  'Français',
-  'Espagnol',
-  'Histoire',
-  'Géographie',
-  'Informatique',
-  'Économie',
-  'Philosophie',
-];
-
-interface LevelConfig {
-  level: string;
-  system?: string; // Optional, not present for higher education
-  teachingType?: string; // Optional, depends on level and system
-  selectedClasses: Record<string, string[]>; // For Général lycée: { Seconde: ['C', 'A'], Première: ['C', 'D'] }
-  classes: string[]; // For other levels: simple array
-}
-
-interface SubjectTeaching {
-  subject: string;
-  selectedLevels: string[]; // Multiple levels can be selected
-  levelConfigs: LevelConfig[]; // One config per selected level
-}
+// Convert range to numeric (middle of range for storage)
+const getRangeMiddle = (range: string): number => {
+  if (range === '0-1') return 0;
+  if (range === '1-3') return 2;
+  if (range === '3-5') return 4;
+  if (range === '5-10') return 7;
+  if (range === '10+') return 10;
+  return 0;
+};
 
 export default function TutorEditProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { modalState, hideModal, showSuccess, showError } = useModal();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-
-  // Tutor profile data - restructured
-  const [tutorData, setTutorData] = useState({
-    bio: '',
-    experienceYears: '',
-    hourlyRate: '',
-    subjectTeachings: [] as SubjectTeaching[],
-    teachingMode: 'BOTH' as 'IN_PERSON' | 'ONLINE' | 'BOTH',
-    serviceRadius: '',
-  });
-
-  // Track which class is expanded for series selection
-  const [expandedClasses, setExpandedClasses] = useState<Record<string, string | null>>({});
   
-  // Track which subject teaching cards are expanded
-  const [expandedSubjects, setExpandedSubjects] = useState<Record<number, boolean>>({});
-
-  // User data
-  const [userData, setUserData] = useState({
+  const [educationSystems, setEducationSystems] = useState<any[]>([]);
+  const [educationLevels, setEducationLevels] = useState<any[]>([]);
+  const [educationStreams, setEducationStreams] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  
+  const [formData, setFormData] = useState<ProfileData>({
     firstName: '',
     lastName: '',
     phone: '',
-    address: '',
-    city: '',
-    postalCode: '',
-    country: '',
+    bio: '',
+    experienceYears: '',
+    hourlyRate: '',
+    educationSystemId: '',
+    levelIds: [],
+    streamIds: [],
+    subjectIds: [],
+    languages: ['Français'],
+    teachingMode: 'BOTH',
+    serviceRadius: '',
   });
+
+  const availableLevels = educationLevels.filter(l => l.systemId === formData.educationSystemId);
+  
+  const selectedLevelsWithStreams = availableLevels.filter(
+    l => formData.levelIds.includes(l.id) && l.hasStreams
+  );
+  const availableStreams = educationStreams.filter(
+    s => selectedLevelsWithStreams.some(l => l.id === s.levelId)
+  );
+
+  // Filter subjects to only show those available for selected levels
+  const [availableSubjects, setAvailableSubjects] = useState<any[]>([]);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
+  useEffect(() => {
+    if (formData.educationSystemId) {
+      loadLevelsForSystem(formData.educationSystemId);
+    } else {
+      setEducationLevels([]);
+    }
+  }, [formData.educationSystemId]);
+
+  useEffect(() => {
+    if (formData.levelIds.length > 0) {
+      loadStreamsForLevels(formData.levelIds);
+      loadSubjectsForLevels(formData.levelIds);
+    } else {
+      setEducationStreams([]);
+      setAvailableSubjects([]);
+    }
+  }, [formData.levelIds]);
+
   const loadProfile = async () => {
     try {
       setIsLoading(true);
       
-      // Load user data
-      const userResponse = await ApiClient.get<{ success: boolean; data: UserResponse }>(`/profiles/user/${user?.id}`);
+      const systemsResponse = await apiClient.get('/education/systems');
+      const systemsData = Array.isArray(systemsResponse.data) ? systemsResponse.data : systemsResponse;
+      setEducationSystems(systemsData);
       
+      const subjectsResponse = await apiClient.get('/education/subjects');
+      const subjectsData = Array.isArray(subjectsResponse.data) ? subjectsResponse.data : subjectsResponse;
+      setSubjects(subjectsData);
+      
+      const userResponse = await apiClient.get(`/profiles/user/${user?.id}`);
       const userData = userResponse.data;
-      setUserData({
+      
+      const profileResponse = await apiClient.get(`/profiles/tutor/${user?.id}`);
+      const profile = profileResponse.data;
+      
+      console.log('📊 Loaded profile:', {
+        experienceYears: profile.experienceYears,
+        teachingSubjectsCount: profile.teachingSubjects?.length,
+        teachingLanguagesCount: profile.teachingLanguages?.length,
+      });
+      
+      setAvatarUri(userData.avatarUrl);
+      
+      const teachingSubjects = profile.teachingSubjects || [];
+      const teachingLanguages = profile.teachingLanguages || [];
+      
+      const systemIds = new Set<string>();
+      const levelIds = new Set<string>();
+      const subjectIds = new Set<string>();
+      
+      teachingSubjects.forEach((ts: any) => {
+        const levelSubject = ts.levelSubject;
+        if (levelSubject) {
+          if (levelSubject.level?.systemId) systemIds.add(levelSubject.level.systemId);
+          if (levelSubject.levelId) levelIds.add(levelSubject.levelId);
+          if (levelSubject.subjectId) subjectIds.add(levelSubject.subjectId);
+        }
+      });
+      
+      console.log('🎯 Extracted IDs:', {
+        systemIds: Array.from(systemIds),
+        levelIds: Array.from(levelIds),
+        subjectIds: Array.from(subjectIds),
+      });
+      
+      const languageNames = teachingLanguages.map((tl: any) => tl.teachingLanguage?.name).filter(Boolean);
+      
+      const systemId = Array.from(systemIds)[0] || '';
+      
+      // Load levels for the system before setting form data
+      if (systemId) {
+        const levelsResponse = await apiClient.get(`/education/systems/${systemId}/levels`);
+        const levelsData = levelsResponse.data || levelsResponse;
+        const levelsWithSystemId = Array.isArray(levelsData) 
+          ? levelsData.map(level => ({ ...level, systemId }))
+          : [];
+        setEducationLevels(levelsWithSystemId);
+        
+        console.log('📖 Available levels:', levelsWithSystemId.map(l => ({ id: l.id, name: l.name })));
+      }
+      
+      console.log('📚 Available subjects:', subjectsData.map((s: any) => ({ id: s.id, name: s.name })));
+      
+      const extractedLevelIds = Array.from(levelIds);
+      const extractedSubjectIds = Array.from(subjectIds);
+      
+      console.log('✅ Setting form data with:', {
+        levelIds: extractedLevelIds,
+        subjectIds: extractedSubjectIds,
+        languages: languageNames,
+      });
+      
+      setFormData({
         firstName: userData.firstName || '',
         lastName: userData.lastName || '',
         phone: userData.phone || '',
-        address: userData.address || '',
-        city: userData.city || '',
-        postalCode: userData.postalCode || '',
-        country: userData.country || '',
+        bio: profile.bio || '',
+        experienceYears: profile.experienceYears !== null && profile.experienceYears !== undefined 
+          ? getExperienceRange(profile.experienceYears) 
+          : '0-1',
+        hourlyRate: profile.hourlyRate ? eurToFcfa(Number(profile.hourlyRate)).toString() : '',
+        educationSystemId: systemId,
+        levelIds: extractedLevelIds,
+        streamIds: [],
+        subjectIds: extractedSubjectIds,
+        languages: languageNames.length > 0 ? languageNames : ['Français'],
+        teachingMode: profile.teachingMode || 'BOTH',
+        serviceRadius: profile.serviceRadius ? profile.serviceRadius.toString() : '',
       });
-      setAvatarUri(userData.avatarUrl);
-
-      // Load tutor profile
-      const profileResponse = await ApiClient.get<{ success: boolean; data: TutorProfileResponse }>(`/profiles/tutor/${user?.id}`);
-      
-      const profile = profileResponse.data;
-        
-        // Convert flat subjects/educationLevels to structured format
-        const subjectTeachings: SubjectTeaching[] = [];
-        
-        // Try to load from detailed data first
-        if (profile.teachingSkillsDetails) {
-          try {
-            const details = JSON.parse(profile.teachingSkillsDetails);
-            details.forEach((detail: any) => {
-              subjectTeachings.push({
-                subject: detail.subject,
-                selectedLevels: detail.levelConfigs.map((c: any) => c.level),
-                levelConfigs: detail.levelConfigs.map((c: any) => ({
-                  level: c.level,
-                  system: c.system,
-                  teachingType: c.teachingType,
-                  classes: c.classes || [],
-                  selectedClasses: c.selectedClasses || {},
-                })),
-              });
-            });
-          } catch (e) {
-            console.error('Failed to parse teachingSkillsDetails:', e);
-          }
-        }
-        
-        // Fallback to old format if no detailed data
-        if (subjectTeachings.length === 0 && profile.subjects && profile.subjects.length > 0) {
-          profile.subjects.forEach(subject => {
-            subjectTeachings.push({
-              subject,
-              selectedLevels: [],
-              levelConfigs: [],
-            });
-          });
-        }
-        
-        // If no subjects yet, start with empty array (user will add)
-        setTutorData({
-          bio: profile.bio || '',
-          experienceYears: profile.experienceYears && profile.experienceYears > 0 ? profile.experienceYears.toString() : '',
-          hourlyRate: profile.hourlyRate && parseFloat(profile.hourlyRate.toString()) > 0 ? eurToFcfa(parseFloat(profile.hourlyRate.toString())).toString() : '',
-          subjectTeachings: subjectTeachings.length > 0 ? subjectTeachings : [],
-          teachingMode: profile.teachingMode || 'BOTH',
-          serviceRadius: profile.serviceRadius ? profile.serviceRadius.toString() : '',
-        });
     } catch (error: any) {
-      console.error('Failed to load profile:', error);
-      console.error('Error details:', error.message, error.stack);
-      Alert.alert('Error', 'Failed to load profile: ' + error.message);
+      console.error('❌ Failed to load profile:', error);
+      showError('Erreur', error.message || 'Impossible de charger le profil');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadLevelsForSystem = async (systemId: string) => {
+    try {
+      const levelsResponse = await apiClient.get(`/education/systems/${systemId}/levels`);
+      const levelsData = levelsResponse.data || levelsResponse;
+      const levelsWithSystemId = Array.isArray(levelsData) 
+        ? levelsData.map(level => ({ ...level, systemId }))
+        : [];
+      setEducationLevels(levelsWithSystemId);
+    } catch (error) {
+      console.error('Failed to load levels:', error);
+      setEducationLevels([]);
+    }
+  };
+
+  const loadStreamsForLevels = async (levelIds: string[]) => {
+    try {
+      const streamsPromises = levelIds.map(levelId =>
+        apiClient.get(`/education/levels/${levelId}/streams`)
+          .then(res => Array.isArray(res.data) ? res.data : res)
+          .catch(() => [])
+      );
+      const streamsArrays = await Promise.all(streamsPromises);
+      setEducationStreams(streamsArrays.flat());
+    } catch (error) {
+      console.error('Failed to load streams:', error);
+      setEducationStreams([]);
+    }
+  };
+
+  const loadSubjectsForLevels = async (levelIds: string[]) => {
+    try {
+      // Get all LevelSubjects for the selected levels
+      const levelSubjectsPromises = levelIds.map(levelId =>
+        apiClient.get(`/education/levels/${levelId}/subjects`)
+          .then(res => Array.isArray(res.data) ? res.data : res)
+          .catch(() => [])
+      );
+      const levelSubjectsArrays = await Promise.all(levelSubjectsPromises);
+      const allLevelSubjects = levelSubjectsArrays.flat();
+      
+      // Get all streams for the selected levels
+      const streamsPromises = levelIds.map(levelId =>
+        apiClient.get(`/education/levels/${levelId}/streams`)
+          .then(res => Array.isArray(res.data) ? res.data : res)
+          .catch(() => [])
+      );
+      const streamsArrays = await Promise.all(streamsPromises);
+      const allStreams = streamsArrays.flat();
+      
+      // Get all StreamSubjects for the streams
+      const streamSubjectsPromises = allStreams.map((stream: any) =>
+        apiClient.get(`/education/streams/${stream.id}/subjects`)
+          .then(res => Array.isArray(res.data) ? res.data : res)
+          .catch(() => [])
+      );
+      const streamSubjectsArrays = await Promise.all(streamSubjectsPromises);
+      const allStreamSubjects = streamSubjectsArrays.flat();
+      
+      // Extract unique subject IDs from both LevelSubjects and StreamSubjects
+      const subjectIds = new Set<string>();
+      allLevelSubjects.forEach((ls: any) => {
+        if (ls.subjectId) subjectIds.add(ls.subjectId);
+      });
+      allStreamSubjects.forEach((ss: any) => {
+        if (ss.subjectId) subjectIds.add(ss.subjectId);
+      });
+      
+      // Filter subjects to only show those available for selected levels (deduplicated)
+      const filtered = subjects.filter(s => subjectIds.has(s.id));
+      setAvailableSubjects(filtered);
+      
+      console.log('📚 Available subjects for selected levels (including streams):', {
+        levelSubjectsCount: allLevelSubjects.length,
+        streamSubjectsCount: allStreamSubjects.length,
+        uniqueSubjectsCount: filtered.length,
+        subjects: filtered.map(s => s.name),
+      });
+    } catch (error) {
+      console.error('Failed to load subjects for levels:', error);
+      setAvailableSubjects([]);
     }
   };
 
@@ -268,12 +338,12 @@ export default function TutorEditProfileScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Veuillez autoriser l\'accès à la galerie pour télécharger une photo');
+      showError('Permission requise', 'Veuillez autoriser l\'accès à la galerie');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -284,222 +354,67 @@ export default function TutorEditProfileScreen() {
     }
   };
 
-  const addSubjectTeaching = () => {
-    setTutorData({
-      ...tutorData,
-      subjectTeachings: [
-        ...tutorData.subjectTeachings,
-        { subject: '', selectedLevels: [], levelConfigs: [] },
-      ],
+  const updateField = (field: keyof ProfileData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleItem = (field: 'levelIds' | 'streamIds' | 'subjectIds' | 'languages', item: string) => {
+    setFormData(prev => {
+      const items = prev[field];
+      const updated = items.includes(item)
+        ? items.filter((i) => i !== item)
+        : [...items, item];
+      return { ...prev, [field]: updated };
     });
-  };
-
-  const removeSubjectTeaching = (index: number) => {
-    setTutorData({
-      ...tutorData,
-      subjectTeachings: tutorData.subjectTeachings.filter((_, i) => i !== index),
-    });
-  };
-
-  const updateSubjectTeaching = (index: number, field: keyof SubjectTeaching, value: any) => {
-    const updated = [...tutorData.subjectTeachings];
-    updated[index] = { ...updated[index], [field]: value };
-    setTutorData({ ...tutorData, subjectTeachings: updated });
-  };
-
-  const toggleLevel = (subjectIndex: number, levelValue: string) => {
-    const updated = [...tutorData.subjectTeachings];
-    const teaching = updated[subjectIndex];
-    
-    if (teaching.selectedLevels.includes(levelValue)) {
-      // Remove level and its config
-      teaching.selectedLevels = teaching.selectedLevels.filter(l => l !== levelValue);
-      teaching.levelConfigs = teaching.levelConfigs.filter(c => c.level !== levelValue);
-    } else {
-      // Add level and create a config for it
-      teaching.selectedLevels.push(levelValue);
-      teaching.levelConfigs.push({
-        level: levelValue,
-        system: undefined,
-        teachingType: undefined,
-        selectedClasses: {},
-        classes: [],
-      });
-    }
-    
-    setTutorData({ ...tutorData, subjectTeachings: updated });
-  };
-
-  const updateLevelConfig = (subjectIndex: number, levelValue: string, field: keyof LevelConfig, value: any) => {
-    const updated = [...tutorData.subjectTeachings];
-    const config = updated[subjectIndex].levelConfigs.find(c => c.level === levelValue);
-    
-    if (!config) return;
-    
-    if (field === 'system') {
-      // Reset dependent fields when system changes
-      config.system = value;
-      config.teachingType = undefined;
-      config.selectedClasses = {};
-      config.classes = [];
-    } else if (field === 'teachingType') {
-      // Reset classes when teaching type changes
-      config.teachingType = value;
-      config.selectedClasses = {};
-      config.classes = [];
-    } else {
-      (config as any)[field] = value;
-    }
-    
-    setTutorData({ ...tutorData, subjectTeachings: updated });
-  };
-
-  const toggleClass = (subjectIndex: number, levelValue: string, className: string) => {
-    const updated = [...tutorData.subjectTeachings];
-    const config = updated[subjectIndex].levelConfigs.find(c => c.level === levelValue);
-    
-    if (!config) return;
-    
-    if (config.classes.includes(className)) {
-      config.classes = config.classes.filter(c => c !== className);
-    } else {
-      config.classes.push(className);
-    }
-    
-    setTutorData({ ...tutorData, subjectTeachings: updated });
-  };
-
-  const toggleSerie = (subjectIndex: number, levelValue: string, className: string, serie: string) => {
-    const updated = [...tutorData.subjectTeachings];
-    const config = updated[subjectIndex].levelConfigs.find(c => c.level === levelValue);
-    
-    if (!config) return;
-    
-    if (!config.selectedClasses[className]) {
-      config.selectedClasses[className] = [];
-    }
-    
-    if (config.selectedClasses[className].includes(serie)) {
-      config.selectedClasses[className] = config.selectedClasses[className].filter(s => s !== serie);
-      // Remove class if no series selected
-      if (config.selectedClasses[className].length === 0) {
-        delete config.selectedClasses[className];
-      }
-    } else {
-      config.selectedClasses[className].push(serie);
-    }
-    
-    setTutorData({ ...tutorData, subjectTeachings: updated });
   };
 
   const handleSave = async () => {
     try {
       setIsSaving(true);
 
-      // Update user data
-      await ApiClient.put(`/profiles/me`, {
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        phone: userData.phone,
-        address: userData.address,
-        city: userData.city,
-        postalCode: userData.postalCode,
-        country: userData.country,
+      console.log('💾 Saving profile with data:', {
+        experienceYears: formData.experienceYears,
+        levelIds: formData.levelIds,
+        subjectIds: formData.subjectIds,
+        languages: formData.languages,
       });
 
-      // Upload avatar if changed
+      await apiClient.put('/profiles/me', {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+      });
+
       if (avatarUri && avatarUri !== user?.avatarUrl) {
-        await ApiClient.post(`/profiles/me/avatar`, { avatarUrl: avatarUri });
+        await apiClient.post('/profiles/me/avatar', { avatarUrl: avatarUri });
       }
 
-      // Update tutor profile
-      const hourlyRateFcfa = parseFloat(tutorData.hourlyRate);
-      
-      if (!tutorData.hourlyRate || isNaN(hourlyRateFcfa) || hourlyRateFcfa < 3280 || hourlyRateFcfa > 328000) {
-        Alert.alert('Erreur de validation', 'Le tarif horaire doit être entre 3 280 FCFA et 328 000 FCFA');
-        setIsSaving(false);
-        return;
-      }
-      
-      // Convert FCFA to EUR for backend
-      const hourlyRate = fcfaToEur(hourlyRateFcfa);
+      const hourlyRateInEur = fcfaToEur(parseFloat(formData.hourlyRate));
+      const experienceYearsNumeric = getRangeMiddle(formData.experienceYears);
 
-      // Validate teaching skills
-      if (tutorData.subjectTeachings.length === 0) {
-        Alert.alert('Erreur de validation', 'Vous devez ajouter au moins une matière enseignée');
-        setIsSaving(false);
-        return;
-      }
-
-      for (let i = 0; i < tutorData.subjectTeachings.length; i++) {
-        const teaching = tutorData.subjectTeachings[i];
-        if (!teaching.subject) {
-          Alert.alert('Erreur de validation', `Matière ${i + 1}: Veuillez sélectionner une matière`);
-          setIsSaving(false);
-          return;
-        }
-        if (teaching.selectedLevels.length === 0) {
-          Alert.alert('Erreur de validation', `Matière ${i + 1}: Veuillez sélectionner au moins un niveau`);
-          setIsSaving(false);
-          return;
-        }
-        
-        for (const config of teaching.levelConfigs) {
-          const levelData = EDUCATION_LEVELS.find(l => l.value === config.level);
-          const levelLabel = levelData?.label || config.level;
-          
-          // Check if system is required for this level
-          if (levelData && levelData.systems.length > 0 && !config.system) {
-            Alert.alert('Erreur de validation', `Matière ${i + 1}, ${levelLabel}: Veuillez sélectionner un système`);
-            setIsSaving(false);
-            return;
-          }
-          
-          if (config.classes.length === 0 && Object.keys(config.selectedClasses).length === 0) {
-            Alert.alert('Erreur de validation', `Matière ${i + 1}, ${levelLabel}: Veuillez sélectionner au moins une classe`);
-            setIsSaving(false);
-            return;
-          }
-        }
-      }
-
-      // Convert structured format back to flat arrays for API (backward compatibility)
-      const subjects = Array.from(new Set(tutorData.subjectTeachings.map(st => st.subject).filter(s => s)));
-      const educationLevels = Array.from(new Set(
-        tutorData.subjectTeachings.flatMap(st => st.levelConfigs.map(c => c.level)).filter(l => l)
-      ));
-
-      // Prepare detailed teaching skills data
-      const teachingSkillsDetails = tutorData.subjectTeachings.map(teaching => ({
-        subject: teaching.subject,
-        levelConfigs: teaching.levelConfigs.map(config => ({
-          level: config.level,
-          system: config.system,
-          teachingType: config.teachingType,
-          classes: config.classes,
-          selectedClasses: config.selectedClasses,
-        })),
-      }));
-
-      const tutorUpdateData = {
-        bio: tutorData.bio || undefined,
-        experienceYears: tutorData.experienceYears ? parseInt(tutorData.experienceYears) : undefined,
-        hourlyRate,
-        subjects,
-        educationLevels,
-        teachingMode: tutorData.teachingMode,
-        serviceRadius: tutorData.serviceRadius ? parseFloat(tutorData.serviceRadius) : undefined,
-        teachingSkillsDetails: JSON.stringify(teachingSkillsDetails), // Store as JSON string
+      const profileData = {
+        bio: formData.bio,
+        experienceYears: experienceYearsNumeric,
+        hourlyRate: hourlyRateInEur,
+        educationSystemId: formData.educationSystemId,
+        levelIds: formData.levelIds,
+        streamIds: formData.streamIds,
+        subjectIds: formData.subjectIds,
+        languages: formData.languages,
+        teachingMode: formData.teachingMode,
+        serviceRadius: formData.serviceRadius ? parseInt(formData.serviceRadius) : null,
       };
 
-      await ApiClient.put(`/profiles/tutor`, tutorUpdateData);
+      console.log('📤 Sending profile data:', profileData);
 
-      Alert.alert('Succès', 'Profil mis à jour avec succès');
-      router.back();
+      const response = await apiClient.put('/profiles/tutor', profileData);
+      
+      console.log('✅ Profile updated successfully:', response);
+
+      showSuccess('Succès', 'Profil mis à jour avec succès', () => router.back());
     } catch (error: any) {
-      console.error('Failed to save profile:', error);
-      console.error('Error details:', error.message, error.stack);
-      Alert.alert('Erreur', error.message || 'Échec de la mise à jour du profil');
+      console.error('❌ Failed to update profile:', error);
+      showError('Erreur', error.message || 'Échec de la mise à jour du profil');
     } finally {
       setIsSaving(false);
     }
@@ -516,37 +431,32 @@ export default function TutorEditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerButton} 
-          onPress={() => router.back()}
-          disabled={isSaving}
-        >
-          <X size={24} color={Colors.white} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modifier le profil</Text>
-        <TouchableOpacity 
-          style={styles.headerButton} 
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={Colors.white} />
-          ) : (
-            <Check size={24} color={Colors.white} strokeWidth={2.5} />
-          )}
-        </TouchableOpacity>
-      </View>
+      <PageHeader 
+        title="Modifier le profil" 
+        variant='primary'
+        showBackButton 
+        centerTitle
+        rightElement={
+          <TouchableOpacity 
+            style={styles.saveHeaderButton} 
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Ionicons name='checkmark' size={24} color={Colors.white} />
+            )}
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isSaving}
       >
-        {/* Avatar Section */}
         <View style={styles.avatarSection}>
           <TouchableOpacity style={styles.avatarContainer} onPress={pickImage}>
             {avatarUri ? (
@@ -554,590 +464,398 @@ export default function TutorEditProfileScreen() {
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarText}>
-                  {userData.firstName?.[0]}{userData.lastName?.[0]}
+                  {formData.firstName?.[0]}{formData.lastName?.[0]}
                 </Text>
               </View>
             )}
             <View style={styles.cameraButton}>
-              <Camera size={20} color={Colors.white} strokeWidth={2.5} />
+              <Camera size={18} color={Colors.white} strokeWidth={2.5} />
             </View>
           </TouchableOpacity>
-          <Text style={styles.avatarHint}>Appuyez pour changer la photo</Text>
         </View>
 
-        {/* Basic Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations de base</Text>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconBox}>
+              <UserIcon size={20} color={Colors.primary} strokeWidth={2} />
+            </View>
+            <Text style={styles.cardTitle}>Informations personnelles</Text>
+          </View>
           
           <View style={styles.inputGroup}>
-            <View style={styles.inputIcon}>
-              <UserIcon size={20} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Prénom</Text>
-              <TextInput
-                style={styles.input}
-                value={userData.firstName}
-                onChangeText={(text) => setUserData({ ...userData, firstName: text })}
-                placeholder="Entrez votre prénom"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
+            <Text style={styles.inputLabel}>Prénom</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.firstName}
+              onChangeText={(text) => updateField('firstName', text)}
+              placeholder="Entrez votre prénom"
+              placeholderTextColor={Colors.textTertiary}
+            />
           </View>
 
           <View style={styles.inputGroup}>
-            <View style={styles.inputIcon}>
-              <UserIcon size={20} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Nom</Text>
-              <TextInput
-                style={styles.input}
-                value={userData.lastName}
-                onChangeText={(text) => setUserData({ ...userData, lastName: text })}
-                placeholder="Entrez votre nom"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
+            <Text style={styles.inputLabel}>Nom</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.lastName}
+              onChangeText={(text) => updateField('lastName', text)}
+              placeholder="Entrez votre nom"
+              placeholderTextColor={Colors.textTertiary}
+            />
           </View>
 
           <View style={styles.inputGroup}>
-            <View style={styles.inputIcon}>
-              <Phone size={20} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Téléphone</Text>
-              <TextInput
-                style={styles.input}
-                value={userData.phone}
-                onChangeText={(text) => setUserData({ ...userData, phone: text })}
-                placeholder="Entrez votre numéro"
-                placeholderTextColor={Colors.textTertiary}
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <View style={styles.inputIcon}>
-              <Home size={20} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Adresse</Text>
-              <TextInput
-                style={styles.input}
-                value={userData.address}
-                onChangeText={(text) => setUserData({ ...userData, address: text })}
-                placeholder="Entrez votre adresse"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.flex1]}>
-              <View style={styles.inputIcon}>
-                <MapPin size={20} color={Colors.primary} strokeWidth={2} />
-              </View>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>Ville</Text>
-                <TextInput
-                  style={styles.input}
-                  value={userData.city}
-                  onChangeText={(text) => setUserData({ ...userData, city: text })}
-                  placeholder="Ville"
-                  placeholderTextColor={Colors.textTertiary}
-                />
-              </View>
-            </View>
-
-            <View style={[styles.inputGroup, styles.flex1]}>
-              <View style={styles.inputIcon}>
-                <Mail size={20} color={Colors.primary} strokeWidth={2} />
-              </View>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>Code postal</Text>
-                <TextInput
-                  style={styles.input}
-                  value={userData.postalCode}
-                  onChangeText={(text) => setUserData({ ...userData, postalCode: text })}
-                  placeholder="Code"
-                  placeholderTextColor={Colors.textTertiary}
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <View style={styles.inputIcon}>
-              <MapPin size={20} color={Colors.primary} strokeWidth={2} />
-            </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Pays</Text>
-              <TextInput
-                style={styles.input}
-                value={userData.country}
-                onChangeText={(text) => setUserData({ ...userData, country: text })}
-                placeholder="Entrez votre pays"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
+            <Text style={styles.inputLabel}>Téléphone</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.phone}
+              onChangeText={(text) => updateField('phone', text)}
+              placeholder="Entrez votre numéro"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="phone-pad"
+            />
           </View>
         </View>
 
-        {/* Tutor Profile */}
-        <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Informations professionnelles</Text>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Bio</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={tutorData.bio}
-                  onChangeText={(text) => setTutorData({ ...tutorData, bio: text })}
-                  placeholder="Décrivez votre expérience et votre approche pédagogique"
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconBox}>
+              <Briefcase size={20} color={Colors.primary} strokeWidth={2} />
+            </View>
+            <Text style={styles.cardTitle}>Informations professionnelles</Text>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Bio</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={formData.bio}
+              onChangeText={(text) => updateField('bio', text)}
+              placeholder="Décrivez votre expérience..."
+              placeholderTextColor={Colors.textTertiary}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Années d'expérience</Text>
-                <TextInput
-                  style={styles.input}
-                  value={tutorData.experienceYears}
-                  onChangeText={(text) => setTutorData({ ...tutorData, experienceYears: text })}
-                  placeholder="ex: 5"
-                  keyboardType="numeric"
-                />
-              </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Années d'expérience</Text>
+            <View style={styles.experienceGrid}>
+              {EXPERIENCE_RANGES.map((range) => (
+                <TouchableOpacity
+                  key={range}
+                  style={[
+                    styles.experienceCard,
+                    formData.experienceYears === range && styles.experienceCardActive,
+                  ]}
+                  onPress={() => updateField('experienceYears', range)}
+                >
+                  <Text
+                    style={[
+                      styles.experienceText,
+                      formData.experienceYears === range && styles.experienceTextActive,
+                    ]}
+                  >
+                    {range} {range === '10+' ? 'ans' : range === '0-1' ? 'an' : 'ans'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Tarif horaire (FCFA) *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={tutorData.hourlyRate}
-                  onChangeText={(text) => setTutorData({ ...tutorData, hourlyRate: text })}
-                  placeholder="Entre 3 280 et 328 000"
-                  keyboardType="numeric"
-                />
-                <Text style={styles.hint}>Doit être entre 3 280 FCFA et 328 000 FCFA</Text>
-              </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Tarif horaire (FCFA)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.hourlyRate}
+              onChangeText={(text) => updateField('hourlyRate', text)}
+              placeholder="Ex: 10000"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Mode d'enseignement</Text>
-                <View style={styles.modeContainer}>
-                  {[
-                    { value: 'IN_PERSON', label: 'En personne' },
-                    { value: 'ONLINE', label: 'En ligne' },
-                    { value: 'BOTH', label: 'Les deux' },
-                  ].map((mode) => (
-                    <TouchableOpacity
-                      key={mode.value}
-                      style={[
-                        styles.modeButton,
-                        tutorData.teachingMode === mode.value && styles.modeButtonActive,
-                      ]}
-                      onPress={() =>
-                        setTutorData({
-                          ...tutorData,
-                          teachingMode: mode.value as 'IN_PERSON' | 'ONLINE' | 'BOTH',
-                        })
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.modeButtonText,
-                          tutorData.teachingMode === mode.value && styles.modeButtonTextActive,
-                        ]}
-                      >
-                        {mode.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconBox}>
+              <BookOpen size={20} color={Colors.primary} strokeWidth={2} />
+            </View>
+            <Text style={styles.cardTitle}>Système éducatif</Text>
+          </View>
+          
+          <View style={styles.systemsGrid}>
+            {educationSystems.map((system) => (
+              <TouchableOpacity
+                key={system.id}
+                style={[
+                  styles.systemCard,
+                  formData.educationSystemId === system.id && styles.systemCardActive,
+                ]}
+                onPress={() => {
+                  updateField('educationSystemId', system.id);
+                  updateField('levelIds', []);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.systemName,
+                    formData.educationSystemId === system.id && styles.systemNameActive,
+                  ]}
+                >
+                  {system.name}
+                </Text>
+                {formData.educationSystemId === system.id && (
+                  <View style={styles.checkmark}>
+                    <Check size={14} color={Colors.white} strokeWidth={3} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-              {(tutorData.teachingMode === 'IN_PERSON' || tutorData.teachingMode === 'BOTH') && (
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Rayon de service (km, optionnel)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={tutorData.serviceRadius}
-                    onChangeText={(text) => setTutorData({ ...tutorData, serviceRadius: text })}
-                    placeholder="ex: 10"
-                    keyboardType="numeric"
+        {formData.educationSystemId && availableLevels.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconBox}>
+                <GraduationCap size={20} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <Text style={styles.cardTitle}>Niveaux d'enseignement</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{formData.levelIds.length}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.chipsGrid}>
+              {availableLevels.map((level) => (
+                <TouchableOpacity
+                  key={level.id}
+                  style={[
+                    styles.chip,
+                    formData.levelIds.includes(level.id) && styles.chipActive,
+                  ]}
+                  onPress={() => toggleItem('levelIds', level.id)}
+                >
+                  {formData.levelIds.includes(level.id) && (
+                    <Check size={14} color={Colors.white} strokeWidth={3} />
+                  )}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      formData.levelIds.includes(level.id) && styles.chipTextActive,
+                    ]}
+                  >
+                    {level.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {availableStreams.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconBox}>
+                <BookOpen size={20} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <Text style={styles.cardTitle}>Filières</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{formData.streamIds.length}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.chipsGrid}>
+              {availableStreams.map((stream) => (
+                <TouchableOpacity
+                  key={stream.id}
+                  style={[
+                    styles.chip,
+                    formData.streamIds.includes(stream.id) && styles.chipActive,
+                  ]}
+                  onPress={() => toggleItem('streamIds', stream.id)}
+                >
+                  {formData.streamIds.includes(stream.id) && (
+                    <Check size={14} color={Colors.white} strokeWidth={3} />
+                  )}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      formData.streamIds.includes(stream.id) && styles.chipTextActive,
+                    ]}
+                  >
+                    {stream.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {availableSubjects.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconBox}>
+                <BookOpen size={20} color={Colors.primary} strokeWidth={2} />
+              </View>
+              <Text style={styles.cardTitle}>Matières enseignées</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{formData.subjectIds.length}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.chipsGrid}>
+              {availableSubjects.map((subject) => (
+                <TouchableOpacity
+                  key={subject.id}
+                  style={[
+                    styles.chip,
+                    formData.subjectIds.includes(subject.id) && styles.chipActive,
+                  ]}
+                  onPress={() => toggleItem('subjectIds', subject.id)}
+                >
+                  {formData.subjectIds.includes(subject.id) && (
+                    <Check size={14} color={Colors.white} strokeWidth={3} />
+                  )}
+                  {subject.icon && (
+                    <Text style={styles.subjectIcon}>{subject.icon}</Text>
+                  )}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      formData.subjectIds.includes(subject.id) && styles.chipTextActive,
+                    ]}
+                  >
+                    {subject.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconBox}>
+              <Globe size={20} color={Colors.primary} strokeWidth={2} />
+            </View>
+            <Text style={styles.cardTitle}>Langues parlées</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{formData.languages.length}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.chipsGrid}>
+            {LANGUAGES.map((language) => (
+              <TouchableOpacity
+                key={language}
+                style={[
+                  styles.chip,
+                  formData.languages.includes(language) && styles.chipActive,
+                ]}
+                onPress={() => toggleItem('languages', language)}
+              >
+                {formData.languages.includes(language) && (
+                  <Check size={14} color={Colors.white} strokeWidth={3} />
+                )}
+                <Text
+                  style={[
+                    styles.chipText,
+                    formData.languages.includes(language) && styles.chipTextActive,
+                  ]}
+                >
+                  {language}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconBox}>
+              <MapPin size={20} color={Colors.primary} strokeWidth={2} />
+            </View>
+            <Text style={styles.cardTitle}>Mode d'enseignement</Text>
+          </View>
+          
+          <View style={styles.teachingModeGrid}>
+            {TEACHING_MODES.map((mode) => (
+              <TouchableOpacity
+                key={mode.value}
+                style={[
+                  styles.teachingModeCard,
+                  formData.teachingMode === mode.value && styles.teachingModeCardActive,
+                ]}
+                onPress={() => updateField('teachingMode', mode.value)}
+              >
+                <View style={[
+                  styles.teachingModeIconBox,
+                  formData.teachingMode === mode.value && styles.teachingModeIconBoxActive,
+                ]}>
+                  <mode.icon 
+                    size={22} 
+                    color={formData.teachingMode === mode.value ? Colors.white : Colors.primary} 
+                    strokeWidth={2} 
                   />
                 </View>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <BookOpen size={22} color={Colors.primary} strokeWidth={2} />
-                <Text style={styles.sectionTitle}>Matières enseignées</Text>
-              </View>
-              
-              <Text style={styles.fieldLabel}>
-                Configurez vos compétences d'enseignement
-              </Text>
-
-              {tutorData.subjectTeachings.map((teaching, subjectIndex) => {
-                const isExpanded = expandedSubjects[subjectIndex] !== false; // Default to true (expanded)
-                
-                return (
-                  <View key={subjectIndex} style={styles.teachingCard}>
-                    {/* Header with subject, chevron and delete */}
-                    <TouchableOpacity 
-                      style={styles.teachingCardHeader}
-                      onPress={() => {
-                        setExpandedSubjects(prev => ({
-                          ...prev,
-                          [subjectIndex]: !isExpanded,
-                        }));
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.teachingCardTitle}>
-                        <BookOpen size={16} color={Colors.primary} strokeWidth={2} />
-                        <Text style={styles.teachingCardTitleText}>
-                          {teaching.subject || 'Nouvelle matière'}
-                        </Text>
-                        {teaching.selectedLevels.length > 0 && (
-                          <View style={styles.levelCountBadge}>
-                            <Text style={styles.levelCountBadgeText}>
-                              {teaching.selectedLevels.length} niveau{teaching.selectedLevels.length > 1 ? 'x' : ''}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.teachingCardActions}>
-                        <ChevronDown 
-                          size={20} 
-                          color={Colors.textSecondary} 
-                          strokeWidth={2}
-                          style={{
-                            transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
-                          }}
-                        />
-                        <TouchableOpacity
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            removeSubjectTeaching(subjectIndex);
-                          }}
-                          style={styles.deleteButton}
-                        >
-                          <Trash2 size={16} color={Colors.error} strokeWidth={2} />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Collapsible content */}
-                    {isExpanded && (
-                      <View style={styles.inlineForm}>
-                        <View style={styles.inlineField}>
-                          <Text style={styles.inlineLabel}>Matière</Text>
-                          <ScrollView 
-                            horizontal 
-                            showsHorizontalScrollIndicator={false}
-                            style={styles.horizontalScroll}
-                          >
-                            {SUBJECTS.map((subject) => (
-                              <TouchableOpacity
-                                key={subject}
-                                style={[
-                                  styles.pillButton,
-                                  teaching.subject === subject && styles.pillButtonActive,
-                                ]}
-                                onPress={() => updateSubjectTeaching(subjectIndex, 'subject', subject)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.pillButtonText,
-                                    teaching.subject === subject && styles.pillButtonTextActive,
-                                  ]}
-                                >
-                                  {subject}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-
-                        {/* Levels multi-selection */}
-                        {teaching.subject && (
-                          <>
-                            <View style={styles.inlineField}>
-                            <Text style={styles.inlineLabel}>Niveaux (plusieurs possibles)</Text>
-                            <View style={styles.pillGrid}>
-                              {EDUCATION_LEVELS.map((level) => (
-                                <TouchableOpacity
-                                  key={level.value}
-                                  style={[
-                                    styles.pillButton,
-                                    teaching.selectedLevels.includes(level.value) && styles.pillButtonActive,
-                                  ]}
-                                  onPress={() => toggleLevel(subjectIndex, level.value)}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.pillButtonText,
-                                      teaching.selectedLevels.includes(level.value) && styles.pillButtonTextActive,
-                                    ]}
-                                  >
-                                    {level.label}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          </View>
-
-                          {/* Configuration for each selected level */}
-                          {teaching.selectedLevels.map((levelValue) => {
-                            const levelData = EDUCATION_LEVELS.find(l => l.value === levelValue);
-                            const config = teaching.levelConfigs.find(c => c.level === levelValue);
-                            
-                            if (!levelData || !config) return null;
-
-                            const hasSystems = levelData.systems.length > 0;
-                            const selectedSystem = hasSystems ? levelData.systems.find(s => s.value === config.system) : null;
-                            const hasTeachingTypes = selectedSystem && selectedSystem.teachingTypes.length > 0;
-                            
-                            // Get available classes
-                            let availableClasses: any = [];
-                            let hasSeriesSelection = false;
-                            
-                            if (levelValue === 'higher') {
-                              // Higher education has no system
-                              availableClasses = CLASSES.higher.default.default;
-                            } else if (config.system) {
-                              if (hasTeachingTypes && config.teachingType) {
-                                const classData = CLASSES[levelValue]?.[config.system]?.[config.teachingType];
-                                if (typeof classData === 'object' && !Array.isArray(classData)) {
-                                  // Has series selection (Général lycée, Technique collège/lycée)
-                                  availableClasses = classData;
-                                  hasSeriesSelection = true;
-                                } else {
-                                  // Simple array
-                                  availableClasses = classData || [];
-                                }
-                              } else if (!hasTeachingTypes) {
-                                availableClasses = CLASSES[levelValue]?.[config.system]?.default || [];
-                     }
-                            }
-
-                            return (
-                              <View key={levelValue} style={styles.levelConfigCard}>
-                                <Text style={styles.levelConfigTitle}>{levelData.label}</Text>
-
-                                {/* System selection (if applicable) */}
-                                {hasSystems && (
-                                  <View style={styles.inlineField}>
-                                    <Text style={styles.inlineLabel}>Système</Text>
-                                    <View style={styles.pillGrid}>
-                                      {levelData.systems.map((system) => (
-                                        <TouchableOpacity
-                                          key={system.value}
-                                          style={[
-                                            styles.pillButton,
-                                            config.system === system.value && styles.pillButtonActive,
-                                          ]}
-                                          onPress={() => updateLevelConfig(subjectIndex, levelValue, 'system', system.value)}
-                                        >
-                                          <Text
-                                            style={[
-                                              styles.pillButtonText,
-                                              config.system === system.value && styles.pillButtonTextActive,
-                                            ]}
-                                          >
-                                            {system.label}
-                                          </Text>
-                                        </TouchableOpacity>
-                                      ))}
-                                    </View>
-                                  </View>
-                                )}
-
-                                {/* Teaching type selection (if applicable) */}
-                                {hasTeachingTypes && (
-                                  <View style={styles.inlineField}>
-                                    <Text style={styles.inlineLabel}>Enseignement</Text>
-                                    <View style={styles.pillGrid}>
-                                      {selectedSystem.teachingTypes.map((type) => (
-                                        <TouchableOpacity
-                                          key={type}
-                                          style={[
-                                            styles.pillButton,
-                                            config.teachingType === type && styles.pillButtonActive,
-                                          ]}
-                                          onPress={() => updateLevelConfig(subjectIndex, levelValue, 'teachingType', type)}
-                                        >
-                                          <Text
-                                            style={[
-                                              styles.pillButtonText,
-                                              config.teachingType === type && styles.pillButtonTextActive,
-                                            ]}
-                                          >
-                                            {type}
-                                          </Text>
-                                        </TouchableOpacity>
-                                      ))}
-                                    </View>
-                                  </View>
-                                )}
-
-                                {/* Classes selection */}
-                                {availableClasses && (
-                                  <View style={styles.inlineField}>
-                                    <Text style={styles.inlineLabel}>Classes</Text>
-                                    {hasSeriesSelection ? (
-                                      // Classes with series (Général lycée, Technique collège/lycée)
-                                      <View style={styles.classesWithSeriesContainer}>
-                                        <ScrollView 
-                                          horizontal 
-                                          showsHorizontalScrollIndicator={false}
-                                          style={styles.classesScrollView}
-                                        >
-                                          <View style={styles.classesRow}>
-                                            {Object.entries(availableClasses).map(([className, series]: [string, any]) => {
-                                              const selectedSeries = config.selectedClasses[className] || [];
-                                              const hasSelectedSeries = selectedSeries.length > 0;
-                                              const expandKey = `${subjectIndex}-${levelValue}`;
-                                              const isExpanded = expandedClasses[expandKey] === className;
-                                              
-                                              return (
-                                                <TouchableOpacity
-                                                  key={className}
-                                                  style={[
-                                                    styles.classButton,
-                                                    hasSelectedSeries && styles.classButtonActive,
-                                                  ]}
-                                                  onPress={() => {
-                                                    // Toggle expansion for this class
-                                                    setExpandedClasses(prev => ({
-                                                      ...prev,
-                                                      [expandKey]: isExpanded ? null : className,
-                                                    }));
-                                                  }}
-                                                >
-                                                  <Text style={[
-                                                    styles.classButtonText,
-                                                    hasSelectedSeries && styles.classButtonTextActive,
-                                                  ]}>
-                                                    {className}
-                                                  </Text>
-                                                  {hasSelectedSeries && (
-                                                    <View style={styles.selectedBadge}>
-                                                      <Text style={styles.selectedBadgeText}>
-                                                        {selectedSeries.length}
-                                                      </Text>
-                                                    </View>
-                                                  )}
-                                                </TouchableOpacity>
-                                              );
-                                            })}
-                                          </View>
-                                        </ScrollView>
-                                        
-                                        {/* Series for expanded class */}
-                                        {Object.entries(availableClasses).map(([className, series]: [string, any]) => {
-                                          const expandKey = `${subjectIndex}-${levelValue}`;
-                                          const isExpanded = expandedClasses[expandKey] === className;
-                                          const selectedSeries = config.selectedClasses[className] || [];
-                                          
-                                          if (!isExpanded) return null;
-                                          
-                                          return (
-                                            <View key={`series-${className}`} style={styles.seriesSection}>
-                                              <Text style={styles.seriesSectionTitle}>
-                                                Séries pour {className}
-                                              </Text>
-                                              <ScrollView 
-                                                horizontal 
-                                                showsHorizontalScrollIndicator={false}
-                                                style={styles.seriesScrollView}
-                                              >
-                                                <View style={styles.seriesContainer}>
-                                                  {series.map((serie: string) => {
-                                                    const isSelected = selectedSeries.includes(serie);
-                                                    return (
-                                                      <TouchableOpacity
-                                                        key={serie}
-                                                        style={[
-                                                          styles.pillButton,
-                                                          styles.serieButton,
-                                                          isSelected && styles.pillButtonActive,
-                                                        ]}
-                                                        onPress={() => toggleSerie(subjectIndex, levelValue, className, serie)}
-                                                      >
-                                                        <Text
-                                                          style={[
-                                                            styles.pillButtonText,
-                                                            isSelected && styles.pillButtonTextActive,
-                                                          ]}
-                                                        >
-                                                          {serie}
-                                                        </Text>
-                                                      </TouchableOpacity>
-                                                    );
-                                                  })}
-                                                </View>
-                                              </ScrollView>
-                                            </View>
-                                          );
-                                        })}
-                                      </View>
-                                    ) : (
-                                      // Simple classes (no series)
-                                      <View style={styles.pillGrid}>
-                                        {(availableClasses as string[]).map((className) => {
-                                          const isSelected = config.classes.includes(className);
-                                          return (
-                                            <TouchableOpacity
-                                              key={className}
-                                              style={[
-                                                styles.pillButton,
-                                                isSelected && styles.pillButtonActive,
-                                              ]}
-                                              onPress={() => toggleClass(subjectIndex, levelValue, className)}
-                                            >
-                                              <Text
-                                             style={[
-                                                  styles.pillButtonText,
-                                                  isSelected && styles.pillButtonTextActive,
-                                                ]}
-                                              >
-                                                {className}
-                                              </Text>
-                                            </TouchableOpacity>
-                                          );
-                                        })}
-                                      </View>
-                                    )}
-                                  </View>
-                                )}
-                              </View>
-                            );
-                          })}
-                        </>
-                      )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={addSubjectTeaching}
-              >
-                <Plus size={18} color={Colors.primary} strokeWidth={2.5} />
-                <Text style={styles.addButtonText}>Ajouter une matière</Text>
+                <Text
+                  style={[
+                    styles.teachingModeText,
+                    formData.teachingMode === mode.value && styles.teachingModeTextActive,
+                  ]}
+                >
+                  {mode.label}
+                </Text>
               </TouchableOpacity>
-            </View>
+            ))}
+          </View>
 
-        <View style={{ height: 20 }} />
+          {formData.teachingMode !== 'ONLINE' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Rayon de déplacement (km)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.serviceRadius}
+                onChangeText={(text) => updateField('serviceRadius', text)}
+                placeholder="Ex: 10"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="numeric"
+              />
+              <Text style={styles.helperText}>
+                Distance maximale que vous êtes prêt à parcourir
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      <StyledModal
+        visible={modalState.visible}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        primaryButton={modalState.primaryButton}
+        secondaryButton={modalState.secondaryButton}
+        onClose={hideModal}
+      />
+
+      {isSaving && (
+        <View style={styles.savingOverlay}>
+          <View style={styles.savingCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.savingTitle}>Mise à jour en cours...</Text>
+            <Text style={styles.savingText}>
+              Nous enregistrons vos modifications{'\n'}
+              Veuillez patienter quelques instants
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1152,62 +870,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.bgCream,
-    gap: 12,
   },
   loadingText: {
-    fontSize: 15,
+    marginTop: 16,
+    fontSize: 16,
     color: Colors.textSecondary,
-    fontWeight: '500',
   },
-  
-  // Header
-  header: {
-    backgroundColor: Colors.primary,
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  saveHeaderButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
+  saveHeaderText: {
+    fontSize: 16,
     fontWeight: '700',
-    color: Colors.white,
+    color: Colors.primary,
   },
-
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 4,
+    padding: 20,
   },
-
-  // Avatar Section
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: Colors.white,
-    marginBottom: 12,
+    marginBottom: 24,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 12,
   },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 4,
-    borderColor: Colors.primary,
+    borderWidth: 3,
+    borderColor: Colors.white,
   },
   avatarPlaceholder: {
     width: 100,
@@ -1216,11 +912,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: Colors.primary,
+    borderWidth: 3,
+    borderColor: Colors.white,
   },
   avatarText: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
     color: Colors.white,
   },
@@ -1228,531 +924,249 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    borderWidth: 3,
-    borderColor: Colors.white,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
-  avatarHint: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-
-  // Sections
-  section: {
+  card: {
     backgroundColor: Colors.white,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    borderRadius: 16,
+    borderRadius: BorderRadius.large,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    marginBottom: 16,
+    ...Shadows.small,
   },
-  sectionHeader: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
+  cardIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
-
-  // Input Groups
+  badge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.white,
+  },
   inputGroup: {
+    marginBottom: 16,
+  },
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    gap: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: Colors.bgCream,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.medium,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.textPrimary,
+  },
+  textArea: {
+    minHeight: 120,
+    paddingTop: 12,
+  },
+  helperText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 6,
+  },
+  experienceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  experienceCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: Colors.bgCream,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  experienceCardActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  experienceText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  experienceTextActive: {
+    color: Colors.white,
+  },
+  systemsGrid: {
+    gap: 12,
+  },
+  systemCard: {
+    backgroundColor: Colors.bgCream,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.medium,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  systemCardActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  systemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  systemNameActive: {
+    color: Colors.white,
+  },
+  checkmark: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bgCream,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  chipTextActive: {
+    color: Colors.white,
+  },
+  subjectIcon: {
+    fontSize: 14,
+  },
+  teachingModeGrid: {
+    flexDirection: 'row',
     gap: 12,
     marginBottom: 16,
   },
-  inputIcon: {
-    width: 40,
-    height: 40,
+  teachingModeCard: {
+    flex: 1,
+    backgroundColor: Colors.bgCream,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  teachingModeCardActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  teachingModeIconBox: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: 'rgba(13, 115, 119, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
   },
-  inputWrapper: {
-    flex: 1,
+  teachingModeIconBoxActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  inputLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontWeight: '500',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingVertical: 8,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 12,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  flex1: {
-    flex: 1,
-  },
-
-  // Field Labels
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-
-  // Options
-  optionsContainer: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  optionButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    backgroundColor: Colors.bgCream,
-  },
-  optionButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  optionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  optionButtonTextActive: {
-    color: Colors.white,
-  },
-
-  // Subjects
-  subjectsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  subjectChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    backgroundColor: Colors.bgCream,
-  },
-  subjectChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  subjectChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  subjectChipTextActive: {
-    color: Colors.white,
-  },
-  systemsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  systemChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-  },
-  systemChipActive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.secondary,
-  },
-  systemChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  systemChipTextActive: {
-    color: Colors.textPrimary,
-  },
-
-  // Mode Buttons (for tutors)
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: Colors.textPrimary,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  modeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  modeButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: Colors.bgCream,
-  },
-  modeButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  modeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  modeButtonTextActive: {
-    color: Colors.white,
-  },
-
-  // Teaching Cards - New streamlined design
-  teachingCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  teachingCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  teachingCardTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  teachingCardTitleText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  teachingCardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  levelCountBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  levelCountBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  
-  // Inline form layout
-  inlineForm: {
-    gap: 10,
-  },
-  inlineField: {
-    gap: 6,
-  },
-  inlineLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  
-  // Horizontal scroll for long lists
-  horizontalScroll: {
-    flexGrow: 0,
-  },
-  
-  // Pill buttons for selections
-  pillGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  pillButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
-    marginRight: 6,
-  },
-  pillButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  pillButtonText: {
+  teachingModeText: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textPrimary,
+    textAlign: 'center',
   },
-  pillButtonTextActive: {
+  teachingModeTextActive: {
     color: Colors.white,
   },
-  
-  // Add button
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  savingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    gap: 6,
-    padding: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderRadius: 10,
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    marginTop: 4,
+    alignItems: 'center',
+    zIndex: 1000,
   },
-  addButtonText: {
+  savingCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.large,
+    padding: 32,
+    alignItems: 'center',
+    gap: 16,
+    minWidth: 200,
+    ...Shadows.large,
+  },
+  savingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  savingText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  
-  // Level sections
-  levelSection: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  levelSectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 6,
-  },
-  
-  // Level config cards
-  levelConfigCard: {
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 115, 119, 0.2)',
-  },
-  levelConfigTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 8,
-  },
-  
-  // Classes with series
-  classesScrollView: {
-    flexGrow: 0,
-    marginBottom: 8,
-  },
-  classesWithSeriesContainer: {
-    gap: 8,
-  },
-  classesRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 12,
-  },
-  classSeriesBlock: {
-    minWidth: 100,
-  },
-  classButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginRight: 8,
-  },
-  classButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  classButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  classButtonTextActive: {
-    color: Colors.white,
-  },
-  selectedBadge: {
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  selectedBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  seriesSection: {
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-  },
-  seriesSectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 8,
-  },
-  seriesScrollView: {
-    flexGrow: 0,
-  },
-  seriesContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingRight: 12,
-  },
-  classSeriesTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  serieButton: {
-    minWidth: 40,
-  },
-  levelsContainer: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  levelBlock: {
-    marginBottom: 8,
-  },
-  levelButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    backgroundColor: Colors.white,
-  },
-  levelButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  levelButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  levelButtonTextActive: {
-    color: Colors.white,
-  },
-  gradesContainer: {
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: Colors.white,
-    borderRadius: 8,
-  },
-  gradesLabel: {
-    fontSize: 12,
-    fontWeight: '600',
     color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  gradesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  gradeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    backgroundColor: Colors.bgCream,
-  },
-  gradeChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  gradeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  gradeChipTextActive: {
-    color: Colors.white,
+    textAlign: 'center',
   },
 });

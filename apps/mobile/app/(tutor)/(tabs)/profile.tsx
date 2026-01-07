@@ -26,13 +26,36 @@ import {
   FileText,
   Star,
   DollarSign,
+  BookOpen,
+  MapPin,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/auth-context';
 import { apiClient } from '@/utils/api-client';
 import { Colors } from '@/constants/colors';
-import { API_BASE_URL } from '@/config/api';
 import type { UserResponse, TutorProfileResponse } from '@/types/api';
 import { formatEurAsFcfa, formatHourlyRateAsFcfa } from '@/utils/currency';
+
+// Helper function to get country name from country code
+const getCountryName = (countryCode: string): string => {
+  const countries: { [key: string]: string } = {
+    'SN': 'Sénégal',
+    'CM': 'Cameroun',
+    'CI': 'Côte d\'Ivoire',
+    'BJ': 'Bénin',
+    'TG': 'Togo',
+    'BF': 'Burkina Faso',
+    'ML': 'Mali',
+    'NE': 'Niger',
+    'GA': 'Gabon',
+    'CG': 'Congo',
+    'CD': 'RD Congo',
+    'FR': 'France',
+    'BE': 'Belgique',
+    'CH': 'Suisse',
+    'CA': 'Canada',
+  };
+  return countries[countryCode] || countryCode;
+};
 
 export default function TutorProfileScreen() {
   const router = useRouter();
@@ -56,12 +79,20 @@ export default function TutorProfileScreen() {
       setUserData(userResponse.data);
 
       // Fetch tutor profile - handle 404 if profile doesn't exist yet
+      // Use /tutors/user/:userId endpoint which returns formatted data with subjects, educationLevels, languages
       try {
         const profileResponse = await apiClient.get<{ success: boolean; data: TutorProfileResponse }>(
-          `/profiles/tutor/${user?.id}`
+          `/tutors/user/${user?.id}`
         );
+        console.log('📊 Profile data loaded:', {
+          subjects: profileResponse.data?.subjects,
+          educationLevels: profileResponse.data?.educationLevels,
+          languages: profileResponse.data?.languages,
+          countryCode: profileResponse.data?.countryCode,
+        });
         setProfileData(profileResponse.data);
       } catch (profileError: any) {
+        console.log('❌ Profile error:', profileError.message);
         // Profile doesn't exist yet - this is OK for new users
         setProfileData(null);
       }
@@ -112,7 +143,6 @@ export default function TutorProfileScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Header */}
         <View style={styles.heroHeader}>
           <View style={styles.avatarContainer}>
             {userData?.avatarUrl ? (
@@ -140,16 +170,15 @@ export default function TutorProfileScreen() {
               <Text style={styles.roleBadgeText}>Tuteur</Text>
             </View>
             
-            {profileData?.experienceYears && (
+            {profileData?.experienceYears !== undefined && profileData.experienceYears !== null && (
               <View style={styles.experienceBadge}>
                 <GraduationCap size={12} color={Colors.primary} strokeWidth={2} />
                 <Text style={styles.experienceText}>
-                  {profileData.experienceYears} ans d{"'"}expérience
+                  {profileData.experienceYears} ans d'expérience
                 </Text>
               </View>
             )}
             
-            {/* Verification status */}
             {profileData?.isVerified ? (
               <View style={styles.certifiedBadge}>
                 <Check size={12} color="#4CAF50" strokeWidth={3} />
@@ -163,7 +192,6 @@ export default function TutorProfileScreen() {
           </View>
         </View>
 
-        {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Clock size={20} color={Colors.primary} strokeWidth={2} />
@@ -182,7 +210,6 @@ export default function TutorProfileScreen() {
           </View>
         </View>
 
-        {/* Tutor Info */}
         {profileData?.bio && (
           <View style={styles.bioSection}>
             <Text style={styles.bioTitle}>À propos</Text>
@@ -190,7 +217,6 @@ export default function TutorProfileScreen() {
           </View>
         )}
 
-        {/* Hourly Rate */}
         {profileData?.hourlyRate && (
           <View style={styles.rateSection}>
             <DollarSign size={20} color={Colors.primary} strokeWidth={2} />
@@ -200,7 +226,95 @@ export default function TutorProfileScreen() {
           </View>
         )}
 
-        {/* Main Actions */}
+        {/* Competencies and Information Section */}
+        {(profileData?.subjects || profileData?.countryCode || profileData?.educationLevels || profileData?.languages) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Compétences et Informations</Text>
+            
+            {/* Subjects */}
+            {profileData?.subjects && profileData.subjects.length > 0 ? (
+              <View style={styles.menuItem}>
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#E8F5F5' }]}>
+                    <BookOpen size={20} color={Colors.primary} strokeWidth={2} />
+                  </View>
+                  <View style={styles.menuText}>
+                    <Text style={styles.menuTitle}>Matières enseignées</Text>
+                    <Text style={styles.menuSubtitle} numberOfLines={2}>
+                      {profileData.subjects.join(', ')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : profileData && (
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => router.push('/(tutor)/profile/edit')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#FFF4E6' }]}>
+                    <BookOpen size={20} color="#FF9800" strokeWidth={2} />
+                  </View>
+                  <View style={styles.menuText}>
+                    <Text style={styles.menuTitle}>Matières enseignées</Text>
+                    <Text style={styles.menuSubtitle}>Aucune matière configurée</Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#999" strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+            
+            {/* Education Levels */}
+            {profileData?.educationLevels && profileData.educationLevels.length > 0 && (
+              <View style={styles.menuItem}>
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#F3E8FF' }]}>
+                    <GraduationCap size={20} color="#9C27B0" strokeWidth={2} />
+                  </View>
+                  <View style={styles.menuText}>
+                    <Text style={styles.menuTitle}>Niveaux enseignés</Text>
+                    <Text style={styles.menuSubtitle} numberOfLines={2}>
+                      {profileData.educationLevels.join(', ')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            
+            {/* Languages */}
+            {profileData?.languages && profileData.languages.length > 0 && (
+              <View style={styles.menuItem}>
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#FFF3E0' }]}>
+                    <Text style={styles.languageIcon}>🌐</Text>
+                  </View>
+                  <View style={styles.menuText}>
+                    <Text style={styles.menuTitle}>Langues d'enseignement</Text>
+                    <Text style={styles.menuSubtitle} numberOfLines={2}>
+                      {profileData.languages.join(', ')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            
+            {/* Country */}
+            {profileData?.countryCode && (
+              <View style={styles.menuItem}>
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#E3F2FD' }]}>
+                    <MapPin size={20} color="#2196F3" strokeWidth={2} />
+                  </View>
+                  <View style={styles.menuText}>
+                    <Text style={styles.menuTitle}>Pays</Text>
+                    <Text style={styles.menuSubtitle}>{getCountryName(profileData.countryCode)}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Gestion du profil</Text>
           
@@ -253,13 +367,12 @@ export default function TutorProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Financial */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Finances</Text>
           
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert('Bientôt disponible', 'Cette fonctionnalité sera bientôt disponible')}
+            onPress={() => router.push('/(tutor)/wallet')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#E8F5E9' }]}>
@@ -277,7 +390,7 @@ export default function TutorProfileScreen() {
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert('Bientôt disponible', 'Cette fonctionnalité sera bientôt disponible')}
+            onPress={() => router.push('/(tutor)/wallet/transactions')}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#FFF3E0' }]}>
@@ -292,7 +405,6 @@ export default function TutorProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Compte</Text>
           
@@ -314,7 +426,7 @@ export default function TutorProfileScreen() {
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => {/* TODO: Settings */}}
+            onPress={() => {}}
           >
             <View style={styles.menuLeft}>
               <View style={[styles.menuIcon, { backgroundColor: '#F5F5F5' }]}>
@@ -351,13 +463,13 @@ export default function TutorProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.bgCream,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.bgCream,
   },
 
   scrollView: {
@@ -566,6 +678,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.primary,
+  },
+
+  // Language Icon
+  languageIcon: {
+    fontSize: 20,
   },
 
   // Sections

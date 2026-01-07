@@ -12,13 +12,15 @@ interface WalletHeaderProps {
   balanceVisible: boolean;
   onToggleVisibility: () => void;
   showBackButton?: boolean;
+  onBackPress?: () => void;
 }
 
 export function WalletHeader({ 
   balance, 
   balanceVisible, 
   onToggleVisibility,
-  showBackButton = true 
+  showBackButton = true,
+  onBackPress
 }: WalletHeaderProps) {
   const router = useRouter();
 
@@ -36,7 +38,7 @@ export function WalletHeader({
         {showBackButton ? (
           <TouchableOpacity 
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={onBackPress || (() => router.back())}
           >
             <ArrowLeft size={24} color={Colors.white} strokeWidth={2.5} />
           </TouchableOpacity>

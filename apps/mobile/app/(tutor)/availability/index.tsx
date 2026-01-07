@@ -42,13 +42,13 @@ interface TutorAvailability {
 }
 
 const DAYS_OF_WEEK = [
-  { value: 0, label: 'Dim', fullLabel: 'Dimanche' },
   { value: 1, label: 'Lun', fullLabel: 'Lundi' },
   { value: 2, label: 'Mar', fullLabel: 'Mardi' },
   { value: 3, label: 'Mer', fullLabel: 'Mercredi' },
   { value: 4, label: 'Jeu', fullLabel: 'Jeudi' },
   { value: 5, label: 'Ven', fullLabel: 'Vendredi' },
   { value: 6, label: 'Sam', fullLabel: 'Samedi' },
+  { value: 0, label: 'Dim', fullLabel: 'Dimanche' },
 ];
 
 type ViewMode = 'calendar' | 'list';

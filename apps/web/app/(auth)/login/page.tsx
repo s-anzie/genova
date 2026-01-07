@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+import Link from 'next/link';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -90,9 +92,9 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-600">
               Pas encore de compte ?{' '}
-              <a href="/register" className="text-primary font-semibold hover:underline">
+              <Link href="/auth/register" className="text-primary font-semibold hover:underline">
                 S'inscrire
-              </a>
+              </Link>
             </p>
           </div>
         </CardContent>

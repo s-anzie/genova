@@ -443,6 +443,11 @@ export default function SessionDetailScreen() {
           </View>
         )}
 
+        {/* Rating Section - Only for completed sessions with tutor */}
+        {session.status === 'COMPLETED' && hasTutor && (
+          <RatingSection sessionId={id as string} tutorId={session.tutorId!} onRatingSubmitted={loadSessionDetails} />
+        )}
+
         {/* Price */}
         {hasTutor && (
           <View style={styles.section}>
@@ -488,6 +493,179 @@ export default function SessionDetailScreen() {
           loadSessionDetails();
         }}
       />
+    </View>
+  );
+}
+
+// Rating Section Component
+interface RatingSectionProps {
+  sessionId: string;
+  tutorId: string;
+  onRatingSubmitted: () => void;
+}
+
+function RatingSection({ sessionId, tutorId, onRatingSubmitted }: RatingSectionProps) {
+  const [existingReview, setExistingReview] = useState<any>(null);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadExistingReview();
+  }, [sessionId]);
+
+  const loadExistingReview = async () => {
+    try {
+      setLoading(true);
+      const response = await ApiClient.get<{ success: boolean; data: any[] }>(
+        `/reviews/session/${sessionId}`
+      );
+      if (response.data && response.data.length > 0) {
+        const review = response.data[0];
+        setExistingReview(review);
+        setRating(review.rating);
+        setComment(review.comment || '');
+      }
+    } catch (error) {
+      console.log('No existing review');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (rating === 0) {
+      Alert.alert('Attention', 'Veuillez sélectionner une note');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      if (existingReview) {
+        // Update existing review
+        await ApiClient.put(`/reviews/${existingReview.id}`, {
+          comment,
+        });
+        Alert.alert('Succès', 'Votre avis a été mis à jour');
+      } else {
+        // Create new review
+        await ApiClient.post('/reviews', {
+          sessionId,
+          rating,
+          comment,
+        });
+        Alert.alert('Succès', 'Merci pour votre avis !');
+      }
+      
+      onRatingSubmitted();
+      loadExistingReview();
+    } catch (error: any) {
+      console.error('Failed to submit review:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de soumettre votre avis');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <ActivityIndicator size="small" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>
+        {existingReview ? 'Votre avis' : 'Évaluer le tuteur'}
+      </Text>
+      
+      {existingReview && (
+        <View style={styles.reviewSubmittedBanner}>
+          <CheckCircle size={18} color={Colors.success} strokeWidth={2} />
+          <Text style={styles.reviewSubmittedText}>
+            Vous avez déjà évalué cette session
+          </Text>
+        </View>
+      )}
+
+      {/* Star Rating */}
+      <View style={styles.ratingContainer}>
+        <Text style={styles.ratingLabel}>Note:</Text>
+        <View style={styles.starsContainer}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <TouchableOpacity
+              key={star}
+              onPress={() => !existingReview && setRating(star)}
+              disabled={!!existingReview}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.starIcon}>
+                {star <= rating ? '⭐' : '☆'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {rating > 0 && (
+          <Text style={styles.ratingValue}>{rating}/5</Text>
+        )}
+      </View>
+
+      {/* Comment Input */}
+      {!existingReview && (
+        <>
+          <Text style={styles.commentLabel}>Commentaire (optionnel):</Text>
+          <View style={styles.commentInputContainer}>
+            <Text
+              style={styles.commentInput}
+              onPress={() => {
+                Alert.prompt(
+                  'Votre commentaire',
+                  'Partagez votre expérience avec ce tuteur',
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    {
+                      text: 'OK',
+                      onPress: (text?: string) => setComment(text || ''),
+                    },
+                  ],
+                  'plain-text',
+                  comment
+                );
+              }}
+            >
+              {comment || 'Tapez pour ajouter un commentaire...'}
+            </Text>
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitReviewButton, (rating === 0 || submitting) && styles.submitReviewButtonDisabled]}
+            onPress={handleSubmitReview}
+            disabled={rating === 0 || submitting}
+            activeOpacity={0.7}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <>
+                <CheckCircle size={18} color={Colors.white} strokeWidth={2} />
+                <Text style={styles.submitReviewButtonText}>Soumettre mon avis</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </>
+      )}
+
+      {existingReview && comment && (
+        <View style={styles.existingCommentContainer}>
+          <Text style={styles.existingCommentLabel}>Votre commentaire:</Text>
+          <Text style={styles.existingCommentText}>{comment}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1138,5 +1316,99 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.white,
+  },
+  // Rating Section Styles
+  reviewSubmittedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: Spacing.sm,
+    backgroundColor: Colors.success + '10',
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.success + '30',
+  },
+  reviewSubmittedText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.success,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  ratingLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  starIcon: {
+    fontSize: 28,
+  },
+  ratingValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 4,
+  },
+  commentLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+  },
+  commentInputContainer: {
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    padding: Spacing.md,
+    minHeight: 80,
+  },
+  commentInput: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+  submitReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.medium,
+    marginTop: Spacing.sm,
+    ...Shadows.small,
+  },
+  submitReviewButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitReviewButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  existingCommentContainer: {
+    backgroundColor: Colors.bgCream,
+    borderRadius: BorderRadius.medium,
+    padding: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  existingCommentLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  existingCommentText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    lineHeight: 20,
   },
 });

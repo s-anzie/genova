@@ -10,6 +10,7 @@ export interface UserResponse {
   city: string | null;
   postalCode: string | null;
   country: string | null;
+  countryCode: string | null;
   preferredLanguage: string;
   role: 'STUDENT' | 'TUTOR' | 'ADMIN';
   subscriptionType: string;
@@ -83,6 +84,9 @@ export interface TutorProfileResponse {
   totalReviews: number;
   isVerified: boolean;
   verificationDocuments: string[];
+  city?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
   user?: UserResponse;
 }
 

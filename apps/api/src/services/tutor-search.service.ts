@@ -285,7 +285,7 @@ export async function searchTutors(
 
   for (const tutor of tutors) {
     // Extract subjects, education levels, and languages from relations
-    const tutorSubjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+    const tutorSubjects = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name))];
     const tutorEducationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
     const tutorLanguages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
 
@@ -444,7 +444,7 @@ export async function getTutorDetails(tutorId: string): Promise<any> {
   }
 
   // Extract subjects, education levels, and languages from relations
-  const subjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+  const subjects = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name))];
   const educationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
   const languages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
 
@@ -550,7 +550,7 @@ export async function getTutorDetailsByUserId(userId: string): Promise<any> {
   }
 
   // Extract subjects, education levels, and languages from relations
-  const subjects = tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name);
+  const subjects = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.subject.name))];
   const educationLevels = [...new Set(tutor.teachingSubjects.map(ts => ts.levelSubject.level.name))];
   const languages = tutor.teachingLanguages.map(tl => tl.teachingLanguage.name);
 

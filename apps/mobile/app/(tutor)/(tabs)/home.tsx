@@ -21,6 +21,7 @@ import {
   BookOpen,
   ShoppingBag,
   Award,
+  Wallet,
 } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/colors';
 import { PageHeader } from '@/components/PageHeader';
@@ -41,7 +42,7 @@ export default function TutorHomeScreen() {
   const [stats, setStats] = useState({
     pendingCount: 0,
     upcomingCount: 0,
-    totalEarnings: 0,
+    walletBalance: 0,
     hoursThisWeek: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -125,13 +126,19 @@ export default function TutorHomeScreen() {
         return total + duration;
       }, 0);
 
-      const completedSessions = allSessions.filter(s => s.status === 'COMPLETED');
-      const totalEarnings = completedSessions.reduce((total, s) => total + Number(s.price || 0), 0);
+      // Load wallet balance
+      let walletBalance = 0;
+      try {
+        const walletRes = await ApiClient.get<{ success: boolean; data: { availableBalance: number } }>('/payments/wallet');
+        walletBalance = walletRes.data.availableBalance || 0;
+      } catch (error) {
+        console.warn('Failed to load wallet balance:', error);
+      }
 
       setStats({
         pendingCount: allSessions.filter(s => s.status === 'PENDING').length,
         upcomingCount: allSessions.filter(s => new Date(s.scheduledStart) > sessionNow && s.status === 'CONFIRMED').length,
-        totalEarnings: Math.round(totalEarnings),
+        walletBalance: Math.round(walletBalance),
         hoursThisWeek: Math.round(hoursThisWeek * 10) / 10,
       });
     } catch (error: any) {
@@ -260,18 +267,18 @@ export default function TutorHomeScreen() {
           </View>
         </View>
 
-        {/* Earnings Card */}
+        {/* Wallet Balance Card */}
         <TouchableOpacity
           style={styles.earningsCard}
-          onPress={() => router.push('/(tutor)/(tabs)/wallet')}
+          onPress={() => router.push('/(tutor)/wallet')}
         >
           <View style={styles.earningsContent}>
             <View style={styles.earningsIconContainer}>
-              <DollarSign size={28} color={Colors.white} strokeWidth={2.5} />
+              <Wallet size={28} color={Colors.white} strokeWidth={2.5} />
             </View>
             <View style={styles.earningsInfo}>
-              <Text style={styles.earningsLabel}>Revenus totaux</Text>
-              <Text style={styles.earningsValue}>{eurToFcfa(stats.totalEarnings).toLocaleString('fr-FR')} FCFA</Text>
+              <Text style={styles.earningsLabel}>Solde du wallet</Text>
+              <Text style={styles.earningsValue}>{eurToFcfa(stats.walletBalance).toLocaleString('fr-FR')} FCFA</Text>
             </View>
           </View>
           <ChevronRight size={24} color={Colors.white} />
@@ -306,7 +313,7 @@ export default function TutorHomeScreen() {
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(tutor)/(tabs)/students')}
+              onPress={() => router.push('/(tutor)/students' as any)}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
                 <Users size={24} color={Colors.accent2} strokeWidth={2} />
@@ -348,17 +355,17 @@ export default function TutorHomeScreen() {
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(tutor)/(tabs)/wallet')}
+              onPress={() => router.push('/(tutor)/wallet')}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.success + '15' }]}>
-                <DollarSign size={24} color={Colors.success} strokeWidth={2} />
+                <Wallet size={24} color={Colors.success} strokeWidth={2} />
               </View>
               <Text style={styles.serviceText}>Wallet</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.serviceCard}
-              onPress={() => router.push('/(tutor)/(tabs)/badges')}
+              onPress={() => router.push('/(tutor)/badges' as any)}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accent2 + '15' }]}>
                 <Award size={24} color={Colors.accent2} strokeWidth={2} />

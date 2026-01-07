@@ -11,11 +11,22 @@ interface User {
   role: 'ADMIN' | 'TUTOR' | 'STUDENT';
 }
 
+interface RegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role?: 'TUTOR' | 'STUDENT';
+  birthDate?: Date;
+  preferredLanguage?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -116,6 +127,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const register = async (data: RegisterData) => {
+    try {
+      console.log('Register attempt:', { email: data.email, apiUrl: process.env.NEXT_PUBLIC_API_URL });
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      console.log('Register response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Register error response:', error);
+        throw new Error(error.message || error.error || 'Registration failed');
+      }
+
+      const responseData = await response.json();
+      console.log('Register success - Full response:', responseData);
+      
+      // Store both access token and refresh token
+      if (responseData.data.accessToken) {
+        localStorage.setItem('token', responseData.data.accessToken);
+      }
+      if (responseData.data.refreshToken) {
+        localStorage.setItem('refreshToken', responseData.data.refreshToken);
+      }
+      
+      const userData = responseData.data.user;
+      setUser(userData);
+
+      console.log('Redirecting based on role:', userData.role);
+
+      // Redirect based on role
+      if (userData.role === 'ADMIN') {
+        console.log('Redirecting to /admin');
+        router.push('/admin');
+      } else if (userData.role === 'TUTOR') {
+        console.log('Redirecting to /tutor');
+        router.push('/tutor');
+      } else if (userData.role === 'STUDENT') {
+        console.log('Redirecting to /student');
+        router.push('/student');
+      } else {
+        console.error('Unknown role:', userData.role);
+        router.push('/student'); // fallback
+      }
+    } catch (error: any) {
+      console.error('Register error:', error);
+      throw new Error(error.message || 'Registration failed');
+    }
+  };
+
   const logout = async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
@@ -140,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

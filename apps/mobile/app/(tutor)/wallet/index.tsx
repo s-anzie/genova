@@ -13,8 +13,10 @@ import { WalletHeader } from '@/components/wallet/WalletHeader';
 import { QuickActions } from '@/components/wallet/QuickActions';
 import { RecentTransactions } from '@/components/wallet/RecentTransactions';
 import { Colors } from '@/constants/colors';
+import { useRouter } from 'expo-router';
 
 export default function TutorWalletScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const { balance, loading, refreshing, recentTransactions, onRefresh } = useWallet();
   const [balanceVisible, setBalanceVisible] = useState(true);
@@ -34,7 +36,8 @@ export default function TutorWalletScreen() {
         balance={balance}
         balanceVisible={balanceVisible}
         onToggleVisibility={() => setBalanceVisible(!balanceVisible)}
-        showBackButton={false}
+        showBackButton={true}
+        onBackPress={() => router.back()}
       />
 
       <ScrollView

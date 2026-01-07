@@ -381,6 +381,38 @@ export async function getTutorProfile(userId: string) {
           createdAt: true,
         },
       },
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              level: {
+                select: {
+                  id: true,
+                  name: true,
+                  systemId: true,
+                },
+              },
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      teachingLanguages: {
+        include: {
+          teachingLanguage: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -611,7 +643,46 @@ export async function updateTutorProfile(userId: string, data: UpdateTutorProfil
     });
   }
 
-  return profile;
+  // Return profile with relations
+  const updatedProfile = await prisma.tutorProfile.findUnique({
+    where: { userId },
+    include: {
+      teachingSubjects: {
+        include: {
+          levelSubject: {
+            include: {
+              level: {
+                select: {
+                  id: true,
+                  name: true,
+                  systemId: true,
+                },
+              },
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      teachingLanguages: {
+        include: {
+          teachingLanguage: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return updatedProfile!;
 }
 
 /**
